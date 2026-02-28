@@ -6,6 +6,16 @@ export const LANGUAGE_VERSIONS = {
   csharp: "6.12.0",
   php: "8.2.3",
 };
+
+export const LANGUAGE_CONFIG = {
+  javascript: { name: "JavaScript", monacoLang: "javascript", badge: "JS" },
+  typescript: { name: "TypeScript", monacoLang: "typescript", badge: "TS" },
+  python:     { name: "Python",     monacoLang: "python",     badge: "PY" },
+  java:       { name: "Java",       monacoLang: "java",       badge: "JV" },
+  csharp:     { name: "C#",         monacoLang: "csharp",     badge: "C#" },
+  php:        { name: "PHP",        monacoLang: "php",        badge: "PHP" },
+};
+
 export const CODE_SNIPPETS = {
   javascript: `\nfunction greet(name) {\n\tconsole.log("Hello, " + name + "!");\n}\n\ngreet("Alex");\n`,
   typescript: `\ntype Params = {\n\tname: string;\n}\n\nfunction greet(data: Params) {\n\tconsole.log("Hello, " + data.name + "!");\n}\n\ngreet({ name: "Alex" });\n`,
