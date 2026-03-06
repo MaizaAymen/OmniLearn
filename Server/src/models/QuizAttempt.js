@@ -1,117 +1,64 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const answerSchema = new mongoose.Schema({
-  question: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true, // references a subdocument in Quiz.questions
-  },
-  // For MCQ: selected option index(es)
-  selectedOptions: [Number],
-  // For short_answer / code
-  textAnswer: {
-    type: String,
-    default: null,
-  },
-  // For code questions
-  codeAnswer: {
-    type: String,
-    default: null,
-  },
-  language: {
-    type: String,
-    default: null,
-  },
-  isCorrect: {
-    type: Boolean,
-    default: false,
-  },
-  pointsEarned: {
-    type: Number,
-    default: 0,
-  },
-  // AI-generated feedback for this specific answer
-  aiFeedback: {
-    type: String,
-    default: null,
-  },
-  // Time spent on this question (seconds)
-  timeSpent: {
-    type: Number,
-    default: 0,
-  },
-});
-
-const quizAttemptSchema = new mongoose.Schema(
+const QuizAttempt = sequelize.define(
+  "QuizAttempt",
   {
-    quiz: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Quiz",
-      required: [true, "Quiz reference is required"],
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    student: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "Student reference is required"],
+    quizId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "quizzes", key: "id" },
+      onDelete: "CASCADE",
     },
-    answers: [answerSchema],
-    // Scores
-    totalScore: {
-      type: Number,
-      default: 0,
+    studentId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "users", key: "id" },
+      onDelete: "CASCADE",
     },
-    maxScore: {
-      type: Number,
-      default: 0,
-    },
-    percentage: {
-      type: Number,
-      default: 0,
-    },
-    passed: {
-      type: Boolean,
-      default: false,
-    },
-    // Timing
     startedAt: {
-      type: Date,
-      default: Date.now,
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
     completedAt: {
-      type: Date,
-      default: null,
+      type: DataTypes.DATE,
+      allowNull: true,
     },
-    // Duration in seconds
-    duration: {
-      type: Number,
-      default: 0,
+    score: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0,
+    },
+    maxScore: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0,
+    },
+    percentage: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0,
+    },
+    isPassed: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    // AI-generated overall feedback for this attempt
+    aiFeedback: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     status: {
-      type: String,
-      enum: ["in_progress", "completed", "timed_out", "abandoned"],
-      default: "in_progress",
-    },
-    attemptNumber: {
-      type: Number,
-      default: 1,
-    },
-    // Overall AI feedback for the attempt
-    aiFeedback: {
-      type: String,
-      default: null,
-    },
-    // Difficulty level exhibited during this attempt (for adaptive quizzes)
-    difficultyReached: {
-      type: String,
-      enum: ["beginner", "intermediate", "advanced", null],
-      default: null,
+      type: DataTypes.ENUM("in_progress", "completed", "abandoned"),
+      defaultValue: "in_progress",
     },
   },
   {
+    tableName: "quiz_attempts",
     timestamps: true,
   }
 );
 
-quizAttemptSchema.index({ quiz: 1, student: 1 });
-quizAttemptSchema.index({ student: 1, status: 1 });
-
-module.exports = mongoose.model("QuizAttempt", quizAttemptSchema);
+module.exports = QuizAttempt;

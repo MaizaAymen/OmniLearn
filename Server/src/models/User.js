@@ -1,102 +1,89 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 const bcrypt = require("bcryptjs");
+const sequelize = require("../config/database");
+const { BCRYPT_ROUNDS } = require("../config");
 
-const userSchema = new mongoose.Schema(
+const User = sequelize.define(
+  "User",
   {
-    firstName: {
-      type: String,
-      required: [true, "First name is required"],
-      trim: true,
-      maxlength: 50,
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    lastName: {
-      type: String,
-      required: [true, "Last name is required"],
-      trim: true,
-      maxlength: 50,
+    firstname: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
+    lastname: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    
     email: {
-      type: String,
-      required: [true, "Email is required"],
+      type: DataTypes.STRING(255),
+      allowNull: false,
       unique: true,
-      lowercase: true,
-      trim: true,
-      match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
+      validate: { isEmail: true },
     },
     password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: 6,
-      select: false, // exclude from queries by default
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     role: {
-      type: String,
-      enum: ["admin", "teacher", "student"],
-      default: "student",
-    },
-    avatar: {
-      type: String,
-      default: null,
-    },
-    // Student-specific
-    studentId: {
-      type: String,
-      default: null,
-      sparse: true,
-    },
-    class: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Class",
-      default: null,
-    },
-    // Teacher-specific
-    department: {
-      type: String,
-      default: null,
-    },
-    specialization: {
-      type: String,
-      default: null,
+      type: DataTypes.ENUM("admin", "teacher", "student"),
+      allowNull: false,
+      defaultValue: "student",
     },
     isActive: {
-      type: Boolean,
-      default: true,
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
-    lastLogin: {
-      type: Date,
-      default: null,
+    isEmailVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    emailVerificationToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    emailVerificationExpires: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    passwordResetToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    passwordResetExpires: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     refreshToken: {
-      type: String,
-      select: false,
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    lastLoginAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {
+    tableName: "users",
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    hooks: {
+      beforeCreate: async (user) => {
+        if (user.password) {
+          user.password = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
+        }
+      },
+      beforeUpdate: async (user) => {
+        if (user.changed("password")) {
+          user.password = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
+        }
+      },
+    },
   }
 );
 
-// Hash password before saving
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
-
-// Compare password method
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Virtual: full name
-userSchema.virtual("fullName").get(function () {
-  return `${this.firstName} ${this.lastName}`;
-});
-
-// Indexes
-userSchema.index({ role: 1 });
-userSchema.index({ class: 1 });
-
-module.exports = mongoose.model("User", userSchema);
+module.exports = User;

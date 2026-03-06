@@ -1,6 +1,14 @@
+require("dotenv").config();
+
 module.exports = {
-  JWT_SECRET: process.env.JWT_SECRET || "smartlearn-secret-key-change-in-production",
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
-  MONGO_URI: process.env.MONGO_URI || "mongodb://localhost:27017/smartlearn",
   PORT: process.env.PORT || 5000,
+  DATABASE_URL: process.env.DATABASE_URL,
+  JWT_SECRET: "samiros",
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
+  JWT_REFRESH_SECRET:
+    process.env.JWT_REFRESH_SECRET || "changeme_refresh_secret",
+  JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
+  BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS) || 12,
+  NODE_ENV: process.env.NODE_ENV || "development",
+  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
 };

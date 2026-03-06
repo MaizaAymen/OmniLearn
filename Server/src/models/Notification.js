@@ -1,81 +1,52 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const notificationSchema = new mongoose.Schema(
+/**
+ * Notification - In-app notifications for all roles.
+ * e.g. teacher alert on student inactivity, grade available, new course assigned.
+ */
+const Notification = sequelize.define(
+  "Notification",
   {
-    recipient: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "Recipient is required"],
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    // Who/what triggered the notification
-    sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null, // null = system-generated
-    },
-    type: {
-      type: String,
-      enum: [
-        "student_inactivity", // Student inactive during session
-        "repeated_errors", // Student has repeated errors in code
-        "quiz_submitted", // Student submitted a quiz
-        "new_course", // New course assigned to class
-        "new_quiz", // New quiz available
-        "session_starting", // Supervision session about to start
-        "failure_risk", // AI detected failure risk
-        "level_change", // Student level changed
-        "new_recommendation", // AI generated new recommendation
-        "system", // General system notification
-      ],
-      required: true,
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "users", key: "id" },
+      onDelete: "CASCADE",
     },
     title: {
-      type: String,
-      required: [true, "Notification title is required"],
-      maxlength: 200,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     message: {
-      type: String,
-      required: [true, "Notification message is required"],
+      type: DataTypes.TEXT,
+      allowNull: false,
     },
-    // Contextual references
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      default: null,
+    // e.g. "info", "warning", "alert", "success"
+    type: {
+      type: DataTypes.ENUM("info", "warning", "alert", "success"),
+      defaultValue: "info",
     },
-    supervisionSession: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SupervisionSession",
-      default: null,
-    },
-    student: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null, // the student this notification is about (for teacher alerts)
-    },
-    // Notification state
     isRead: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    readAt: {
-      type: Date,
-      default: null,
-    },
-    // Priority
-    priority: {
-      type: String,
-      enum: ["low", "medium", "high", "urgent"],
-      default: "medium",
+    // Optional deep-link metadata
+    link: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
   },
   {
+    tableName: "notifications",
     timestamps: true,
+    updatedAt: false,
   }
 );
 
-notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
-notificationSchema.index({ type: 1 });
-
-module.exports = mongoose.model("Notification", notificationSchema);
+module.exports = Notification;

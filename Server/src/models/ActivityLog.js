@@ -1,87 +1,52 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const activityLogSchema = new mongoose.Schema(
+/**
+ * ActivityLog - Records every significant user action for the analytics dashboard.
+ */
+const ActivityLog = sequelize.define(
+  "ActivityLog",
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "User reference is required"],
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    // What kind of activity
-    type: {
-      type: String,
-      enum: [
-        "course_access", // Accessed a course/module
-        "resource_view", // Viewed a resource
-        "quiz_start", // Started a quiz
-        "quiz_complete", // Completed a quiz
-        "code_session_start", // Started coding
-        "code_session_end", // Ended coding session
-        "code_run", // Ran code
-        "code_error", // Encountered error
-        "supervision_join", // Joined supervision session
-        "supervision_leave", // Left supervision session
-        "chat_message", // Sent a chatbot message
-        "login", // User logged in
-        "logout", // User logged out
-      ],
-      required: true,
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "users", key: "id" },
+      onDelete: "CASCADE",
     },
-    // References (contextual, depending on type)
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      default: null,
+    // e.g. "course_view", "quiz_start", "quiz_submit", "code_run", "resource_download", "login", "chat_message"
+    activityType: {
+      type: DataTypes.STRING(80),
+      allowNull: false,
     },
-    module: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Module",
-      default: null,
+    // Optional reference to a course
+    courseId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "courses", key: "id" },
+      onDelete: "SET NULL",
     },
-    quiz: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Quiz",
-      default: null,
+    // Arbitrary payload (e.g. { language: "python", errors: 3 })
+    details: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
-    codeSession: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "CodeSession",
-      default: null,
-    },
-    supervisionSession: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SupervisionSession",
-      default: null,
-    },
-    // Duration of the activity in seconds (where applicable)
+    // Time spent on this activity in seconds
     duration: {
-      type: Number,
-      default: null,
-    },
-    // Additional metadata
-    metadata: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
-    },
-    // IP address (for security logging)
-    ipAddress: {
-      type: String,
-      default: null,
-    },
-    // User agent
-    userAgent: {
-      type: String,
-      default: null,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
   {
+    tableName: "activity_logs",
     timestamps: true,
+    // Only createdAt is relevant; no updatedAt needed
+    updatedAt: false,
   }
 );
 
-// Indexes for dashboard analytics queries
-activityLogSchema.index({ user: 1, type: 1, createdAt: -1 });
-activityLogSchema.index({ course: 1, createdAt: -1 });
-activityLogSchema.index({ type: 1, createdAt: -1 });
-
-module.exports = mongoose.model("ActivityLog", activityLogSchema);
+module.exports = ActivityLog;

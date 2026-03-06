@@ -1,67 +1,42 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const moduleSchema = new mongoose.Schema(
+const Module = sequelize.define(
+  "Module",
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    courseId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "courses", key: "id" },
+      onDelete: "CASCADE",
+    },
     title: {
-      type: String,
-      required: [true, "Module title is required"],
-      trim: true,
-      maxlength: 200,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     description: {
-      type: String,
-      default: "",
-    },
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      required: [true, "Course reference is required"],
-    },
-    // Content body (rich text / markdown for AI explanations)
-    content: {
-      type: String,
-      default: "",
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     order: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    // Attached resources
-    resources: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Resource",
-      },
-    ],
-    // Linked quizzes for this module
-    quizzes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Quiz",
-      },
-    ],
-    // Difficulty for adaptive learning
-    difficulty: {
-      type: String,
-      enum: ["beginner", "intermediate", "advanced"],
-      default: "beginner",
-    },
-    // Estimated duration in minutes
-    estimatedDuration: {
-      type: Number,
-      default: null,
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     isPublished: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
   },
   {
+    tableName: "modules",
     timestamps: true,
   }
 );
 
-moduleSchema.index({ course: 1, order: 1 });
-
-module.exports = mongoose.model("Module", moduleSchema);
+module.exports = Module;

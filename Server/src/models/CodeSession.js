@@ -1,142 +1,78 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const codeSnapshotSchema = new mongoose.Schema({
-  code: {
-    type: String,
-    required: true,
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-  },
-  // Event that triggered the save
-  trigger: {
-    type: String,
-    enum: ["auto_save", "manual_save", "run", "error", "submit"],
-    default: "auto_save",
-  },
-});
-
-const errorLogSchema = new mongoose.Schema({
-  message: {
-    type: String,
-    required: true,
-  },
-  type: {
-    type: String, // "syntax", "runtime", "logic"
-    default: "runtime",
-  },
-  line: {
-    type: Number,
-    default: null,
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-  },
-  // Count of consecutive similar errors (for repeated error detection)
-  repeatCount: {
-    type: Number,
-    default: 1,
-  },
-});
-
-const codeSessionSchema = new mongoose.Schema(
+/**
+ * CodeSession - Persists a student's Web Code Editor session.
+ * Linked to a course; optionally to a specific module/resource.
+ */
+const CodeSession = sequelize.define(
+  "CodeSession",
   {
-    student: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "Student reference is required"],
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    // Optional link to a course/module exercise
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      default: null,
+    studentId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "users", key: "id" },
+      onDelete: "CASCADE",
     },
-    module: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Module",
-      default: null,
+    courseId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "courses", key: "id" },
+      onDelete: "SET NULL",
     },
-    // Optional link to a supervision session
-    supervisionSession: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SupervisionSession",
-      default: null,
-    },
-    // Programming language
+    // Programming language selected in the editor
     language: {
-      type: String,
-      enum: ["python", "java", "c", "javascript"],
-      required: [true, "Language is required"],
+      type: DataTypes.ENUM("python", "java", "c", "javascript", "typescript", "other"),
+      defaultValue: "python",
     },
-    // Current code state
-    currentCode: {
-      type: String,
-      default: "",
+    // Full code content (auto-saved)
+    code: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    // Automatic session snapshots
-    snapshots: [codeSnapshotSchema],
-    // Error logs for detection of repeated errors
-    errors: [errorLogSchema],
-    // Session timing
-    startedAt: {
-      type: Date,
-      default: Date.now,
-    },
-    endedAt: {
-      type: Date,
-      default: null,
-    },
-    // Total active editing time in seconds
-    activeTime: {
-      type: Number,
-      default: 0,
-    },
-    // Total idle time in seconds
-    idleTime: {
-      type: Number,
-      default: 0,
-    },
-    // Number of code runs
-    runCount: {
-      type: Number,
-      default: 0,
-    },
-    // Number of errors encountered
-    errorCount: {
-      type: Number,
-      default: 0,
-    },
-    // Number of repeated errors (threshold-based alert)
-    repeatedErrorCount: {
-      type: Number,
-      default: 0,
-    },
-    // Inactivity detected
-    inactivityDetected: {
-      type: Boolean,
-      default: false,
-    },
-    // Last output from code execution
+    // Last execution output
     lastOutput: {
-      type: String,
-      default: null,
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    // Cumulative error count in this session
+    errorCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    // Number of inactivity alerts triggered
+    inactivityAlerts: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    // Session duration in seconds
+    duration: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    // Has the teacher been alerted about repeated errors?
+    teacherAlertSent: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    savedAt: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
     status: {
-      type: String,
-      enum: ["active", "idle", "completed", "abandoned"],
-      default: "active",
+      type: DataTypes.ENUM("active", "paused", "completed"),
+      defaultValue: "active",
     },
   },
   {
+    tableName: "code_sessions",
     timestamps: true,
   }
 );
 
-codeSessionSchema.index({ student: 1, status: 1 });
-codeSessionSchema.index({ supervisionSession: 1 });
-codeSessionSchema.index({ course: 1, module: 1 });
-
-module.exports = mongoose.model("CodeSession", codeSessionSchema);
+module.exports = CodeSession;

@@ -1,73 +1,60 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const courseSchema = new mongoose.Schema(
+const Course = sequelize.define(
+  "Course",
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
     title: {
-      type: String,
-      required: [true, "Course title is required"],
-      trim: true,
-      maxlength: 200,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     description: {
-      type: String,
-      default: "",
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    teacher: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "Teacher is required"],
+    teacherId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "users", key: "id" },
+      onDelete: "CASCADE",
     },
-    // Classes this course is assigned to
-    classes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Class",
-      },
-    ],
-    // Ordered modules within this course
-    modules: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Module",
-      },
-    ],
-    category: {
-      type: String,
-      default: null, // e.g. "Programming", "Databases", "Networking"
+    classId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "classes", key: "id" },
+      onDelete: "SET NULL",
     },
-    tags: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
+    subject: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+    },
     difficulty: {
-      type: String,
-      enum: ["beginner", "intermediate", "advanced", "mixed"],
-      default: "mixed",
+      type: DataTypes.ENUM("beginner", "intermediate", "advanced"),
+      defaultValue: "beginner",
     },
     thumbnail: {
-      type: String,
-      default: null,
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     isPublished: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    publishedAt: {
-      type: Date,
-      default: null,
+    // Time estimate in minutes
+    estimatedDuration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
   },
   {
+    tableName: "courses",
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
   }
 );
 
-courseSchema.index({ teacher: 1 });
-courseSchema.index({ classes: 1 });
-courseSchema.index({ isPublished: 1 });
-
-module.exports = mongoose.model("Course", courseSchema);
+module.exports = Course;

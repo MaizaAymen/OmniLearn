@@ -1,0 +1,67 @@
+/* ===========================
+   Problem Page — IDE Layout
+   =========================== */
+
+.problem-page {
+  background: oklch(var(--b3));
+}
+
+/* Panels get rounded corners and subtle shadow */
+.problem-panel {
+  border: 1px solid oklch(var(--b3));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: oklch(var(--b1));
+}
+
+/* Top bar */
+.problem-topbar {
+  min-height: 44px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  z-index: 10;
+}
+
+/* Gutter indicators */
+.gutter-h,
+.gutter-v {
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.gutter-h:active,
+.gutter-v:active {
+  background: oklch(var(--p) / 0.15);
+}
+
+/* Scrollbar styling for problem description */
+.problem-panel::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.problem-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.problem-panel::-webkit-scrollbar-thumb {
+  background: oklch(var(--bc) / 0.15);
+  border-radius: 3px;
+}
+
+.problem-panel::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--bc) / 0.25);
+}
+
+/* Nested scrollable areas also get nice scrollbars */
+.problem-panel *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.problem-panel *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.problem-panel *::-webkit-scrollbar-thumb {
+  background: oklch(var(--bc) / 0.12);
+  border-radius: 3px;
+}

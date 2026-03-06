@@ -1,10 +1,11 @@
-export const LANGUAGE_VERSIONS = {
-  javascript: "18.15.0",
-  typescript: "5.0.3",
-  python: "3.10.0",
-  java: "15.0.2",
-  csharp: "6.12.0",
-  php: "8.2.3",
+// Judge0 language IDs (https://ce.judge0.com)
+export const JUDGE0_LANGUAGE_IDS = {
+  javascript: 63,  // Node.js 12.14.0
+  typescript: 74,  // TypeScript 3.7.4
+  python: 71,      // Python 3.8.1
+  java: 62,        // Java 13.0.1
+  csharp: 51,      // C# (Mono 6.6.0.0)
+  php: 68,         // PHP 7.4.1
 };
 
 export const LANGUAGE_CONFIG = {

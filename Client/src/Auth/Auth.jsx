@@ -17,12 +17,18 @@ import {
 import { GoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 import "./Auth.css";
+import Cookies from "js-cookie";
 
 const { Title, Text, Link } = Typography;
 
 const API_URL = "http://localhost:5000/api/auth";
 
 const Auth = () => {
+    const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstname, setFirstname] = useState("");
+  const [lastname, setLastname] = useState("");
+  const [role, setRole] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
@@ -35,15 +41,37 @@ const Auth = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      const endpoint = isLogin ? "/login" : "/register";
-      const res = await axios.post(`${API_URL}${endpoint}`, values);
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      message.success(isLogin ? "Welcome back!" : "Account created!");
-      window.location.href = "/";
+      if (isLogin) {
+        const res = await axios.post(`${API_URL}/login`, {
+          email: values.email,
+          password: values.password,
+        });
+        Cookies.set("token", res.data.token, {
+  expires: 7,
+  path: "/",
+});
+        Cookies.set("user", JSON.stringify(res.data.user), {
+  expires: 7,
+  path: "/",
+});
+        message.success("Welcome back!");
+        console.log(res.data);
+        window.location.href = "/";
+      } else {
+        await axios.post(`${API_URL}/register`, {
+          firstname: values.firstName,
+          lastname: values.lastName,
+          email: values.email,
+          password: values.password,
+          role: values.role,
+        });
+        message.success("Account created! Please sign in.");
+        setIsLogin(true);
+        form.resetFields();
+      }
     } catch (err) {
       message.error(
-        err.response?.data?.message || "Something went wrong"
+        err.response?.data?.error || err.response?.data?.message || "Something went wrong"
       );
     } finally {
       setLoading(false);
@@ -56,8 +84,8 @@ const Auth = () => {
       const res = await axios.post(`${API_URL}/google`, {
         credential: credentialResponse.credential,
       });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      Cookies.set("token", res.data.token, { expires: 7 });
+      Cookies.set("user", JSON.stringify(res.data.user), { expires: 7 });
       message.success("Logged in with Google!");
       window.location.href = "/";
     } catch (err) {
@@ -69,6 +97,29 @@ const Auth = () => {
     }
   };
 
+
+const handelregistre =  () => {
+ fetch(`http://localhost:5000/api/auth/register`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    firstname: firstname,
+    lastname: lastname,
+    email: email,
+    password: password,
+    role: role
+  }).then((res) => res.json())
+  .then((data) => {
+    console.log("User registered:", data);
+  })
+  .catch((err) => {
+    console.error("Registration error:", err);
+  }),
+    
+
+})} 
   return (
     <div className="auth-container">
       {/* Left side — illustration */}

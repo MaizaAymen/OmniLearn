@@ -1,158 +1,66 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const questionSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: [true, "Question text is required"],
-  },
-  type: {
-    type: String,
-    enum: ["mcq", "true_false", "short_answer", "code"],
-    required: true,
-  },
-  // For MCQ
-  options: [
-    {
-      text: { type: String, required: true },
-      isCorrect: { type: Boolean, default: false },
-    },
-  ],
-  // For short answer / code
-  correctAnswer: {
-    type: String,
-    default: null,
-  },
-  // For code questions
-  language: {
-    type: String,
-    default: null,
-  },
-  testCases: [
-    {
-      input: { type: String },
-      expectedOutput: { type: String },
-    },
-  ],
-  explanation: {
-    type: String,
-    default: "", // AI-generated explanation for feedback
-  },
-  points: {
-    type: Number,
-    default: 1,
-  },
-  difficulty: {
-    type: String,
-    enum: ["beginner", "intermediate", "advanced"],
-    default: "beginner",
-  },
-  // Was this question AI-generated?
-  isAIGenerated: {
-    type: Boolean,
-    default: false,
-  },
-});
-
-const quizSchema = new mongoose.Schema(
+const Quiz = sequelize.define(
+  "Quiz",
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    moduleId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "modules", key: "id" },
+      onDelete: "CASCADE",
+    },
+    courseId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "courses", key: "id" },
+      onDelete: "CASCADE",
+    },
     title: {
-      type: String,
-      required: [true, "Quiz title is required"],
-      trim: true,
-      maxlength: 200,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     description: {
-      type: String,
-      default: "",
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    module: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Module",
-      default: null,
-    },
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      required: [true, "Course reference is required"],
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    questions: [questionSchema],
-    // Quiz settings
-    duration: {
-      type: Number, // in minutes
-      default: null, // null = unlimited
+    // Time limit in minutes (null = unlimited)
+    timeLimit: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     maxAttempts: {
-      type: Number,
-      default: 1,
+      type: DataTypes.INTEGER,
+      defaultValue: 1,
     },
     passingScore: {
-      type: Number, // percentage 0-100
-      default: 50,
+      type: DataTypes.FLOAT,
+      defaultValue: 50.0,
     },
-    // Adaptive quiz: difficulty adjusts based on student answers
+    // AI-adaptive quiz adjusts difficulty per student
     isAdaptive: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    // Shuffle questions order
-    shuffleQuestions: {
-      type: Boolean,
-      default: false,
-    },
-    // Show correct answers after submission
-    showCorrectAnswers: {
-      type: Boolean,
-      default: true,
-    },
-    // AI-generated quiz
-    isAIGenerated: {
-      type: Boolean,
-      default: false,
-    },
-    // Assigned classes
-    classes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Class",
-      },
-    ],
     isPublished: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    startDate: {
-      type: Date,
-      default: null,
-    },
-    endDate: {
-      type: Date,
-      default: null,
+    // Difficulty targeting
+    targetLevel: {
+      type: DataTypes.ENUM("beginner", "intermediate", "advanced", "all"),
+      defaultValue: "all",
     },
   },
   {
+    tableName: "quizzes",
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
   }
 );
 
-// Virtual: total points
-quizSchema.virtual("totalPoints").get(function () {
-  return this.questions.reduce((sum, q) => sum + q.points, 0);
-});
-
-// Virtual: question count
-quizSchema.virtual("questionCount").get(function () {
-  return this.questions.length;
-});
-
-quizSchema.index({ course: 1 });
-quizSchema.index({ module: 1 });
-quizSchema.index({ createdBy: 1 });
-
-module.exports = mongoose.model("Quiz", quizSchema);
+module.exports = Quiz;

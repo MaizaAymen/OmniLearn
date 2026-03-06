@@ -1,69 +1,55 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const resourceSchema = new mongoose.Schema(
+const Resource = sequelize.define(
+  "Resource",
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    moduleId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: { model: "modules", key: "id" },
+      onDelete: "CASCADE",
+    },
     title: {
-      type: String,
-      required: [true, "Resource title is required"],
-      trim: true,
-      maxlength: 200,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
-    description: {
-      type: String,
-      default: "",
-    },
-    module: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Module",
-      required: [true, "Module reference is required"],
-    },
-    uploadedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    // Resource type
     type: {
-      type: String,
-      enum: ["pdf", "video", "code", "document", "image", "link", "other"],
-      required: [true, "Resource type is required"],
+      type: DataTypes.ENUM("pdf", "video", "code", "document", "image", "link"),
+      allowNull: false,
     },
-    // File path or URL
-    fileUrl: {
-      type: String,
-      required: [true, "File URL or path is required"],
+    // Public URL (external or CDN)
+    url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    // Original filename
-    originalName: {
-      type: String,
-      default: null,
+    // Local server file path (multer uploads)
+    filePath: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    // MIME type
     mimeType: {
-      type: String,
-      default: null,
+      type: DataTypes.STRING(100),
+      allowNull: true,
     },
-    // File size in bytes
-    fileSize: {
-      type: Number,
-      default: null,
+    sizeBytes: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
     },
-    // For code files: language
-    language: {
-      type: String,
-      default: null, // "python", "java", "c", "javascript"
-    },
-    // Order within the module
     order: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
   {
+    tableName: "resources",
     timestamps: true,
   }
 );
 
-resourceSchema.index({ module: 1, order: 1 });
-
-module.exports = mongoose.model("Resource", resourceSchema);
+module.exports = Resource;
