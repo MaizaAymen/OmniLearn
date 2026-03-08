@@ -5,7 +5,7 @@ const { User } = require("../models");
 const sendEmail = require("../config/mail");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("../config");
+const { JWT_SECRET, JWT_REFRESH_SECRET } = require("../config");
 
 
 
@@ -86,12 +86,33 @@ router.post("/login", async (req, res) => {
         }
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = jwt.sign({ id: user.id, email: user.email }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
-        res.json({ token, refreshToken });
+        res.json({
+            token,
+            refreshToken,
+            user: { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname, role: user.role },
+        });
     } catch (error) {
         res.status(500).json({ error: "Erreur lors de la connexion" });
         console.error("Erreur de connexion:", error);
 
     }})
+router.post("/refresh-token", async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ error: "Refresh token manquant" });
+        }
+        jwt.verify(refreshToken, JWT_REFRESH_SECRET, (err, user) => {
+            if (err) {
+                return res.status(403).json({ error: "Refresh token invalide" });
+            }
+            const newToken = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+            res.json({ token: newToken });
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Erreur lors du rafraîchissement du token" });
+    }
+});
 
 router.post("/reset-password", async (req, res) => {
     try {
@@ -123,14 +144,6 @@ L'équipe Learnflow
 });
 
 
-router.get("/getAllUsers", async (req, res) => {
-    try {
-        const users = await User.findAll();
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({ error: "Erreur lors de la récupération des utilisateurs" });
-    }
-});
 
 
 module.exports = router;

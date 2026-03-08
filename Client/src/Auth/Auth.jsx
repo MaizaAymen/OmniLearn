@@ -19,19 +19,34 @@ import axios from "axios";
 import "./Auth.css";
 import Cookies from "js-cookie";
 
+
+
 const { Title, Text, Link } = Typography;
 
 const API_URL = "http://localhost:5000/api/auth";
 
+export const refreshToken = async () => {
+  const stored = Cookies.get("refreshToken");
+  if (!stored) return null;
+  try {
+    const res = await axios.post(`${API_URL}/refresh-token`, { refreshToken: stored });
+    Cookies.set("token", res.data.token, { expires: 7, path: "/" });
+    return res.data.token;
+  } catch {
+    return null;
+  }
+};
+
 const Auth = () => {
-    const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [firstname, setFirstname] = useState("");
-  const [lastname, setLastname] = useState("");
-  const [role, setRole] = useState('');
+  //   const [email, setEmail] = useState("");
+  // const [password, setPassword] = useState("");
+  // const [firstname, setFirstname] = useState("");
+  // const [lastname, setLastname] = useState("");
+  // const [role, setRole] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
@@ -50,13 +65,17 @@ const Auth = () => {
   expires: 7,
   path: "/",
 });
-        Cookies.set("user", JSON.stringify(res.data.user), {
+Cookies.set("refreshToken", res.data.refreshToken, {
+  expires: 7,
+  path: "/",
+});
+Cookies.set("user", JSON.stringify(res.data.user), {
   expires: 7,
   path: "/",
 });
         message.success("Welcome back!");
         console.log(res.data);
-        window.location.href = "/";
+        window.location.href = "/problems";
       } else {
         await axios.post(`${API_URL}/register`, {
           firstname: values.firstName,
@@ -98,28 +117,7 @@ const Auth = () => {
   };
 
 
-const handelregistre =  () => {
- fetch(`http://localhost:5000/api/auth/register`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    firstname: firstname,
-    lastname: lastname,
-    email: email,
-    password: password,
-    role: role
-  }).then((res) => res.json())
-  .then((data) => {
-    console.log("User registered:", data);
-  })
-  .catch((err) => {
-    console.error("Registration error:", err);
-  }),
-    
 
-})} 
   return (
     <div className="auth-container">
       {/* Left side — illustration */}
