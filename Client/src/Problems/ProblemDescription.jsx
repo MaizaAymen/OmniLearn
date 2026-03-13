@@ -16,10 +16,37 @@ function ProblemDescription({
   problem,
   currentProblemId,
   onProblemChange,
+  onAiProblemGenerated,
   allProblems,
 }) {
   const [activeTab, setActiveTab] = useState("description");
   const [copiedIdx, setCopiedIdx] = useState(null);
+  const [topicInput, setTopicInput] = useState("");
+const [isGenerating, setIsGenerating] = useState(false);
+
+
+
+const handleGenerateFromInput = async () => {
+  if (!topicInput.trim()) return; // optional: ignore empty input
+
+  setIsGenerating(true);
+  try {
+    const response = await fetch("http://localhost:5000/api/ai/ai/generate/problems", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: topicInput.trim() })
+    });
+    const newProblems = await response.json();
+    if (newProblems.length > 0) {
+      onAiProblemGenerated(newProblems[0]);
+      setActiveTab("description");
+    }
+  } catch (error) {
+    console.error("Error generating new problem:", error);
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
   const handleCopyExample = (text, idx) => {
     navigator.clipboard.writeText(text);
@@ -27,14 +54,36 @@ function ProblemDescription({
     setTimeout(() => setCopiedIdx(null), 1500);
   };
 
-  const difficultyColor = {
-    Easy: "text-success",
-    Medium: "text-warning",
-    Hard: "text-error",
-  };
 
   return (
     <div className="h-full flex flex-col bg-base-100">
+      {/* Quick Generate */}
+<div className="flex items-center gap-2 px-4 py-2 border-b border-base-300 bg-base-200/30">
+  <input
+    type="text"
+    placeholder="Enter topic (e.g., 'Dynamic Programming')"
+    value={topicInput}
+    onChange={(e) => setTopicInput(e.target.value)}
+    className="input input-xs input-bordered flex-1"
+    disabled={isGenerating}
+    onKeyDown={(e) => e.key === 'Enter' && handleGenerateFromInput()}
+  />
+  <button
+    onClick={handleGenerateFromInput}
+    className="btn btn-primary btn-xs"
+    disabled={isGenerating || !topicInput.trim()}
+  >
+    {isGenerating ? (
+      <>
+        <span className="loading loading-spinner loading-xs"></span>
+        Generating...
+      </>
+    ) : (
+      'Generate'
+    )}
+  </button>
+</div>
+
       {/* TABS */}
       <div className="flex items-center bg-base-100 border-b border-base-300 px-2 shrink-0">
         <button
@@ -76,7 +125,7 @@ function ProblemDescription({
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === "description" && (
-          <div className="p-5 space-y-5 display=fixed ">
+          <div className="p-5 space-y-5">
             {/* TITLE + DIFFICULTY */}
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -228,16 +277,8 @@ function ProblemDescription({
           </div>
         )}
         {activeTab === "Paint" && (
-          <div className="p-5 space-y-4">
-            <div className="flex flex-col items-center justify-center py-12 text-base-content/30">
-              <LightbulbIcon className="size-10 mb-3" />
-              <p className="text-sm font-medium">
-                <div style={{ position: "fixed", inset: 0 }}>
-               <Tldraw />
-              </div>
-              </p>
-              <p className="text-xs mt-1">Try solving it on your own first!</p>
-            </div>
+          <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+            <Tldraw />
           </div>
         )}
       </div>

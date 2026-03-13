@@ -11,6 +11,39 @@ function ProblemsPage() {
   const mediumProblemsCount = problems.filter((p) => p.difficulty === "Medium").length;
   const hardProblemsCount = problems.filter((p) => p.difficulty === "Hard").length;
 
+const handelegetproblems = async () => {
+  try {
+    const response = await fetch("/api/ai/ai/getallproblems", {
+      method: "Get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await response.json();
+    console.log("Generated Problems:", data);
+  }
+    catch (error) {
+      console.error("Error fetching problems:", error);
+    }
+};
+
+const handelgetpromplembyid = async () => {
+  try {
+    const response = await fetch("/api/ai/ai/getproblembyid", {
+      method: "Post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: "problem-id" }),
+    });
+    const data = await response.json();
+    console.log("Generated Problems:", data);
+  }
+    catch (error) {
+      console.error("Error fetching problem:", error);
+    }
+};
+
   return (
     <div className="min-h-screen bg-base-200">
       <Navbar />

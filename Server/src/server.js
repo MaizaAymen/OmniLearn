@@ -7,7 +7,7 @@ const sequelize = require("./config/database");
 const { ensureDatabase } = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const UserRoutes = require("./routes/UserRoutes");
-
+const AiRoutes = require("./ai/Ai");
 // Import models/index.js to register all models and associations
 require("./models");
 
@@ -24,6 +24,7 @@ app.use(morgan("dev"));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/", UserRoutes);
+app.use("/api/ai", AiRoutes);
 
 
 app.get("/", (req, res) => {

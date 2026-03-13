@@ -7,6 +7,7 @@ import { Route, Routes } from "react-router-dom";
 import User from "./Dashbord/User";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Roadmaps from "./Roadmaps/Roadmaps";
+import ProblemRoadmap from "./Roadmaps/ProblemRoadmap";
 function App() {
   return (
     <TooltipProvider>
@@ -17,6 +18,7 @@ function App() {
         <Route path="/problems/:id" element={<ProblemPage />} />
         <Route path="/users" element={<User />} />
         <Route path="/roadmaps" element={<Roadmaps />} />
+        <Route path="/problem-roadmap" element={<ProblemRoadmap />} />
       </Routes>
       <Toaster toastOptions={{ duration: 3000 }} />
     </TooltipProvider>

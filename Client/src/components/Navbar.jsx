@@ -12,6 +12,12 @@ function Navbar() {
         <Link to="/problems" className="btn btn-ghost btn-sm">
           Problems
         </Link>
+        <Link to="/roadmaps" className="btn btn-ghost btn-sm">
+          Roadmaps
+        </Link>
+        <Link to="/problem-roadmap" className="btn btn-ghost btn-sm">
+          Problem Roadmap
+        </Link>
       </div>
     </div>
   );
