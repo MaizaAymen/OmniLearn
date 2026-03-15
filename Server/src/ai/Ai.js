@@ -6,7 +6,7 @@ const {slugify} = require("../utils/slugify");
 
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 });
 
 async function generateRoadmap(topic) {
@@ -154,7 +154,7 @@ router.post("/ai/generate/problems", async (req, res) => {
     "difficulty": "Easy" | "Medium" | "Hard",
     "category": "string",               // include "${topic}" and optionally subcategories separated by " • " (e.g., "Array • Hash Table")
     "description": {
-      "text": "string",                //make 5 line  description 
+      "text": "string",                //make 2 line  description 
       "notes": ["string"]
     },
     "examples": [
@@ -241,7 +241,6 @@ router.post("/ai/getproblembyid", async (req, res) => {
     res.status(500).json({ error: "Error fetching problem" });
   }
 });
-
 
 router.delete("/ai/deletepromblem/:id", async (req, res) => {
   try {

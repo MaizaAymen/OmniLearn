@@ -16,37 +16,11 @@ function ProblemDescription({
   problem,
   currentProblemId,
   onProblemChange,
-  onAiProblemGenerated,
   allProblems,
 }) {
   const [activeTab, setActiveTab] = useState("description");
   const [copiedIdx, setCopiedIdx] = useState(null);
-  const [topicInput, setTopicInput] = useState("");
-const [isGenerating, setIsGenerating] = useState(false);
 
-
-
-const handleGenerateFromInput = async () => {
-  if (!topicInput.trim()) return; // optional: ignore empty input
-
-  setIsGenerating(true);
-  try {
-    const response = await fetch("http://localhost:5000/api/ai/ai/generate/problems", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: topicInput.trim() })
-    });
-    const newProblems = await response.json();
-    if (newProblems.length > 0) {
-      onAiProblemGenerated(newProblems[0]);
-      setActiveTab("description");
-    }
-  } catch (error) {
-    console.error("Error generating new problem:", error);
-  } finally {
-    setIsGenerating(false);
-  }
-};
 
   const handleCopyExample = (text, idx) => {
     navigator.clipboard.writeText(text);
@@ -58,31 +32,6 @@ const handleGenerateFromInput = async () => {
   return (
     <div className="h-full flex flex-col bg-base-100">
       {/* Quick Generate */}
-<div className="flex items-center gap-2 px-4 py-2 border-b border-base-300 bg-base-200/30">
-  <input
-    type="text"
-    placeholder="Enter topic (e.g., 'Dynamic Programming')"
-    value={topicInput}
-    onChange={(e) => setTopicInput(e.target.value)}
-    className="input input-xs input-bordered flex-1"
-    disabled={isGenerating}
-    onKeyDown={(e) => e.key === 'Enter' && handleGenerateFromInput()}
-  />
-  <button
-    onClick={handleGenerateFromInput}
-    className="btn btn-primary btn-xs"
-    disabled={isGenerating || !topicInput.trim()}
-  >
-    {isGenerating ? (
-      <>
-        <span className="loading loading-spinner loading-xs"></span>
-        Generating...
-      </>
-    ) : (
-      'Generate'
-    )}
-  </button>
-</div>
 
       {/* TABS */}
       <div className="flex items-center bg-base-100 border-b border-base-300 px-2 shrink-0">
@@ -110,11 +59,11 @@ const handleGenerateFromInput = async () => {
         </button>
         <button
           className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-            activeTab === "Paint"
+            activeTab === "paint"
               ? "border-primary text-primary"
               : "border-transparent text-base-content/50 hover:text-base-content/80"
           }`}
-          onClick={() => setActiveTab("Paint")}
+          onClick={() => setActiveTab("paint")}
         >
           <BookOpenIcon className="size-3.5" />
           Paint
@@ -123,7 +72,11 @@ const handleGenerateFromInput = async () => {
       </div>
 
       {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={`flex-1 ${
+          activeTab === "paint" ? "overflow-hidden" : "overflow-y-auto"
+        }`}
+      >
         {activeTab === "description" && (
           <div className="p-5 space-y-5">
             {/* TITLE + DIFFICULTY */}
@@ -276,9 +229,11 @@ const handleGenerateFromInput = async () => {
             </div>
           </div>
         )}
-        {activeTab === "Paint" && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-            <Tldraw />
+        {activeTab === "paint" && (
+          <div className="h-full w-full p-2">
+            <div className="h-full w-full rounded-lg border border-base-300 overflow-hidden bg-base-100">
+              <Tldraw />
+            </div>
           </div>
         )}
       </div>

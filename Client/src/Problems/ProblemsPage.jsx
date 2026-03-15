@@ -1,48 +1,43 @@
-import { Link } from "react-router";
-import { PROBLEMS } from "./problems";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ChevronRightIcon, Code2Icon } from "lucide-react";
 import { getDifficultyBadgeClass } from "./utils";
 import Navbar from "../components/Navbar";
 
 function ProblemsPage() {
-  const problems = Object.values(PROBLEMS);
+  const [problems, setProblems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProblems = async () => {
+      try {
+        const response = await fetch("http://localhost:5000/api/ai/ai/getallproblems", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch problems: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setProblems(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error fetching problems:", error);
+        setProblems([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProblems();
+  }, []);
 
   const easyProblemsCount = problems.filter((p) => p.difficulty === "Easy").length;
   const mediumProblemsCount = problems.filter((p) => p.difficulty === "Medium").length;
   const hardProblemsCount = problems.filter((p) => p.difficulty === "Hard").length;
-
-const handelegetproblems = async () => {
-  try {
-    const response = await fetch("/api/ai/ai/getallproblems", {
-      method: "Get",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await response.json();
-    console.log("Generated Problems:", data);
-  }
-    catch (error) {
-      console.error("Error fetching problems:", error);
-    }
-};
-
-const handelgetpromplembyid = async () => {
-  try {
-    const response = await fetch("/api/ai/ai/getproblembyid", {
-      method: "Post",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: "problem-id" }),
-    });
-    const data = await response.json();
-    console.log("Generated Problems:", data);
-  }
-    catch (error) {
-      console.error("Error fetching problem:", error);
-    }
-};
 
   return (
     <div className="min-h-screen bg-base-200">
@@ -59,6 +54,18 @@ const handelgetpromplembyid = async () => {
 
         {/* PROBLEMS LIST */}
         <div className="space-y-4">
+          {isLoading && (
+            <div className="card bg-base-100">
+              <div className="card-body text-base-content/70">Loading problems...</div>
+            </div>
+          )}
+
+          {!isLoading && problems.length === 0 && (
+            <div className="card bg-base-100">
+              <div className="card-body text-base-content/70">No problems found.</div>
+            </div>
+          )}
+
           {problems.map((problem) => (
             <Link
               key={problem.id}
@@ -83,7 +90,9 @@ const handelgetpromplembyid = async () => {
                         <p className="text-sm text-base-content/60"> {problem.category}</p>
                       </div>
                     </div>
-                    <p className="text-base-content/80 mb-3">{problem.description.text}</p>
+                    <p className="text-base-content/80 mb-3">
+                      {problem.description?.text || "No description available."}
+                    </p>
                   </div>
                   {/* RIGHT SIDE */}
 

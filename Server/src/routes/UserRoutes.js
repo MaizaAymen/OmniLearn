@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const sequelize = require("../config/database");
 const { User } = require("../models");
 
 
@@ -40,8 +39,16 @@ router.put("/users/:id", async (req, res) => {
     const { firstname, lastname, email, password, role } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
-      user.firstname = firstname || user.firstname;
-        user.lastname = lastname || user.lastname;
+      user.firstname = firstname ?? user.firstname;
+      user.lastname = lastname ?? user.lastname;
+      user.email = email ?? user.email;
+      user.role = role ?? user.role;
+
+      // Update password only when explicitly provided.
+      if (typeof password === "string" && password.trim().length > 0) {
+        user.password = password;
+      }
+
       await user.save();
       res.json(user);
     } else {

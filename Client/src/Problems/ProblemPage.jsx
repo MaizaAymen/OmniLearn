@@ -1,12 +1,11 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { PROBLEMS } from "./problems";
 import ProblemDescription from "./ProblemDescription";
 import OutputPanel from "../Codeeditor/OutputPanel";
 import CodeEditorPanel from "../Codeeditor/Codeeditor";
 import { executeCode } from "../Codeeditor/Api";
-import Navbar from "../components/Navbar";
 
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -18,8 +17,6 @@ import {
   Loader2Icon,
   TimerIcon,
   RotateCcwIcon,
-  MaximizeIcon,
-  MinimizeIcon,
   ListIcon,
 } from "lucide-react";
 
@@ -29,12 +26,12 @@ function ProblemPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const problemIds = Object.keys(PROBLEMS);
-  const [currentProblemId, setCurrentProblemId] = useState(id || "two-sum");
+  const defaultProblemId = Object.keys(PROBLEMS)[0] || "";
+  const [currentProblemId, setCurrentProblemId] = useState(id || defaultProblemId);
+  const [apiProblem, setApiProblem] = useState(null);
+  const [isProblemLoading, setIsProblemLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript");
-  const [code, setCode] = useState(
-    PROBLEMS[currentProblemId]?.starterCode?.javascript || ""
-  );
+  const [code, setCode] = useState("");
   const [output, setOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,7 +49,18 @@ function ProblemPage() {
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
 
-  const currentProblem = PROBLEMS[currentProblemId];
+  const allProblemsById = useMemo(() => {
+    const mergedProblems = { ...PROBLEMS };
+    if (apiProblem?.id) {
+      mergedProblems[apiProblem.id] = apiProblem;
+    }
+    return mergedProblems;
+  }, [apiProblem]);
+
+  const problemIds = Object.keys(allProblemsById).filter(
+    (problemId) => Boolean(allProblemsById[problemId])
+  );
+  const currentProblem = allProblemsById[currentProblemId] || null;
   const currentIndex = problemIds.indexOf(currentProblemId);
 
   // Timer effect
@@ -71,19 +79,66 @@ function ProblemPage() {
   };
 
   useEffect(() => {
-    if (id && PROBLEMS[id]) {
-      setCurrentProblemId(id);
-      setCode(PROBLEMS[id].starterCode[selectedLanguage] || "");
-      setOutput(null);
-      setSeconds(0);
-      setActiveRightTab("testcase");
+    const targetProblemId = id || defaultProblemId;
+    if (!targetProblemId) return;
+
+    setCurrentProblemId(targetProblemId);
+    setOutput(null);
+    setSeconds(0);
+    setActiveRightTab("testcase");
+
+    if (PROBLEMS[targetProblemId]) {
+      setApiProblem(null);
+      return;
     }
-  }, [id, selectedLanguage]);
+
+    let active = true;
+
+    const fetchProblemById = async () => {
+      setIsProblemLoading(true);
+      try {
+        const response = await fetch("http://localhost:5000/api/ai/ai/getproblembyid", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id: targetProblemId }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Problem not found: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (active) {
+          setApiProblem(data);
+        }
+      } catch {
+        if (active) {
+          setApiProblem(null);
+        }
+      } finally {
+        if (active) {
+          setIsProblemLoading(false);
+        }
+      }
+    };
+
+    fetchProblemById();
+
+    return () => {
+      active = false;
+    };
+  }, [id, defaultProblemId]);
+
+  useEffect(() => {
+    if (!currentProblem) return;
+    setCode(currentProblem.starterCode?.[selectedLanguage] || "");
+  }, [currentProblem, selectedLanguage]);
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
     setSelectedLanguage(newLang);
-    setCode(currentProblem.starterCode[newLang] || "");
     setOutput(null);
   };
 
@@ -100,6 +155,7 @@ function ProblemPage() {
   };
 
   const handleResetCode = () => {
+    if (!currentProblem) return;
     setCode(currentProblem.starterCode[selectedLanguage] || "");
     setOutput(null);
     toast.success("Code reset to starter template");
@@ -125,6 +181,11 @@ function ProblemPage() {
   };
 
   const handleSubmit = async () => {
+    if (!currentProblem) {
+      toast.error("Problem data is not loaded yet");
+      return;
+    }
+
     setIsSubmitting(true);
     setActiveRightTab("result");
     try {
@@ -223,6 +284,32 @@ function ProblemPage() {
     [editorHeight]
   );
 
+  if (isProblemLoading && !currentProblem) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-base-300">
+        <div className="card bg-base-100 shadow-md">
+          <div className="card-body text-base-content/70">Loading problem...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentProblem) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-base-300 px-4">
+        <div className="card bg-base-100 shadow-md max-w-md w-full">
+          <div className="card-body gap-4">
+            <h2 className="card-title">Problem not found</h2>
+            <p className="text-base-content/70">
+              This problem could not be loaded. It may have been deleted or the id is invalid.
+            </p>
+            <button className="btn btn-primary" onClick={() => navigate("/problems")}>Back to Problems</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="problem-page h-screen flex flex-col overflow-hidden bg-base-300">
       {/* TOP BAR */}
@@ -255,7 +342,7 @@ function ProblemPage() {
             >
               {problemIds.map((pid) => (
                 <option key={pid} value={pid}>
-                  {PROBLEMS[pid].title}
+                  {allProblemsById[pid]?.title || pid}
                 </option>
               ))}
             </select>
@@ -332,7 +419,7 @@ function ProblemPage() {
             problem={currentProblem}
             currentProblemId={currentProblemId}
             onProblemChange={handleProblemChange}
-            allProblems={Object.values(PROBLEMS)}
+            allProblems={Object.values(allProblemsById)}
           />
         </div>
 

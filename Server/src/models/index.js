@@ -21,6 +21,7 @@ const Progress = require("./Progress");
 const ChatMessage = require("./ChatMessage");
 const Notification = require("./Notification");
 const CodeSubmission = require("./CodeSubmission");
+const Problem = require("./Problem");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
