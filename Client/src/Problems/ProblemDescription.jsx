@@ -229,13 +229,16 @@ function ProblemDescription({
             </div>
           </div>
         )}
-        {activeTab === "paint" && (
-          <div className="h-full w-full p-2">
-            <div className="h-full w-full rounded-lg border border-base-300 overflow-hidden bg-base-100">
-              <Tldraw />
-            </div>
+        
+        <div
+          className={`h-full w-full p-2 ${
+            activeTab === "paint" ? "block" : "hidden"
+          }`}
+        >
+          <div className="h-full w-full rounded-lg border border-base-300 overflow-hidden bg-base-100">
+            <Tldraw />
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

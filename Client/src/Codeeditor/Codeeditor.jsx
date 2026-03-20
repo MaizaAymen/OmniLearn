@@ -15,7 +15,7 @@ function CodeEditorPanel({
       <div className="flex items-center justify-between px-4 py-3 bg-base-100 border-t border-base-300">
         <div className="flex items-center gap-3">
           <img
-            src={LANGUAGE_CONFIG[selectedLanguage].icon}
+            src={LANGUAGE_CONFIG[selectedLanguage].icon || "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/code/code-original.svg"}
             alt={LANGUAGE_CONFIG[selectedLanguage].name}
             className="size-6"
           />

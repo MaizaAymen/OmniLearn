@@ -9,12 +9,42 @@ export const JUDGE0_LANGUAGE_IDS = {
 };
 
 export const LANGUAGE_CONFIG = {
-  javascript: { name: "JavaScript", monacoLang: "javascript", badge: "JS" },
-  typescript: { name: "TypeScript", monacoLang: "typescript", badge: "TS" },
-  python:     { name: "Python",     monacoLang: "python",     badge: "PY" },
-  java:       { name: "Java",       monacoLang: "java",       badge: "JV" },
-  csharp:     { name: "C#",         monacoLang: "csharp",     badge: "C#" },
-  php:        { name: "PHP",        monacoLang: "php",        badge: "PHP" },
+  javascript: {
+    name: "JavaScript",
+    monacoLang: "javascript",
+    badge: "JS",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg",
+  },
+  typescript: {
+    name: "TypeScript",
+    monacoLang: "typescript",
+    badge: "TS",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg",
+  },
+  python: {
+    name: "Python",
+    monacoLang: "python",
+    badge: "PY",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg",
+  },
+  java: {
+    name: "Java",
+    monacoLang: "java",
+    badge: "JV",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg",
+  },
+  csharp: {
+    name: "C#",
+    monacoLang: "csharp",
+    badge: "C#",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/csharp/csharp-original.svg",
+  },
+  php: {
+    name: "PHP",
+    monacoLang: "php",
+    badge: "PHP",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/php/php-original.svg",
+  },
 };
 
 export const CODE_SNIPPETS = {
