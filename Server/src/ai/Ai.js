@@ -6,7 +6,7 @@ const {slugify} = require("../utils/slugify");
 
 
 const groq = new Groq({
-  apiKey: "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  apiKey: "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",
 });
 
 async function generateRoadmap(topic) {
@@ -65,7 +65,45 @@ const nodes = steps.map((step, index) => ({
 
 // ─── Problem Learning Roadmap ────────────────────────────────────────────────
 
-async function generateProblemRoadmap(problem) {
+function buildProblemSummary(problemPayload) {
+  if (typeof problemPayload === "string") return problemPayload;
+  if (!problemPayload || typeof problemPayload !== "object") return "";
+
+  const title = problemPayload.title || "";
+  const difficulty = problemPayload.difficulty || "";
+  const description = problemPayload.description?.text || "";
+  const notes = Array.isArray(problemPayload.description?.notes)
+    ? problemPayload.description.notes.join(" ")
+    : "";
+  const examples = Array.isArray(problemPayload.examples)
+    ? problemPayload.examples
+        .map(
+          (ex, idx) =>
+            `Example ${idx + 1}: input=${ex.input} output=${ex.output} explanation=${ex.explanation || ""}`
+        )
+        .join("\n")
+    : "";
+  const constraints = Array.isArray(problemPayload.constraints)
+    ? problemPayload.constraints.join("; ")
+    : "";
+
+  return `Problem Title: ${title}\nDifficulty: ${difficulty}\nDescription: ${description}\nNotes: ${notes}\nExamples:\n${examples}\nConstraints: ${constraints}`.trim();
+}
+
+function normalizeRoadmap(roadmap) {
+  if (!roadmap || typeof roadmap !== "object") return null;
+  const nodes = Array.isArray(roadmap.nodes) ? roadmap.nodes : [];
+  const edges = Array.isArray(roadmap.edges) ? roadmap.edges : [];
+  return {
+    title: roadmap.title || "",
+    difficulty: (roadmap.difficulty || "").toLowerCase(),
+    nodes,
+    edges,
+  };
+}
+
+async function generateProblemRoadmap(problemPayload) {
+  const problemText = buildProblemSummary(problemPayload);
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [
@@ -77,54 +115,58 @@ Return ONLY valid JSON — no markdown fences, no extra text, just the JSON obje
 
 Required schema (strictly follow this):
 {
-  "problem": "problem name string",
-  "concepts_detected": ["concept1", "concept2"],
-  "roadmap": [
+  "title": "string",
+  "difficulty": "easy" | "medium" | "hard",
+  "nodes": [
     {
-      "step": 1,
-      "title": "concept name",
-      "description": "short one-line explanation",
-      "explanation": "clear beginner-friendly explanation (2-4 sentences)",
-      "example": "small illustrative code snippet or text example",
-      "hints": ["hint 1", "hint 2", "hint 3"],
-      "practice": ["LeetCode or practice problem name 1", "problem 2"],
-      "resources": ["resource description or link"]
+      "id": "string",
+      "title": "string",
+      "description": "short clear explanation (2-3 lines max)",
+      "example": "short code example",
+      "hint": "short helpful hint",
+      "type": "theory" | "practice" | "implementation" | "optimization",
+      "position": { "x": number, "y": number }
     }
+  ],
+  "edges": [
+    { "from": "node_id", "to": "node_id" }
   ]
 }
 
 Rules:
-- Generate 5 to 8 steps.
-- Order concepts from easiest/most fundamental to hardest/optimized.
-- Each step must build on the previous one.
-- The last step should describe the optimal solution strategy (do NOT write code).
-- Keep explanations concise and beginner-friendly.`
+- The roadmap must be step-by-step from basic to advanced.
+- Each node must represent ONE small concept.
+- Descriptions must be simple and beginner-friendly.
+- Examples must be SHORT and relevant.
+- Hints must guide thinking, not give full answers.
+- Include at least: 1 theory node, 2 practice nodes, 1 implementation node, 1 optimization node.
+- Final node must represent the "Final Solution".
+- Positions must form a readable graph (top to bottom or left to right).
+- Do NOT include unnecessary text outside JSON.`
       },
       {
         role: "user",
-        content: `Generate a step-by-step learning roadmap for this coding problem:\n\n${problem}`
+        content: `Generate a roadmap for this coding problem:\n\n${problemText}`
       }
     ],
-    temperature: 0.6,
-    max_tokens: 4096
+    temperature: 0.5,
+    max_tokens: 4096,
   });
 
   let text = completion.choices[0].message.content;
-  // Strip markdown fences if present
   text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-  // Extract first JSON object in case of leading text
   const match = text.match(/\{[\s\S]*\}/);
   if (match) text = match[0];
-  return JSON.parse(text);
+  return normalizeRoadmap(JSON.parse(text));
 }
 
 router.post("/generate/problem-roadmap", async (req, res) => {
   try {
     const { problem } = req.body;
-    if (!problem || !problem.trim()) {
+    if (!problem || (typeof problem === "string" && !problem.trim())) {
       return res.status(400).json({ error: "Problem description is required" });
     }
-    const roadmap = await generateProblemRoadmap(problem.trim());
+    const roadmap = await generateProblemRoadmap(problem);
     res.json(roadmap);
   } catch (error) {
     console.error("Problem roadmap error:", error);
@@ -142,11 +184,23 @@ router.post("/ai/generate/problems", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `You are an expert coding problem designer. Generate problems that exactly match the schema used in the frontend. Output **only** a valid JSON array – no markdown, no extra text.`
+          content: `You are an expert coding problem designer. Generate problems that exactly match the schema used in the frontend.
+
+CRITICAL JSON FORMATTING RULES:
+- Output ONLY a valid JSON array – no markdown, no extra text
+- All strings must use escaped characters: \\n for newlines, \\" for quotes, \\\\ for backslashes
+- Code examples must have all special characters properly escaped
+- No trailing commas in arrays or objects
+- Use double quotes for all strings, never single quotes
+- Test your JSON validity before outputting`
         },
         {
           role: "user",
-          content: `Generate 5 distinct coding problems about "${topic}". The problems should cover different difficulty levels (Easy, Medium, Hard). Each problem must follow this schema:
+          content: `Generate 5 distinct coding problems about "${topic}". The problems should cover different difficulty levels (Easy, Medium, Hard).
+
+IMPORTANT: Keep code examples SHORT and SIMPLE to ensure valid JSON. Use single-line comments instead of multi-line. Keep function bodies minimal.
+
+Each problem must follow this schema:
 
 [
   {
@@ -165,6 +219,7 @@ router.post("/ai/generate/problems", async (req, res) => {
       }
     ],
     "constraints": ["string"],
+    "hints": ["string"],
     "starterCode": {
       "javascript": "string",
       "python": "string",
@@ -174,16 +229,40 @@ router.post("/ai/generate/problems", async (req, res) => {
       "javascript": "string",
       "python": "string",
       "java": "string"
-    }
+      },
+      "roadmap": {
+        "title": "string",
+        "difficulty": "easy" | "medium" | "hard",
+        "nodes": [
+          {
+            "id": "string",
+            "title": "string",
+            "description": "short clear explanation (2-3 lines max)",
+            "example": "short code example",
+            "hint": "short helpful hint",
+            "type": "theory" | "practice" | "implementation" | "optimization",
+            "position": { "x": number, "y": number }
+          }
+        ],
+        "edges": [
+          { "from": "node_id", "to": "node_id" }
+        ]
+      }
   }
 ]
 
 **Requirements:**
 - Generate exactly 5 problems.
 - Include at least 2 examples per problem.
+- Include 2 to 4 hints per problem. Keep hints short and actionable.
 - starterCode must contain a function skeleton and the same test cases as the examples.
 - expectedOutput must contain the exact output (including newlines) that the test cases would produce.
-- All strings must be properly escaped for valid JSON.
+- The roadmap must follow the schema above and be ordered from basic to advanced with a final "Final Solution" node.
+- **CRITICAL**: All strings must be properly escaped for valid JSON:
+  - Use \\n for line breaks in code/descriptions
+  - Use \\" for quotes inside strings
+  - Use \\\\ for backslashes
+  - Example: "function test() {\\n  return \\"hello\\";\\n}"
 - Do not include any text outside the JSON array.`
         }
       ]
@@ -191,16 +270,75 @@ router.post("/ai/generate/problems", async (req, res) => {
 
     let text = completion.choices[0].message.content;
 
-    // 2. Clean markdown code fences (just in case)
+    // 2. Clean markdown code fences and extract JSON array
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const startIndex = text.indexOf("[");
+    const endIndex = text.lastIndexOf("]");
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      text = text.slice(startIndex, endIndex + 1);
+    }
 
-    // 3. Parse JSON
-    const problemsData = JSON.parse(text);
+    // 3. Parse JSON with better error handling and retry mechanism
+    let problemsData;
+    try {
+      problemsData = JSON.parse(text);
+    } catch (parseError) {
+      console.error("JSON Parse Error on first attempt:", parseError.message);
+      console.error("Failed at position:", parseError.message.match(/position (\d+)/)?.[1]);
+      const errorPos = parseInt(parseError.message.match(/position (\d+)/)?.[1] || 0);
+      console.error("Text around error:", text.substring(
+        Math.max(0, errorPos - 100),
+        Math.min(text.length, errorPos + 100)
+      ));
+
+      // Try asking the AI to fix the JSON
+      console.log("Attempting to fix JSON with AI...");
+      const fixCompletion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: `You are a JSON repair expert. Fix the provided malformed JSON and return ONLY the repaired valid JSON array. Do not add any explanation or markdown.
+
+Rules:
+- Ensure all strings are properly terminated with closing quotes
+- Ensure all code strings have escaped special characters: \\n for newlines, \\" for quotes, \\\\ for backslashes
+- Remove any trailing commas
+- Ensure all brackets and braces are properly closed
+- Return ONLY the fixed JSON array, nothing else`
+          },
+          {
+            role: "user",
+            content: `Fix this malformed JSON (error at position ${errorPos}):\n\n${text}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 8000
+      });
+
+      let fixedText = fixCompletion.choices[0].message.content;
+      fixedText = fixedText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const fixedStartIndex = fixedText.indexOf("[");
+      const fixedEndIndex = fixedText.lastIndexOf("]");
+      if (fixedStartIndex !== -1 && fixedEndIndex !== -1 && fixedEndIndex > fixedStartIndex) {
+        fixedText = fixedText.slice(fixedStartIndex, fixedEndIndex + 1);
+      }
+
+      try {
+        problemsData = JSON.parse(fixedText);
+        console.log("Successfully parsed JSON after AI repair");
+      } catch (secondError) {
+        console.error("Failed to parse even after AI repair:", secondError.message);
+        throw new Error(`Invalid JSON from AI even after repair attempt: ${secondError.message}`);
+      }
+    }
 
     // 4. Add a slug as the primary key id for each problem
-    const problemsToInsert = problemsData.map(problem => ({
+    const problemsToInsert = problemsData.map((problem) => ({
       id: slugify(problem.title),
       ...problem,
+      hints: Array.isArray(problem.hints) ? problem.hints : [],
+      roadmap: normalizeRoadmap(problem.roadmap),
     }));
 
     // 5. Insert all problems into the database in one go
@@ -253,6 +391,90 @@ router.delete("/ai/deletepromblem/:id", async (req, res) => {
   }
 });
 
+// ─── AI Code Correction ────────────────────────────────────────────────────
 
+async function correctCodeWithAI(code, language, problemContext) {
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert code reviewer and debugger. Analyze the provided code and fix any bugs, errors, or issues.
+
+IMPORTANT RULES:
+1. Return ONLY valid JSON - no markdown, no extra text
+2. Fix bugs, syntax errors, logic errors, and improve the code
+3. Keep the same overall structure and approach
+4. For each change, provide the line number and what was changed
+
+Required JSON schema:
+{
+  "correctedCode": "the full corrected code as a string",
+  "changes": [
+    {
+      "lineNumber": number,
+      "type": "fix" | "improvement" | "addition" | "removal",
+      "description": "brief description of what was changed",
+      "oldCode": "the original line (if applicable)",
+      "newCode": "the new/corrected line"
+    }
+  ],
+  "summary": "brief summary of all corrections made"
+}
+
+If no changes are needed, return:
+{
+  "correctedCode": "original code unchanged",
+  "changes": [],
+  "summary": "No issues found - code looks good!"
+}`
+      },
+      {
+        role: "user",
+        content: `Fix and correct this ${language} code:
+
+Problem Context:
+${problemContext}
+
+Code to fix:
+\`\`\`${language}
+${code}
+\`\`\`
+
+Return the corrected code with detailed changes in JSON format.`
+      }
+    ],
+    temperature: 0.3,
+    max_tokens: 4096,
+  });
+
+  let text = completion.choices[0].message.content;
+  text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) text = match[0];
+
+  return JSON.parse(text);
+}
+
+router.post("/ai/correct-code", async (req, res) => {
+  try {
+    const { code, language, problemContext } = req.body;
+
+    if (!code || !language) {
+      return res.status(400).json({ error: "Code and language are required" });
+    }
+
+    const correction = await correctCodeWithAI(
+      code,
+      language,
+      problemContext || "General coding problem"
+    );
+
+    res.json(correction);
+  } catch (error) {
+    console.error("Code correction error:", error);
+    res.status(500).json({ error: "Error correcting code" });
+  }
+});
 
 module.exports = router;

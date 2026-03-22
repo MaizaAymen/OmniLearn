@@ -35,6 +35,11 @@ const Problem = sequelize.define(
       allowNull: false,
       defaultValue: [],
     },
+    hints: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
     starterCode: {
       type: DataTypes.JSONB,
       allowNull: false,
@@ -44,6 +49,11 @@ const Problem = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: {},
+    },
+    roadmap: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
     },
   }, {
     timestamps: true, // adds createdAt and updatedAt

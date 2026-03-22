@@ -6,10 +6,10 @@ import Auth from "./Auth/Auth";
 import { Route, Routes } from "react-router-dom";
 import User from "./Dashbord/User";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Roadmaps from "./Roadmaps/Roadmaps";
-import ProblemRoadmap from "./Roadmaps/ProblemRoadmap";
+
 import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
+
 
 function App() {
   const location = useLocation();
@@ -21,8 +21,8 @@ function App() {
       <Route path="/problems" element={<ProblemsPage />} />
       <Route path="/problems/:id" element={<ProblemPage />} />
       <Route path="/users" element={<User />} />
-      <Route path="/roadmaps" element={<Roadmaps />} />
-      <Route path="/problem-roadmap" element={<ProblemRoadmap />} />
+   
+
     </Routes>
   );
 
@@ -31,6 +31,7 @@ function App() {
       {isAuthPage ? (
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          
         </Routes>
       ) : (
         <Sidebar>{appRoutes}</Sidebar>

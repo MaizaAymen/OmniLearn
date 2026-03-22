@@ -6,6 +6,8 @@ import ProblemDescription from "./ProblemDescription";
 import OutputPanel from "../Codeeditor/OutputPanel";
 import CodeEditorPanel from "../Codeeditor/Codeeditor";
 import { executeCode } from "../Codeeditor/Api";
+import { StreamVideoProvider } from "../ScreenShare/StreamVideoProvider";
+import { ScreenRecorder } from "../ScreenShare/ScreenRecorder";
 
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -18,6 +20,7 @@ import {
   TimerIcon,
   RotateCcwIcon,
   ListIcon,
+  WandSparklesIcon, //correcting state
 } from "lucide-react";
 
 import "./ProblemPage.css";
@@ -35,6 +38,7 @@ function ProblemPage() {
   const [output, setOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false); //correcting state
   const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result
 
   // Timer
@@ -216,6 +220,49 @@ function ProblemPage() {
     }
   };
 
+  const handleCorrectCode = async () => {
+    if (!code.trim()) {
+      toast.error("No code to correct");
+      return;
+    }
+
+    setIsCorrecting(true);
+    try {
+      const problemContext = currentProblem
+        ? `${currentProblem.title}: ${currentProblem.description?.text || ""}`
+        : "General coding problem";
+
+      const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code,
+          language: selectedLanguage,
+          problemContext,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to correct code: ${response.status}`);
+      }
+
+      const correction = await response.json();
+
+      if (correction.changes && correction.changes.length > 0) {
+        setCode(correction.correctedCode);
+        toast.success(correction.summary || "Code corrected successfully!");
+      } else {
+        toast.success(correction.summary || "No issues found - code looks good!");
+      }
+    } catch (err) {
+      toast.error(err.message || "Error correcting code");
+    } finally {
+      setIsCorrecting(false);
+    }
+  };
+
   // =========================
   // Horizontal Resize
   // =========================
@@ -311,9 +358,13 @@ function ProblemPage() {
   }
 
   return (
-    <div className="problem-page h-screen flex flex-col overflow-hidden bg-base-300">
-      {/* TOP BAR */}
-      <div className="problem-topbar flex items-center justify-between px-3 py-1.5 bg-base-100 border-b border-base-300 gap-2">
+    <StreamVideoProvider
+      userId={currentProblemId}
+      userName={`User-${currentProblemId}`}
+    >
+      <div className="problem-page h-screen flex flex-col overflow-hidden bg-base-300">
+        {/* TOP BAR */}
+        <div className="problem-topbar flex items-center justify-between px-3 py-1.5 bg-base-100 border-b border-base-300 gap-2">
         {/* Left: Logo + Problem nav */}
         <div className="flex items-center gap-2">
           <button
@@ -362,7 +413,7 @@ function ProblemPage() {
           <button
             className="btn btn-sm btn-outline gap-1.5"
             onClick={handleRunCode}
-            disabled={isRunning || isSubmitting}
+            disabled={isRunning || isSubmitting || isCorrecting}
           >
             {isRunning ? (
               <Loader2Icon className="size-3.5 animate-spin" />
@@ -372,9 +423,21 @@ function ProblemPage() {
             Run
           </button>
           <button
+            className="btn btn-sm btn-primary gap-1.5"
+            onClick={handleCorrectCode}
+            disabled={isRunning || isSubmitting || isCorrecting}
+          >
+            {isCorrecting ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <WandSparklesIcon className="size-3.5" />
+            )}
+            Correct
+          </button>
+          <button
             className="btn btn-sm btn-success text-success-content gap-1.5"
             onClick={handleSubmit}
-            disabled={isRunning || isSubmitting}
+            disabled={isRunning || isSubmitting || isCorrecting}
           >
             {isSubmitting ? (
               <Loader2Icon className="size-3.5 animate-spin" />
@@ -383,6 +446,14 @@ function ProblemPage() {
             )}
             Submit
           </button>
+
+          <div className="divider divider-horizontal mx-1 h-6" />
+
+          {/* Screen Recorder */}
+          <ScreenRecorder
+            problemId={currentProblemId}
+            problemTitle={currentProblem?.title}
+          />
         </div>
 
         {/* Right: Timer + Reset */}
@@ -542,7 +613,8 @@ function ProblemPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </StreamVideoProvider>
   );
 }
 
