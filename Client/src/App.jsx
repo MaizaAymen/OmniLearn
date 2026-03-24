@@ -6,7 +6,7 @@ import Auth from "./Auth/Auth";
 import { Route, Routes } from "react-router-dom";
 import User from "./Dashbord/User";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
+import PdfAssistant from "./components/PdfAssistant";
 import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
 
@@ -21,7 +21,8 @@ function App() {
       <Route path="/problems" element={<ProblemsPage />} />
       <Route path="/problems/:id" element={<ProblemPage />} />
       <Route path="/users" element={<User />} />
-   
+      <Route path="/pdf-assistant" element={<PdfAssistant />} />
+
 
     </Routes>
   );

@@ -40,6 +40,8 @@ function ProblemPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false); //correcting state
   const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result
+  const [showDiff, setShowDiff] = useState(false);
+  const [originalCode, setOriginalCode] = useState("");
 
   // Timer
   const [seconds, setSeconds] = useState(0);
@@ -144,6 +146,7 @@ function ProblemPage() {
     const newLang = e.target.value;
     setSelectedLanguage(newLang);
     setOutput(null);
+    setShowDiff(false);
   };
 
   const handleProblemChange = (newProblemId) =>
@@ -162,6 +165,7 @@ function ProblemPage() {
     if (!currentProblem) return;
     setCode(currentProblem.starterCode[selectedLanguage] || "");
     setOutput(null);
+    setShowDiff(false);
     toast.success("Code reset to starter template");
   };
 
@@ -251,7 +255,9 @@ function ProblemPage() {
       const correction = await response.json();
 
       if (correction.changes && correction.changes.length > 0) {
+        setOriginalCode(code);
         setCode(correction.correctedCode);
+        setShowDiff(true);
         toast.success(correction.summary || "Code corrected successfully!");
       } else {
         toast.success(correction.summary || "No issues found - code looks good!");
@@ -528,6 +534,9 @@ function ProblemPage() {
               onLanguageChange={handleLanguageChange}
               onCodeChange={setCode}
               onRunCode={handleRunCode}
+              showDiff={showDiff}
+              originalCode={originalCode}
+              onCloseDiff={() => setShowDiff(false)}
             />
           </div>
 

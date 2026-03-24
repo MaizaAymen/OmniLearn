@@ -1,0 +1,334 @@
+/* PDF Assistant - tldraw Style */
+
+/* PDF Viewer Area */
+.pdf-viewer-area {
+  position: relative;
+  min-height: 100%;
+}
+
+/* ============================================
+   tldraw-style Floating Toolbar
+   ============================================ */
+.tldraw-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    0 8px 32px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  user-select: none;
+}
+
+.tldraw-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tldraw-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 6px;
+}
+
+/* Tool Buttons */
+.tldraw-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #1a1a1a;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.tldraw-tool-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.tldraw-tool-btn.active {
+  background: #e8f4ff;
+  color: #1a8cff;
+}
+
+.tldraw-tool-btn.active svg {
+  stroke: #1a8cff;
+}
+
+.tldraw-tool-btn:active {
+  transform: scale(0.95);
+}
+
+/* Danger buttons */
+.tldraw-tool-btn.tldraw-danger:hover {
+  background: rgba(255, 77, 79, 0.1);
+  color: #ff4d4f;
+}
+
+/* Color Button */
+.tldraw-color-wrapper {
+  position: relative;
+}
+
+.tldraw-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tldraw-color-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.tldraw-color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+
+.tldraw-color-btn:hover .tldraw-color-dot {
+  transform: scale(1.1);
+}
+
+/* Size Button */
+.tldraw-size-wrapper {
+  position: relative;
+}
+
+.tldraw-size-btn {
+  position: relative;
+}
+
+.tldraw-size-dot {
+  background: #1a1a1a;
+  border-radius: 50%;
+  min-width: 4px;
+  min-height: 4px;
+  max-width: 20px;
+  max-height: 20px;
+  transition: all 0.15s ease;
+}
+
+.tldraw-size-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 8px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 4px 16px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.tldraw-size-wrapper:hover .tldraw-size-popup {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Slider styling in popup */
+.tldraw-size-popup .ant-slider {
+  margin: 0;
+}
+
+.tldraw-size-popup .ant-slider-vertical .ant-slider-track {
+  background: #1a8cff;
+}
+
+.tldraw-size-popup .ant-slider-vertical .ant-slider-handle::after {
+  box-shadow: 0 0 0 2px #1a8cff;
+}
+
+/* ============================================
+   Drawing Canvas
+   ============================================ */
+.pdf-canvas-container {
+  position: relative;
+}
+
+.drawing-canvas {
+  border-radius: 4px;
+  transition: box-shadow 0.2s ease;
+}
+
+.drawing-canvas.active {
+  box-shadow:
+    0 0 0 2px #1a8cff,
+    0 0 24px rgba(26, 140, 255, 0.2);
+}
+
+/* ============================================
+   Color Picker Override
+   ============================================ */
+.tldraw-color-wrapper .ant-color-picker-trigger {
+  display: none;
+}
+
+.ant-color-picker-presets .ant-color-picker-presets-color {
+  border-radius: 50%;
+}
+
+/* ============================================
+   PDF Page Layers
+   ============================================ */
+.react-pdf__Page {
+  position: relative;
+}
+
+.react-pdf__Page__textContent {
+  z-index: 5;
+}
+
+.react-pdf__Page__annotations {
+  z-index: 4;
+}
+
+/* ============================================
+   Selection
+   ============================================ */
+::selection {
+  background: rgba(255, 255, 0, 0.4);
+}
+
+::-moz-selection {
+  background: rgba(255, 255, 0, 0.4);
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 768px) {
+  .tldraw-toolbar {
+    bottom: 16px;
+    padding: 6px 10px;
+    gap: 2px;
+  }
+
+  .tldraw-tool-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tldraw-tool-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .tldraw-divider {
+    height: 20px;
+    margin: 0 4px;
+  }
+
+  .tldraw-color-dot {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* ============================================
+   Dark Mode Support (optional)
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  .tldraw-toolbar {
+    background: rgba(40, 40, 40, 0.95);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 4px 16px rgba(0, 0, 0, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .tldraw-tool-btn {
+    color: #e0e0e0;
+  }
+
+  .tldraw-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .tldraw-tool-btn.active {
+    background: rgba(26, 140, 255, 0.2);
+    color: #4da6ff;
+  }
+
+  .tldraw-divider {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .tldraw-color-dot {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .tldraw-size-dot {
+    background: #e0e0e0;
+  }
+
+  .tldraw-size-popup {
+    background: rgba(40, 40, 40, 0.98);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes toolbarSlideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.tldraw-toolbar {
+  animation: toolbarSlideUp 0.3s ease-out;
+}
+
+/* Tooltip styling */
+.ant-tooltip {
+  --antd-arrow-background-color: rgba(0, 0, 0, 0.85);
+}
+
+.ant-tooltip-inner {
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: auto;
+  border-radius: 6px;
+}
