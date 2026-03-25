@@ -3,7 +3,6 @@ import { Document, Page, pdfjs } from "react-pdf";
 import axios from "axios";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import "./PdfAssistant.css";
 import {
   Layout,
   Upload,
@@ -18,8 +17,10 @@ import {
   Tooltip,
   Divider,
   FloatButton,
-  ColorPicker,
-  Slider,
+  Tabs,
+  List,
+  Modal,
+  Tag,
 } from "antd";
 import {
   UploadOutlined,
@@ -31,9 +32,11 @@ import {
   BulbOutlined,
   ReadOutlined,
   UserOutlined,
-  UndoOutlined,
+  BookOutlined,
+  SearchOutlined,
+  PushpinOutlined,
   DeleteOutlined,
-  BgColorsOutlined,
+  HighlightOutlined,
 } from "@ant-design/icons";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -61,28 +64,21 @@ export default function PdfAssistant() {
   const pdfContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Drawing state
-  const [drawingMode, setDrawingMode] = useState(null); // null, 'pen', 'highlighter', 'eraser'
-  const [drawingColor, setDrawingColor] = useState("#ff0000");
-  const [brushSize, setBrushSize] = useState(3);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [annotations, setAnnotations] = useState({}); // Store annotations per page
-  const [highlightColor, setHighlightColor] = useState("#ffff00");
-  const canvasRef = useRef(null);
-  const contextRef = useRef(null);
-  const lastPosRef = useRef({ x: 0, y: 0 });
+  // Highlights & Notes state
+  const [highlights, setHighlights] = useState([]);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [currentNote, setCurrentNote] = useState("");
 
-  // Color presets
-  const colorPresets = [
-    "#ff0000", "#ff6b00", "#ffff00", "#00ff00",
-    "#00ffff", "#0066ff", "#9900ff", "#ff00ff",
-    "#000000", "#666666", "#999999", "#ffffff"
-  ];
+  // Bookmarks state
+  const [bookmarks, setBookmarks] = useState([]);
 
-  const highlightPresets = [
-    "#ffff00", "#00ff00", "#00ffff", "#ff00ff",
-    "#ff9900", "#ff6b6b", "#a0d8ef", "#c9f0c9"
-  ];
+  // Smart Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  // Sidebar tab
+  const [activeTab, setActiveTab] = useState("chat");
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -135,165 +131,6 @@ export default function PdfAssistant() {
     window.addEventListener("resize", updatePdfWidth);
     return () => window.removeEventListener("resize", updatePdfWidth);
   }, [sidebarWidth]);
-
-  // Setup canvas when PDF page loads
-  useEffect(() => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      contextRef.current = ctx;
-
-      // Restore annotations for current page
-      if (annotations[pageNumber]) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0);
-        };
-        img.src = annotations[pageNumber];
-      }
-    }
-  }, [pageNumber, pdfContainerWidth, numPages]);
-
-  // Save current canvas to annotations before changing page
-  const saveCurrentAnnotations = useCallback(() => {
-    if (canvasRef.current) {
-      const dataUrl = canvasRef.current.toDataURL();
-      setAnnotations((prev) => ({
-        ...prev,
-        [pageNumber]: dataUrl,
-      }));
-    }
-  }, [pageNumber]);
-
-  // Drawing functions
-  const startDrawing = useCallback((e) => {
-    if (!drawingMode || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    setIsDrawing(true);
-    lastPosRef.current = { x, y };
-
-    const ctx = contextRef.current;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  }, [drawingMode]);
-
-  const draw = useCallback((e) => {
-    if (!isDrawing || !drawingMode || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    const ctx = contextRef.current;
-
-    if (drawingMode === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-      ctx.lineWidth = brushSize * 3;
-    } else if (drawingMode === "highlighter") {
-      ctx.globalCompositeOperation = "multiply";
-      ctx.strokeStyle = highlightColor;
-      ctx.lineWidth = brushSize * 5;
-      ctx.globalAlpha = 0.3;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = drawingColor;
-      ctx.lineWidth = brushSize;
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-
-    lastPosRef.current = { x, y };
-  }, [isDrawing, drawingMode, drawingColor, highlightColor, brushSize]);
-
-  const stopDrawing = useCallback(() => {
-    if (isDrawing) {
-      setIsDrawing(false);
-      const ctx = contextRef.current;
-      if (ctx) {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = 1;
-      }
-      saveCurrentAnnotations();
-    }
-  }, [isDrawing, saveCurrentAnnotations]);
-
-  // Clear current page annotations
-  const clearAnnotations = useCallback(() => {
-    if (canvasRef.current) {
-      const ctx = contextRef.current;
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      setAnnotations((prev) => {
-        const newAnnotations = { ...prev };
-        delete newAnnotations[pageNumber];
-        return newAnnotations;
-      });
-    }
-  }, [pageNumber]);
-
-  // Clear all annotations
-  const clearAllAnnotations = useCallback(() => {
-    if (canvasRef.current) {
-      const ctx = contextRef.current;
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
-    setAnnotations({});
-    message.success("All annotations cleared");
-  }, []);
-
-  // Highlight selected text
-  const highlightSelectedText = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    const rects = range.getClientRects();
-
-    if (rects.length === 0) {
-      message.warning("Select some text to highlight");
-      return;
-    }
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const canvasRect = canvas.getBoundingClientRect();
-    const ctx = contextRef.current;
-    const scaleX = canvas.width / canvasRect.width;
-    const scaleY = canvas.height / canvasRect.height;
-
-    ctx.fillStyle = highlightColor;
-    ctx.globalAlpha = 0.4;
-
-    for (const rect of rects) {
-      const x = (rect.left - canvasRect.left) * scaleX;
-      const y = (rect.top - canvasRect.top) * scaleY;
-      const width = rect.width * scaleX;
-      const height = rect.height * scaleY;
-      ctx.fillRect(x, y, width, height);
-    }
-
-    ctx.globalAlpha = 1;
-    selection.removeAllRanges();
-    saveCurrentAnnotations();
-    message.success("Text highlighted");
-  }, [highlightColor, saveCurrentAnnotations]);
 
   // Upload PDF
   const handleUpload = async (file) => {
@@ -401,6 +238,85 @@ export default function PdfAssistant() {
     }
   };
 
+  // ─── Highlights + Notes ───────────────────────────────────────────
+  const fetchHighlights = async () => {
+    if (!pdfId) return;
+    const res = await axios.get(`${API_URL}/highlights/${pdfId}`);
+    setHighlights(res.data.highlights);
+  };
+
+  const saveHighlight = async () => {
+    if (!selectedText || !pdfId) return;
+    await axios.post(`${API_URL}/highlights`, {
+      pdfId,
+      text: selectedText,
+      note: currentNote,
+      page: pageNumber,
+    });
+    message.success("Highlight saved!");
+    setSelectedText("");
+    setCurrentNote("");
+    setNoteModalOpen(false);
+    fetchHighlights();
+  };
+
+  const deleteHighlight = async (id) => {
+    await axios.delete(`${API_URL}/highlights/${pdfId}/${id}`);
+    fetchHighlights();
+  };
+
+  // ─── Bookmarks ────────────────────────────────────────────────────
+  const fetchBookmarks = async () => {
+    if (!pdfId) return;
+    const res = await axios.get(`${API_URL}/bookmarks/${pdfId}`);
+    setBookmarks(res.data.bookmarks);
+  };
+
+  const addBookmark = async () => {
+    if (!pdfId) return;
+    await axios.post(`${API_URL}/bookmarks`, {
+      pdfId,
+      page: pageNumber,
+      title: `Page ${pageNumber}`,
+    });
+    message.success("Bookmark added!");
+    fetchBookmarks();
+  };
+
+  const deleteBookmark = async (id) => {
+    await axios.delete(`${API_URL}/bookmarks/${pdfId}/${id}`);
+    fetchBookmarks();
+  };
+
+  const goToBookmark = (page) => {
+    setPageNumber(page);
+  };
+
+  // ─── Smart Search ─────────────────────────────────────────────────
+  const smartSearch = async () => {
+    if (!searchQuery.trim() || !pdfId) return;
+    setSearching(true);
+    try {
+      const res = await axios.post(`${API_URL}/smart-search`, {
+        pdfId,
+        query: searchQuery,
+      });
+      setSearchResults(res.data.results);
+    } catch (error) {
+      message.error("Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Load highlights & bookmarks when PDF loads
+  useEffect(() => {
+    if (pdfId) {
+      fetchHighlights();
+      fetchBookmarks();
+    }
+  }, [pdfId]);
+
   return (
     <Layout style={{ height: "100vh", background: "#f0f2f5" }}>
       {/* PDF Viewer */}
@@ -433,155 +349,7 @@ export default function PdfAssistant() {
               style={{ marginTop: 100 }}
             />
           ) : (
-            <div onMouseUp={handleTextSelection} className="pdf-viewer-area">
-              {/* tldraw-style Floating Toolbar */}
-              <div className="tldraw-toolbar">
-                {/* Main Tools */}
-                <div className="tldraw-toolbar-group">
-                  <Tooltip title="Select" placement="top">
-                    <button
-                      className={`tldraw-tool-btn ${!drawingMode ? "active" : ""}`}
-                      onClick={() => setDrawingMode(null)}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
-                        <path d="M13 13l6 6"/>
-                      </svg>
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="Pen" placement="top">
-                    <button
-                      className={`tldraw-tool-btn ${drawingMode === "pen" ? "active" : ""}`}
-                      onClick={() => setDrawingMode("pen")}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-                        <path d="M2 2l7.586 7.586"/>
-                        <circle cx="11" cy="11" r="2"/>
-                      </svg>
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="Highlighter" placement="top">
-                    <button
-                      className={`tldraw-tool-btn ${drawingMode === "highlighter" ? "active" : ""}`}
-                      onClick={() => setDrawingMode("highlighter")}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 11l-6 6v3h9l3-3"/>
-                        <path d="M22 12l-4.6 4.6a2 2 0 01-2.8 0l-5.2-5.2a2 2 0 010-2.8L14 4"/>
-                      </svg>
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="Eraser" placement="top">
-                    <button
-                      className={`tldraw-tool-btn ${drawingMode === "eraser" ? "active" : ""}`}
-                      onClick={() => setDrawingMode("eraser")}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 20H7L3 16c-.6-.6-.6-1.5 0-2.1l10-10c.6-.6 1.5-.6 2.1 0l6 6c.6.6.6 1.5 0 2.1L13 20"/>
-                        <path d="M6 11l8 8"/>
-                      </svg>
-                    </button>
-                  </Tooltip>
-                </div>
-
-                <div className="tldraw-divider" />
-
-                {/* Color Picker */}
-                <div className="tldraw-toolbar-group">
-                  <Tooltip title="Color" placement="top">
-                    <div className="tldraw-color-wrapper">
-                      <ColorPicker
-                        value={drawingMode === "highlighter" ? highlightColor : drawingColor}
-                        onChange={(color) => {
-                          if (drawingMode === "highlighter") {
-                            setHighlightColor(color.toHexString());
-                          } else {
-                            setDrawingColor(color.toHexString());
-                          }
-                        }}
-                        presets={[
-                          { label: "Colors", colors: colorPresets },
-                          { label: "Highlights", colors: highlightPresets }
-                        ]}
-                        size="small"
-                      >
-                        <button className="tldraw-color-btn">
-                          <div
-                            className="tldraw-color-dot"
-                            style={{
-                              backgroundColor: drawingMode === "highlighter" ? highlightColor : drawingColor,
-                            }}
-                          />
-                        </button>
-                      </ColorPicker>
-                    </div>
-                  </Tooltip>
-
-                  {/* Brush Size */}
-                  <Tooltip title="Brush Size" placement="top">
-                    <div className="tldraw-size-wrapper">
-                      <button className="tldraw-tool-btn tldraw-size-btn">
-                        <div
-                          className="tldraw-size-dot"
-                          style={{
-                            width: Math.max(4, brushSize * 1.2),
-                            height: Math.max(4, brushSize * 1.2),
-                          }}
-                        />
-                      </button>
-                      <div className="tldraw-size-popup">
-                        <Slider
-                          value={brushSize}
-                          onChange={setBrushSize}
-                          min={1}
-                          max={20}
-                          vertical
-                          style={{ height: 100 }}
-                        />
-                      </div>
-                    </div>
-                  </Tooltip>
-                </div>
-
-                <div className="tldraw-divider" />
-
-                {/* Text Highlight */}
-                <div className="tldraw-toolbar-group">
-                  <Tooltip title="Highlight Selected Text" placement="top">
-                    <button
-                      className="tldraw-tool-btn"
-                      onClick={highlightSelectedText}
-                    >
-                      <BgColorsOutlined style={{ fontSize: 18 }} />
-                    </button>
-                  </Tooltip>
-                </div>
-
-                <div className="tldraw-divider" />
-
-                {/* Clear Actions */}
-                <div className="tldraw-toolbar-group">
-                  <Tooltip title="Clear Page" placement="top">
-                    <button
-                      className="tldraw-tool-btn tldraw-danger"
-                      onClick={clearAnnotations}
-                    >
-                      <UndoOutlined style={{ fontSize: 16 }} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="Clear All" placement="top">
-                    <button
-                      className="tldraw-tool-btn tldraw-danger"
-                      onClick={clearAllAnnotations}
-                    >
-                      <DeleteOutlined style={{ fontSize: 16 }} />
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
-
+            <div onMouseUp={handleTextSelection}>
               {/* Page Navigation */}
               <div
                 style={{
@@ -607,11 +375,8 @@ export default function PdfAssistant() {
                 />
               </div>
 
-              {/* PDF Document with Canvas Overlay */}
-              <div
-                className="pdf-canvas-container"
-                style={{ display: "flex", justifyContent: "center", position: "relative" }}
-              >
+              {/* PDF Document */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
                 <Document
                   file={pdfFile}
                   onLoadSuccess={({ numPages }) => setNumPages(numPages)}
@@ -622,43 +387,8 @@ export default function PdfAssistant() {
                     width={pdfContainerWidth}
                     renderTextLayer={true}
                     renderAnnotationLayer={true}
-                    onRenderSuccess={() => {
-                      // Setup canvas dimensions after PDF page renders
-                      if (canvasRef.current) {
-                        const pdfPage = canvasRef.current.parentElement.querySelector(".react-pdf__Page");
-                        if (pdfPage) {
-                          canvasRef.current.width = pdfPage.offsetWidth;
-                          canvasRef.current.height = pdfPage.offsetHeight;
-                          // Restore annotations
-                          if (annotations[pageNumber]) {
-                            const ctx = canvasRef.current.getContext("2d");
-                            const img = new Image();
-                            img.onload = () => ctx.drawImage(img, 0, 0);
-                            img.src = annotations[pageNumber];
-                          }
-                        }
-                      }
-                    }}
                   />
                 </Document>
-                {/* Drawing Canvas Overlay */}
-                <canvas
-                  ref={canvasRef}
-                  className={`drawing-canvas ${drawingMode ? "active" : ""}`}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    pointerEvents: drawingMode ? "auto" : "none",
-                    cursor: drawingMode === "eraser" ? "crosshair" : drawingMode ? "crosshair" : "default",
-                    zIndex: 10,
-                  }}
-                />
               </div>
 
               {/* Explanation Card */}
@@ -691,12 +421,18 @@ export default function PdfAssistant() {
 
         {/* Floating Explain Button */}
         {selectedText && (
-          <FloatButton
-            icon={<BulbOutlined />}
-            tooltip="Explain with AI"
-            onClick={explainText}
-            style={{ right: sidebarWidth + 40 }}
-          />
+          <FloatButton.Group shape="square" style={{ right: sidebarWidth + 40 }}>
+            <FloatButton
+              icon={<BulbOutlined />}
+              tooltip="Explain with AI"
+              onClick={explainText}
+            />
+            <FloatButton
+              icon={<HighlightOutlined />}
+              tooltip="Save Highlight + Note"
+              onClick={() => setNoteModalOpen(true)}
+            />
+          </FloatButton.Group>
         )}
       </Content>
 
@@ -735,147 +471,174 @@ export default function PdfAssistant() {
           userSelect: isResizing ? "none" : "auto",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          <div style={{ padding: 16, flexShrink: 0 }}>
-            <Title level={4} style={{ margin: 0 }}>
-              <Space>
-                <RobotOutlined />
-                Chat with PDF
-              </Space>
-            </Title>
-          </div>
-
-          <Divider style={{ margin: 0, flexShrink: 0 }} />
-
-          {/* Actions */}
-          <div style={{ padding: 12, flexShrink: 0 }}>
-            <Button
-              block
-              icon={<ReadOutlined />}
-              onClick={summarizePdf}
-              disabled={!pdfId || loading}
-            >
-              Summarize PDF
-            </Button>
-          </div>
-
-          <Divider style={{ margin: 0, flexShrink: 0 }} />
-
-          {/* Messages - Scrollable Chat Box */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              overflowX: "hidden",
-              padding: 16,
-              background: "#fafafa",
-              minHeight: 0,
-            }}
-          >
-            {messages.length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Ask anything about your PDF"
-              />
-            ) : (
-              <Space direction="vertical" style={{ width: "100%" }} size={12}>
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "flex",
-                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                    }}
-                  >
-                    <Card
-                      size="small"
-                      style={{
-                        maxWidth: "85%",
-                        background:
-                          msg.role === "user"
-                            ? "#1890ff"
-                            : msg.role === "system"
-                            ? "#f6ffed"
-                            : "#fff",
-                        border:
-                          msg.role === "system"
-                            ? "1px solid #b7eb8f"
-                            : "1px solid #f0f0f0",
-                      }}
-                      bodyStyle={{ padding: "8px 12px" }}
-                    >
-                      <Space align="start">
-                        {msg.role !== "user" && (
-                          <RobotOutlined
-                            style={{
-                              color: msg.role === "system" ? "#52c41a" : "#1890ff",
-                            }}
-                          />
-                        )}
-                        <Text
-                          style={{
-                            color: msg.role === "user" ? "#fff" : "#000",
-                            whiteSpace: "pre-wrap",
-                          }}
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            centered
+            style={{ flex: 1, display: "flex", flexDirection: "column" }}
+            items={[
+              {
+                key: "chat",
+                label: <span><RobotOutlined /> Chat</span>,
+                children: (
+                  <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)" }}>
+                    <div style={{ padding: 12 }}>
+                      <Button block icon={<ReadOutlined />} onClick={summarizePdf} disabled={!pdfId || loading}>
+                        Summarize PDF
+                      </Button>
+                    </div>
+                    <Divider style={{ margin: 0 }} />
+                    <div style={{ flex: 1, overflowY: "auto", padding: 16, background: "#fafafa" }}>
+                      {messages.length === 0 ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ask anything about your PDF" />
+                      ) : (
+                        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                          {messages.map((msg, idx) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                              <Card
+                                size="small"
+                                style={{
+                                  maxWidth: "85%",
+                                  background: msg.role === "user" ? "#1890ff" : msg.role === "system" ? "#f6ffed" : "#fff",
+                                  border: msg.role === "system" ? "1px solid #b7eb8f" : "1px solid #f0f0f0",
+                                }}
+                                bodyStyle={{ padding: "8px 12px" }}
+                              >
+                                <Space align="start">
+                                  {msg.role !== "user" && <RobotOutlined style={{ color: msg.role === "system" ? "#52c41a" : "#1890ff" }} />}
+                                  <Text style={{ color: msg.role === "user" ? "#fff" : "#000", whiteSpace: "pre-wrap" }}>{msg.content}</Text>
+                                  {msg.role === "user" && <UserOutlined style={{ color: "#fff" }} />}
+                                </Space>
+                              </Card>
+                            </div>
+                          ))}
+                          {loading && (
+                            <div style={{ textAlign: "center" }}>
+                              <Spin size="small" />
+                              <Text type="secondary" style={{ marginLeft: 8 }}>AI is thinking...</Text>
+                            </div>
+                          )}
+                          <div ref={messagesEndRef} />
+                        </Space>
+                      )}
+                    </div>
+                    <div style={{ padding: 16, borderTop: "1px solid #f0f0f0" }}>
+                      <Space.Compact style={{ width: "100%" }}>
+                        <TextArea
+                          value={question}
+                          onChange={(e) => setQuestion(e.target.value)}
+                          onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); askQuestion(); } }}
+                          placeholder="Ask about the PDF..."
+                          disabled={!pdfId || loading}
+                          autoSize={{ minRows: 1, maxRows: 3 }}
+                        />
+                        <Button type="primary" icon={<SendOutlined />} onClick={askQuestion} disabled={!pdfId || loading || !question.trim()} />
+                      </Space.Compact>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: "highlights",
+                label: <span><HighlightOutlined /> Notes</span>,
+                children: (
+                  <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
+                    <List
+                      dataSource={highlights}
+                      locale={{ emptyText: "Select text and save highlights with notes" }}
+                      renderItem={(item) => (
+                        <List.Item
+                          actions={[
+                            <Button size="small" onClick={() => setPageNumber(item.page)}>Go</Button>,
+                            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHighlight(item.id)} />,
+                          ]}
                         >
-                          {msg.content}
-                        </Text>
-                        {msg.role === "user" && (
-                          <UserOutlined style={{ color: "#fff" }} />
-                        )}
-                      </Space>
-                    </Card>
+                          <List.Item.Meta
+                            title={<><Tag color="gold">P{item.page}</Tag> {item.text.slice(0, 50)}...</>}
+                            description={item.note || "No note"}
+                          />
+                        </List.Item>
+                      )}
+                    />
                   </div>
-                ))}
-                {loading && (
-                  <div style={{ textAlign: "center" }}>
-                    <Spin size="small" />
-                    <Text type="secondary" style={{ marginLeft: 8 }}>
-                      AI is thinking...
-                    </Text>
+                ),
+              },
+              {
+                key: "bookmarks",
+                label: <span><BookOutlined /> Bookmarks</span>,
+                children: (
+                  <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
+                    <Button block icon={<PushpinOutlined />} onClick={addBookmark} disabled={!pdfId} style={{ marginBottom: 16 }}>
+                      Bookmark This Page
+                    </Button>
+                    <List
+                      dataSource={bookmarks}
+                      locale={{ emptyText: "No bookmarks yet" }}
+                      renderItem={(item) => (
+                        <List.Item
+                          actions={[
+                            <Button size="small" type="primary" onClick={() => goToBookmark(item.page)}>Go</Button>,
+                            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteBookmark(item.id)} />,
+                          ]}
+                        >
+                          <List.Item.Meta title={item.title} description={`Page ${item.page}`} />
+                        </List.Item>
+                      )}
+                    />
                   </div>
-                )}
-                <div ref={messagesEndRef} />
-              </Space>
-            )}
-          </div>
-
-          {/* Input */}
-          <div style={{ padding: 16, borderTop: "1px solid #f0f0f0", flexShrink: 0 }}>
-            <Space.Compact style={{ width: "100%" }}>
-              <TextArea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) {
-                    e.preventDefault();
-                    askQuestion();
-                  }
-                }}
-                placeholder="Ask about the PDF..."
-                disabled={!pdfId || loading}
-                autoSize={{ minRows: 1, maxRows: 3 }}
-                style={{ borderRadius: "6px 0 0 6px" }}
-              />
-              <Tooltip title="Send">
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={askQuestion}
-                  disabled={!pdfId || loading || !question.trim()}
-                  style={{ height: "auto" }}
-                />
-              </Tooltip>
-            </Space.Compact>
-          </div>
+                ),
+              },
+              {
+                key: "search",
+                label: <span><SearchOutlined /> Search</span>,
+                children: (
+                  <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
+                    <Space.Compact style={{ width: "100%", marginBottom: 16 }}>
+                      <Input
+                        placeholder="Search by concept (e.g. 'machine learning')"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onPressEnter={smartSearch}
+                      />
+                      <Button type="primary" icon={<SearchOutlined />} onClick={smartSearch} loading={searching} />
+                    </Space.Compact>
+                    <List
+                      dataSource={searchResults}
+                      loading={searching}
+                      locale={{ emptyText: "Search for concepts in your PDF" }}
+                      renderItem={(item) => (
+                        <List.Item>
+                          <List.Item.Meta
+                            title={<Text ellipsis style={{ maxWidth: 280 }}>{item.excerpt}</Text>}
+                            description={<Text type="secondary">{item.relevance}</Text>}
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </Sider>
+
+      {/* Note Modal */}
+      <Modal
+        title="Add Note to Highlight"
+        open={noteModalOpen}
+        onOk={saveHighlight}
+        onCancel={() => setNoteModalOpen(false)}
+      >
+        <p><strong>Selected:</strong> {selectedText?.slice(0, 100)}...</p>
+        <TextArea
+          rows={4}
+          placeholder="Add your note here..."
+          value={currentNote}
+          onChange={(e) => setCurrentNote(e.target.value)}
+        />
+      </Modal>
     </Layout>
   );
 }
