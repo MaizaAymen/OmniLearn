@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Document, Page, pdfjs } from "react-pdf";
 import axios from "axios";
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -48,6 +49,7 @@ const { TextArea } = Input;
 const API_URL = "http://localhost:5000/api/pdf";
 
 export default function PdfAssistant() {
+  const location = useLocation();
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [numPages, setNumPages] = useState(null);
@@ -84,6 +86,24 @@ export default function PdfAssistant() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Load PDF from navigation state (e.g., Classroom PDFs)
+  useEffect(() => {
+    const state = location.state;
+    if (state?.pdfId && state?.pdfFile) {
+      setPdfId(state.pdfId);
+      setPdfFile(state.pdfFile);
+      setPageNumber(1);
+      setSelectedText("");
+      setExplanation("");
+      setMessages([
+        {
+          role: "system",
+          content: `PDF loaded: ${state.filename || "Selected PDF"}`,
+        },
+      ]);
+    }
+  }, [location.state]);
 
   // Resize sidebar functionality
   const handleMouseDown = useCallback((e) => {

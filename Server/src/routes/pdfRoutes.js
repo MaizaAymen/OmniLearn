@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const pdfParse = require("pdf-parse");
 const Groq = require("groq-sdk");
 
@@ -12,6 +14,9 @@ const { Chroma } = require("@langchain/community/vectorstores/chroma");
 // Document: LangChain document wrapper for storing text with metadata
 const { Document } = require("@langchain/core/documents");
 
+const CHROMA_URL = process.env.CHROMA_URL || "http://127.0.0.1:8000";
+const CHROMA_PERSIST_DIR = process.env.CHROMA_PERSIST_DIR || "./chroma_db";
+
 // Initialize embeddings model using HuggingFace Inference API
 // Uses sentence-transformers model for high-quality semantic embeddings
 const embeddings = new HuggingFaceInferenceEmbeddings({
@@ -21,11 +26,83 @@ const embeddings = new HuggingFaceInferenceEmbeddings({
 
 // Initialize Groq AI
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY || "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",
+  apiKey: process.env.GROQ_API_KEY || "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",
 });
 
-// Configure multer for file upload (store in memory)
-const upload = multer({ storage: multer.memoryStorage() });
+const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
+const INDEX_PATH = path.join(UPLOAD_DIR, "index.json");
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const readIndex = () => {
+  if (!fs.existsSync(INDEX_PATH)) return [];
+  try {
+    const raw = fs.readFileSync(INDEX_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const writeIndex = (items) => {
+  fs.writeFileSync(INDEX_PATH, JSON.stringify(items, null, 2));
+};
+
+const loadPdfData = async (pdfId) => {
+  const cached = pdfCache.get(pdfId);
+  if (cached) return cached;
+
+  const indexItems = readIndex();
+  const item = indexItems.find((entry) => entry.pdfId === pdfId);
+  if (!item) return null;
+
+  const storedName = item.storedName || pdfId;
+  const filePath = path.join(UPLOAD_DIR, storedName);
+  if (!fs.existsSync(filePath)) return null;
+
+  const pdfBuffer = fs.readFileSync(filePath);
+  const pdfData = await pdfParse(pdfBuffer);
+  const fullText = pdfData.text;
+  const chunks = chunkText(fullText, 800);
+
+  const collectionName = item.collectionName || `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const vectorStore = await Chroma.fromExistingCollection(embeddings, {
+    collectionName: collectionName,
+    persistDirectory: CHROMA_PERSIST_DIR,
+    url: CHROMA_URL,
+  });
+
+  const loaded = {
+    filename: item.filename || storedName,
+    fullText: fullText,
+    chunks: chunks,
+    vectorStore: vectorStore,
+    collectionName: collectionName,
+    filePath: filePath,
+    fileUrl: item.fileUrl || "",
+    uploadedAt: item.uploadedAt ? new Date(item.uploadedAt) : new Date(),
+  };
+
+  pdfCache.set(pdfId, loaded);
+  return loaded;
+};
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const pdfId = `${Date.now()}-${safeName}`;
+    req.pdfId = pdfId;
+    cb(null, pdfId);
+  },
+});
+
+const upload = multer({ storage });
 
 // Store PDF data in memory (simple cache)
 const pdfCache = new Map();
@@ -41,15 +118,17 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ error: "No PDF file uploaded" });
     }
 
+    const pdfId = req.pdfId || req.file.filename;
+    const filePath = req.file.path;
+    const fileUrl = `/uploads/${req.file.filename}`;
+
     // Extract text from PDF
-    const pdfData = await pdfParse(req.file.buffer);
+    const pdfBuffer = fs.readFileSync(filePath);
+    const pdfData = await pdfParse(pdfBuffer);
     const fullText = pdfData.text;
 
     // Split text into chunks (500-1000 words each)
     const chunks = chunkText(fullText, 800);
-
-    // Create unique ID for this PDF
-    const pdfId = Date.now() + "-" + req.file.originalname;
 
     // ─── Create Vector Store with Embeddings ───────────────────────
     // Convert text chunks to LangChain Document objects with metadata
@@ -58,14 +137,18 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       metadata: {
         chunkIndex: index,
         pdfId: pdfId,
-        filename: req.file.originalname
+        filename: req.file.originalname,
+        text: chunk
       }
     }));
 
     // Create Chroma vector store from documents
     // This embeds each chunk using OllamaEmbeddings and stores vectors in Chroma
+    const collectionName = `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
     const vectorStore = await Chroma.fromDocuments(documents, embeddings, {
-      collectionName: `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`, // Sanitize collection name
+      collectionName: collectionName,
+      persistDirectory: CHROMA_PERSIST_DIR,
+      url: CHROMA_URL,
     });
 
     // Store in cache (now includes vectorStore for semantic search)
@@ -74,8 +157,22 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       fullText: fullText,
       chunks: chunks,
       vectorStore: vectorStore, // NEW: Store vector store for similarity search
+      collectionName: collectionName,
+      filePath: filePath,
+      fileUrl: fileUrl,
       uploadedAt: new Date(),
     });
+
+    const indexItems = readIndex();
+    indexItems.unshift({
+      pdfId: pdfId,
+      filename: req.file.originalname,
+      storedName: req.file.filename,
+      fileUrl: fileUrl,
+      uploadedAt: new Date().toISOString(),
+      collectionName: collectionName,
+    });
+    writeIndex(indexItems);
 
     res.json({
       success: true,
@@ -83,11 +180,18 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       filename: req.file.originalname,
       totalPages: pdfData.numpages,
       chunksCount: chunks.length,
+      fileUrl: fileUrl,
     });
   } catch (error) {
     console.error("PDF upload error:", error);
     res.status(500).json({ error: "Failed to process PDF" });
   }
+});
+
+// ─── List Uploaded PDFs ────────────────────────────────────────────
+router.get("/list", (req, res) => {
+  const items = readIndex();
+  res.json({ items });
 });
 
 // ─── 2. Explain Selected Text ────────────────────────────────────────
@@ -135,7 +239,7 @@ router.post("/chat", async (req, res) => {
     }
 
     // Get PDF data from cache
-    const pdfData = pdfCache.get(pdfId);
+    const pdfData = await loadPdfData(pdfId);
     if (!pdfData) {
       return res.status(404).json({ error: "PDF not found. Please upload again." });
     }
@@ -181,7 +285,7 @@ router.post("/summarize", async (req, res) => {
   try {
     const { pdfId } = req.body;
 
-    const pdfData = pdfCache.get(pdfId);
+    const pdfData = await loadPdfData(pdfId);
     if (!pdfData) {
       return res.status(404).json({ error: "PDF not found" });
     }
@@ -311,7 +415,7 @@ router.post("/smart-search", async (req, res) => {
       return res.status(400).json({ error: "PDF ID and query required" });
     }
 
-    const pdfData = pdfCache.get(pdfId);
+    const pdfData = await loadPdfData(pdfId);
     if (!pdfData) {
       return res.status(404).json({ error: "PDF not found" });
     }

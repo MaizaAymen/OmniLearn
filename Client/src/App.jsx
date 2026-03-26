@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import PdfAssistant from "./components/PdfAssistant";
 import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
+import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
       <Route path="/problems/:id" element={<ProblemPage />} />
       <Route path="/users" element={<User />} />
       <Route path="/pdf-assistant" element={<PdfAssistant />} />
+      <Route path="/classroom-pdf" element={<ClassroomPdf />} />
 
 
     </Routes>

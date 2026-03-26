@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const path = require("path");
 const { PORT } = require("./config");
 const sequelize = require("./config/database");
 const { ensureDatabase } = require("./config/database");
@@ -22,6 +23,7 @@ app.use(cors(
 ));
 app.use(express.json());
 app.use(morgan("dev"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth", authRoutes);

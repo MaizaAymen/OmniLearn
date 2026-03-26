@@ -11,6 +11,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@huggingface/inference": "^4.13.15",
+    "@langchain/community": "^1.1.25",
+    "@langchain/core": "^1.1.36",
     "@langchain/openai": "^1.2.12",
     "@stream-io/node-sdk": "^0.7.44",
     "bcrypt": "^6.0.0",

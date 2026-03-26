@@ -6,6 +6,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ProjectOutlined,
+  ReadOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { Button, Layout, Menu, theme } from 'antd';
@@ -35,6 +36,11 @@ const Sidebar = ({ children }) => {
         label: 'Problems',
       },
       {
+        key: '/classroom-pdf',
+        icon: <ReadOutlined />,
+        label: 'Classroom PDFs',
+      },
+      {
         key: '/roadmaps',
         icon: <CompassOutlined />,
         label: 'Roadmaps',
@@ -60,6 +66,7 @@ const Sidebar = ({ children }) => {
 
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/problems')) return '/problems';
+    if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
     if (location.pathname.startsWith('/users')) return '/users';
