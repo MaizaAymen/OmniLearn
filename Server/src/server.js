@@ -8,6 +8,7 @@ const sequelize = require("./config/database");
 const { ensureDatabase } = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const UserRoutes = require("./routes/UserRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const AiRoutes = require("./ai/Ai");
 const pdfRoutes = require("./routes/pdfRoutes");
@@ -28,6 +29,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/", UserRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/ai", AiRoutes);
 app.use("/api/pdf", pdfRoutes);
 

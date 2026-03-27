@@ -19,8 +19,26 @@ const Class = sequelize.define(
     },
     teacherId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: { model: "users", key: "id" },
+      onDelete: "SET NULL",
+    },
+    gradeId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "grades", key: "id" },
+      onDelete: "SET NULL",
+    },
+    specialityId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "specialities", key: "id" },
+      onDelete: "SET NULL",
+    },
+    levelId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "levels", key: "id" },
       onDelete: "SET NULL",
     },
     academicYear: {

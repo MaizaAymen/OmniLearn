@@ -29,6 +29,12 @@ const Course = sequelize.define(
       references: { model: "classes", key: "id" },
       onDelete: "SET NULL",
     },
+    levelId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "levels", key: "id" },
+      onDelete: "SET NULL",
+    },
     subject: {
       type: DataTypes.STRING(150),
       allowNull: true,

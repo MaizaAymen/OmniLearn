@@ -22,10 +22,40 @@ const ChatMessage = require("./ChatMessage");
 const Notification = require("./Notification");
 const CodeSubmission = require("./CodeSubmission");
 const Problem = require("./Problem");
+const Grade = require("./Grade");
+const Speciality = require("./Speciality");
+const Level = require("./Level");
+const Lesson = require("./Lesson");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
 Profile.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// ─── Grade ↔ Speciality (1:N) ─────────────────────────────────────────────────
+Grade.hasMany(Speciality, { foreignKey: "gradeId", as: "specialities" });
+Speciality.belongsTo(Grade, { foreignKey: "gradeId", as: "grade" });
+
+// ─── Speciality ↔ Level (1:N) ─────────────────────────────────────────────────
+Speciality.hasMany(Level, { foreignKey: "specialityId", as: "levels" });
+Level.belongsTo(Speciality, { foreignKey: "specialityId", as: "speciality" });
+
+// ─── Level ↔ Course (1:N) ─────────────────────────────────────────────────────
+Level.hasMany(Course, { foreignKey: "levelId", as: "courses" });
+Course.belongsTo(Level, { foreignKey: "levelId", as: "level" });
+
+// ─── Module ↔ Lesson (1:N) ────────────────────────────────────────────────────
+Module.hasMany(Lesson, { foreignKey: "moduleId", as: "lessons" });
+Lesson.belongsTo(Module, { foreignKey: "moduleId", as: "module" });
+
+// ─── Class (Classroom) ↔ Grade/Speciality/Level ───────────────────────────────
+Grade.hasMany(Class, { foreignKey: "gradeId", as: "classrooms" });
+Class.belongsTo(Grade, { foreignKey: "gradeId", as: "grade" });
+
+Speciality.hasMany(Class, { foreignKey: "specialityId", as: "classrooms" });
+Class.belongsTo(Speciality, { foreignKey: "specialityId", as: "speciality" });
+
+Level.hasMany(Class, { foreignKey: "levelId", as: "classroomsAtLevel" });
+Class.belongsTo(Level, { foreignKey: "levelId", as: "level" });
 
 // ─── Teacher ↔ Classes (1:N) ─────────────────────────────────────────────────
 User.hasMany(Class, { foreignKey: "teacherId", as: "taughtClasses" });
@@ -142,5 +172,9 @@ module.exports = {
   ChatMessage,
   Notification,
   CodeSubmission,
+  Grade,
+  Speciality,
+  Level,
+  Lesson,
 };
 
