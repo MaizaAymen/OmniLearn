@@ -13,7 +13,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const AiRoutes = require("./ai/Ai");
 const pdfRoutes = require("./routes/pdfRoutes");
 // Import models/index.js to register all models and associations
-require("./models");
+const models = require("./models");
 
 
 const app = express();
@@ -44,6 +44,10 @@ app.get("/", (req, res) => {
     if (ensureDatabase) await ensureDatabase();
     await sequelize.authenticate();
     console.log("Connected to PostgreSQL");
+    // Ensure base lookup tables exist before applying FK alterations.
+    await models.Grade.sync();
+    await models.Speciality.sync();
+    await models.Level.sync();
     await sequelize.sync({ alter: true });
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

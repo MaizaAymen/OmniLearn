@@ -1,0 +1,113 @@
+.admin-dashboard {
+  min-height: 100%;
+}
+
+.admin-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+}
+
+.admin-card .ant-card-head {
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.admin-card .ant-card-head-title {
+  font-weight: 600;
+  color: #000;
+}
+
+.admin-form {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.admin-form .ant-form-item {
+  margin-bottom: 0;
+}
+
+.admin-hint {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.classroom-courses {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+/* Table styling */
+.admin-card .ant-table {
+  background: #fff;
+}
+
+.admin-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  color: #000;
+  font-weight: 600;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.admin-card .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-card .ant-table-tbody > tr:hover > td {
+  background: #fafafa;
+}
+
+/* Button styling */
+.admin-form .ant-btn-primary {
+  background: #000;
+  border-color: #000;
+}
+
+.admin-form .ant-btn-primary:hover {
+  background: #333 !important;
+  border-color: #333 !important;
+}
+
+.admin-form .ant-btn-default:hover {
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+/* Tag styling */
+.ant-tag {
+  background: #f0f0f0;
+  border: 1px solid #d9d9d9;
+  color: #333;
+}
+
+/* Input styling */
+.admin-form .ant-input,
+.admin-form .ant-input-number,
+.admin-form .ant-select-selector {
+  border-color: #d9d9d9;
+}
+
+.admin-form .ant-input:hover,
+.admin-form .ant-input-number:hover,
+.admin-form .ant-select-selector:hover {
+  border-color: #000 !important;
+}
+
+.admin-form .ant-input:focus,
+.admin-form .ant-input-number-focused,
+.admin-form .ant-select-focused .ant-select-selector {
+  border-color: #000 !important;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Spin styling */
+.ant-spin-dot-item {
+  background: #000 !important;
+}

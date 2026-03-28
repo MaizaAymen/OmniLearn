@@ -11,11 +11,8 @@ const {
   Enrollment,
   User,
 } = require("../models");
-const { authenticate, requireAdmin } = require("../middleware/Authmiddleware");
 
-// Apply authentication and admin check to all routes
-router.use(authenticate);
-router.use(requireAdmin);
+// No auth for now (temporary)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GRADE ROUTES

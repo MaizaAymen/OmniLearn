@@ -1,0 +1,112 @@
+.admin-shell {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.admin-sider {
+  background: #ffffff !important;
+  border-right: 1px solid #e6e6e6;
+}
+
+.admin-brand {
+  padding: 18px 18px 10px;
+  border-bottom: 1px solid #ededed;
+}
+
+.admin-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-title {
+  margin: 0;
+  color: #000;
+  font-weight: 700;
+}
+
+.admin-subtitle {
+  color: #8a8a8a;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.admin-menu {
+  border-right: 0;
+  font-weight: 500;
+  padding: 12px 10px 18px;
+}
+
+.admin-menu .ant-menu-item {
+  margin: 6px 0;
+  border-radius: 10px;
+  height: 44px;
+  line-height: 44px;
+  padding-left: 16px !important;
+}
+
+.admin-menu .ant-menu-item:hover {
+  background: #f2f2f2 !important;
+  color: #000 !important;
+}
+
+.admin-menu .ant-menu-item-selected {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.admin-menu .ant-menu-item-selected .ant-menu-item-icon {
+  color: #fff !important;
+}
+
+.admin-menu .ant-menu-item-selected::after {
+  border-right: 0;
+}
+
+.admin-header {
+  background: #ffffff;
+  border-bottom: 1px solid #ededed;
+  padding: 16px 28px;
+}
+
+.admin-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-collapse-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #000;
+}
+
+.admin-collapse-button:hover {
+  background: #f2f2f2 !important;
+  color: #000 !important;
+}
+
+.admin-header-title {
+  margin: 0;
+  color: #000;
+}
+
+.admin-header-text {
+  color: #6f6f6f;
+  font-size: 13px;
+}
+
+.admin-content {
+  padding: 24px 28px 40px;
+}
+
+@media (max-width: 992px) {
+  .admin-content {
+    padding: 20px 16px 32px;
+  }
+
+  .admin-header {
+    padding: 16px 20px;
+  }
+}

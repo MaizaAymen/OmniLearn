@@ -7,6 +7,7 @@ import {
   MenuUnfoldOutlined,
   ProjectOutlined,
   ReadOutlined,
+  SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { Button, Layout, Menu, theme } from 'antd';
@@ -41,6 +42,11 @@ const Sidebar = ({ children }) => {
         label: 'Classroom PDFs',
       },
       {
+        key: '/pdf-assistant',
+        icon: <ReadOutlined />,
+        label: 'PDF Assistant',
+      },
+      {
         key: '/roadmaps',
         icon: <CompassOutlined />,
         label: 'Roadmaps',
@@ -56,6 +62,11 @@ const Sidebar = ({ children }) => {
         label: 'Users',
       },
       {
+        key: '/admin',
+        icon: <SettingOutlined />,
+        label: 'Admin',
+      },
+      {
         key: '/auth',
         icon: <LoginOutlined />,
         label: 'Auth',
@@ -67,9 +78,11 @@ const Sidebar = ({ children }) => {
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/problems')) return '/problems';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
+    if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
     if (location.pathname.startsWith('/users')) return '/users';
+    if (location.pathname.startsWith('/admin')) return '/admin';
     if (location.pathname.startsWith('/auth')) return '/auth';
     return '/';
   }, [location.pathname]);
