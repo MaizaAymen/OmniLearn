@@ -40,12 +40,7 @@ const AdminLayout = ({ activeSection, onSectionChange, children }) => {
         collapsed={collapsed}
         trigger={null}
       >
-        <div className="admin-brand">
-          <Title level={4} className="admin-title">
-            OmniLearn
-          </Title>
-          <Text className="admin-subtitle">Admin</Text>
-        </div>
+        
         <Menu
           mode="inline"
           selectedKeys={[activeSection]}
