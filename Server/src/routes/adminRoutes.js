@@ -1,5 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
 const {
   Grade,
   Speciality,
@@ -11,6 +14,24 @@ const {
   Enrollment,
   User,
 } = require("../models");
+
+const LESSON_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "lesson-files");
+if (!fs.existsSync(LESSON_UPLOAD_DIR)) {
+  fs.mkdirSync(LESSON_UPLOAD_DIR, { recursive: true });
+}
+
+const lessonStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, LESSON_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const fileId = `${Date.now()}-${safeName}`;
+    cb(null, fileId);
+  },
+});
+
+const lessonUpload = multer({ storage: lessonStorage });
 
 // No auth for now (temporary)
 
@@ -641,6 +662,25 @@ router.get("/lessons", async (req, res) => {
   }
 });
 
+// Upload lesson file (code or other attachments)
+router.post("/lessons/upload", lessonUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    res.json({
+      fileUrl: `/uploads/lesson-files/${req.file.filename}`,
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      sizeBytes: req.file.size,
+    });
+  } catch (error) {
+    console.error("Lesson upload error:", error);
+    res.status(500).json({ error: "Failed to upload lesson file" });
+  }
+});
+
 // Get lessons by module
 router.get("/modules/:moduleId/lessons", async (req, res) => {
   try {
@@ -836,6 +876,60 @@ router.get("/classrooms/:id/courses", async (req, res) => {
   } catch (error) {
     console.error("Error fetching classroom courses:", error);
     res.status(500).json({ error: "Failed to fetch classroom courses" });
+  }
+});
+
+// Get classroom modules (direct assignments)
+router.get("/classrooms/:id/modules", async (req, res) => {
+  try {
+    const classroom = await Class.findByPk(req.params.id, {
+      include: [{ model: Module, as: "modules" }],
+    });
+    if (!classroom) {
+      return res.status(404).json({ error: "Classroom not found" });
+    }
+    res.json(classroom.modules || []);
+  } catch (error) {
+    console.error("Error fetching classroom modules:", error);
+    res.status(500).json({ error: "Failed to fetch classroom modules" });
+  }
+});
+
+// Assign module to classroom
+router.post("/classrooms/:id/modules", async (req, res) => {
+  try {
+    const { moduleId } = req.body;
+    if (!moduleId) {
+      return res.status(400).json({ error: "moduleId is required" });
+    }
+    const classroom = await Class.findByPk(req.params.id);
+    if (!classroom) {
+      return res.status(404).json({ error: "Classroom not found" });
+    }
+    const module = await Module.findByPk(moduleId);
+    if (!module) {
+      return res.status(404).json({ error: "Module not found" });
+    }
+    await classroom.addModule(module);
+    res.status(201).json({ message: "Module assigned" });
+  } catch (error) {
+    console.error("Error assigning classroom module:", error);
+    res.status(500).json({ error: "Failed to assign module" });
+  }
+});
+
+// Remove module from classroom
+router.delete("/classrooms/:id/modules/:moduleId", async (req, res) => {
+  try {
+    const classroom = await Class.findByPk(req.params.id);
+    if (!classroom) {
+      return res.status(404).json({ error: "Classroom not found" });
+    }
+    await classroom.removeModule(req.params.moduleId);
+    res.json({ message: "Module removed" });
+  } catch (error) {
+    console.error("Error removing classroom module:", error);
+    res.status(500).json({ error: "Failed to remove module" });
   }
 });
 

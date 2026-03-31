@@ -10,6 +10,7 @@ const Class = require("./Class");
 const Enrollment = require("./Enrollment");
 const Course = require("./Course");
 const Module = require("./Module");
+const ClassModule = require("./ClassModule");
 const Resource = require("./Resource");
 const Quiz = require("./Quiz");
 const Question = require("./Question");
@@ -79,6 +80,20 @@ Course.belongsTo(Class, { foreignKey: "classId", as: "class" });
 // ─── Course ↔ Modules (1:N) ──────────────────────────────────────────────────
 Course.hasMany(Module, { foreignKey: "courseId", as: "modules" });
 Module.belongsTo(Course, { foreignKey: "courseId", as: "course" });
+
+// ─── Class ↔ Modules (N:M via ClassModule) ───────────────────────────────────
+Class.belongsToMany(Module, {
+  through: ClassModule,
+  foreignKey: "classId",
+  otherKey: "moduleId",
+  as: "modules",
+});
+Module.belongsToMany(Class, {
+  through: ClassModule,
+  foreignKey: "moduleId",
+  otherKey: "classId",
+  as: "classrooms",
+});
 
 // ─── Module ↔ Resources (1:N) ────────────────────────────────────────────────
 Module.hasMany(Resource, { foreignKey: "moduleId", as: "resources" });
@@ -161,6 +176,7 @@ module.exports = {
   Enrollment,
   Course,
   Module,
+  ClassModule,
   Resource,
   Quiz,
   Question,

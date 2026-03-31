@@ -10,6 +10,7 @@ import {
   Space,
   Typography,
   message,
+  Upload,
   Popconfirm,
   Spin,
   Tag,
@@ -21,6 +22,8 @@ import {
   DeleteOutlined,
   EyeOutlined,
   EyeInvisibleOutlined,
+  AppstoreOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import AdminLayout from "./AdminLayout";
 import "./AdminDashboard.css";
@@ -41,6 +44,7 @@ import {
   createCourse,
   updateCourse,
   deleteCourse,
+  fetchUsers,
   fetchModules,
   createModule,
   updateModule,
@@ -49,11 +53,16 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  uploadLessonFile,
+  uploadLessonPdf,
   fetchClassrooms,
   createClassroom,
   updateClassroom,
   deleteClassroom,
   fetchClassroomCourses,
+  fetchClassroomModules,
+  addClassroomModule,
+  removeClassroomModule,
 } from "./api";
 
 const { Title, Text } = Typography;
@@ -78,9 +87,12 @@ const AdminDashboard = () => {
   const [modules, setModules] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const [editingId, setEditingId] = useState(null);
   const [classroomCourses, setClassroomCourses] = useState({});
+  const [classroomModules, setClassroomModules] = useState({});
+  const [lessonUploading, setLessonUploading] = useState(false);
 
   const [gradeForm] = Form.useForm();
   const [specialityForm] = Form.useForm();
@@ -89,6 +101,8 @@ const AdminDashboard = () => {
   const [moduleForm] = Form.useForm();
   const [lessonForm] = Form.useForm();
   const [classroomForm] = Form.useForm();
+  const [classroomModuleForm] = Form.useForm();
+  const lessonType = Form.useWatch("type", lessonForm);
 
   const gradeOptions = useMemo(
     () => grades.map((g) => ({ value: g.id, label: g.displayName || g.name })),
@@ -110,6 +124,18 @@ const AdminDashboard = () => {
     () => modules.map((m) => ({ value: m.id, label: m.title })),
     [modules]
   );
+  const teacherOptions = useMemo(() => {
+    return users
+      .filter((user) => user.role === "teacher")
+      .map((user) => ({
+        value: user.id,
+        label: `${user.firstname} ${user.lastname}`.trim(),
+      }));
+  }, [users]);
+  const classroomOptions = useMemo(
+    () => classrooms.map((c) => ({ value: c.id, label: c.name })),
+    [classrooms]
+  );
 
   const loadAll = async () => {
     try {
@@ -122,6 +148,7 @@ const AdminDashboard = () => {
         modulesData,
         lessonsData,
         classroomsData,
+        usersData,
       ] = await Promise.all([
         fetchGrades(),
         fetchSpecialities(),
@@ -130,6 +157,7 @@ const AdminDashboard = () => {
         fetchModules(),
         fetchLessons(),
         fetchClassrooms(),
+        fetchUsers(),
       ]);
       setGrades(gradesData);
       setSpecialities(specialitiesData);
@@ -138,6 +166,7 @@ const AdminDashboard = () => {
       setModules(modulesData);
       setLessons(lessonsData);
       setClassrooms(classroomsData);
+      setUsers(usersData);
     } catch (err) {
       message.error(err.message || "Failed to load data");
     } finally {
@@ -163,6 +192,23 @@ const AdminDashboard = () => {
       setClassroomCourses((prev) => ({ ...prev, [classroomId]: coursesData }));
     } catch (err) {
       message.error(err.message || "Failed to load courses");
+    }
+  };
+
+  const toggleClassroomModules = async (classroomId) => {
+    if (classroomModules[classroomId]) {
+      setClassroomModules((prev) => {
+        const next = { ...prev };
+        delete next[classroomId];
+        return next;
+      });
+      return;
+    }
+    try {
+      const modulesData = await fetchClassroomModules(classroomId);
+      setClassroomModules((prev) => ({ ...prev, [classroomId]: modulesData }));
+    } catch (err) {
+      message.error(err.message || "Failed to load modules");
     }
   };
 
@@ -363,6 +409,29 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleLessonUpload = async ({ file, onSuccess, onError }) => {
+    try {
+      setLessonUploading(true);
+      if (lessonType === "pdf" && file.type !== "application/pdf") {
+        message.error("Please upload a PDF file");
+        onError?.(new Error("Invalid file type"));
+        return;
+      }
+
+      const result =
+        lessonType === "pdf" ? await uploadLessonPdf(file) : await uploadLessonFile(file);
+      const fileUrl = result?.fileUrl || "";
+      lessonForm.setFieldsValue({ contentUrl: fileUrl });
+      message.success("File uploaded");
+      onSuccess?.(result);
+    } catch (err) {
+      message.error(err.message || "Upload failed");
+      onError?.(err);
+    } finally {
+      setLessonUploading(false);
+    }
+  };
+
   // Classrooms Section
   const handleClassroomSubmit = async (values) => {
     try {
@@ -392,6 +461,28 @@ const AdminDashboard = () => {
       loadAll();
     } catch (err) {
       message.error(err.message || "Delete failed");
+    }
+  };
+
+  const handleClassroomModuleAssign = async (values) => {
+    try {
+      await addClassroomModule(values.classId, values.moduleId);
+      message.success("Module assigned");
+      const modulesData = await fetchClassroomModules(values.classId);
+      setClassroomModules((prev) => ({ ...prev, [values.classId]: modulesData }));
+      classroomModuleForm.resetFields();
+    } catch (err) {
+      message.error(err.message || "Assignment failed");
+    }
+  };
+
+  const handleClassroomModuleRemove = async (classId, moduleId) => {
+    try {
+      await removeClassroomModule(classId, moduleId);
+      const modulesData = await fetchClassroomModules(classId);
+      setClassroomModules((prev) => ({ ...prev, [classId]: modulesData }));
+    } catch (err) {
+      message.error(err.message || "Remove failed");
     }
   };
 
@@ -472,7 +563,12 @@ const AdminDashboard = () => {
       key: "levelId",
       render: (id) => levelOptions.find((l) => l.value === id)?.label || "-",
     },
-    { title: "Teacher ID", dataIndex: "teacherId", key: "teacherId" },
+    {
+      title: "Teacher",
+      dataIndex: "teacherId",
+      key: "teacherId",
+      render: (id) => teacherOptions.find((t) => t.value === id)?.label || "-",
+    },
     {
       title: "Actions",
       key: "actions",
@@ -562,6 +658,12 @@ const AdminDashboard = () => {
       key: "levelId",
       render: (id) => levelOptions.find((l) => l.value === id)?.label || "-",
     },
+    {
+      title: "Teacher",
+      dataIndex: "teacherId",
+      key: "teacherId",
+      render: (id) => teacherOptions.find((t) => t.value === id)?.label || "-",
+    },
     { title: "Year", dataIndex: "academicYear", key: "academicYear" },
     {
       title: "Actions",
@@ -573,6 +675,11 @@ const AdminDashboard = () => {
             size="small"
             icon={classroomCourses[record.id] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
             onClick={() => toggleClassroomCourses(record.id)}
+          />
+          <Button
+            size="small"
+            icon={<AppstoreOutlined />}
+            onClick={() => toggleClassroomModules(record.id)}
           />
           <Button size="small" icon={<EditOutlined />} onClick={() => handleClassroomEdit(record)} />
           <Popconfirm title="Delete?" onConfirm={() => handleClassroomDelete(record.id)}>
@@ -698,7 +805,7 @@ const AdminDashboard = () => {
                 <Input placeholder="Title" />
               </Form.Item>
               <Form.Item name="teacherId" rules={[{ required: true }]}>
-                <Input placeholder="Teacher ID" />
+                <Select placeholder="Select Teacher" options={teacherOptions} style={{ width: 200 }} />
               </Form.Item>
               <Form.Item name="description">
                 <Input placeholder="Description" />
@@ -778,9 +885,28 @@ const AdminDashboard = () => {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="contentUrl">
-                <Input placeholder="Content URL" />
-              </Form.Item>
+              {lessonType === "pdf" || lessonType === "code" ? (
+                <>
+                  <Form.Item name="contentUrl">
+                    <Input placeholder="Uploaded file URL" readOnly />
+                  </Form.Item>
+                  <Form.Item>
+                    <Upload
+                      showUploadList={false}
+                      customRequest={handleLessonUpload}
+                      accept={lessonType === "pdf" ? "application/pdf" : ".zip,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.cs"}
+                    >
+                      <Button icon={<UploadOutlined />} loading={lessonUploading}>
+                        Upload {lessonType === "pdf" ? "PDF" : "Code File"}
+                      </Button>
+                    </Upload>
+                  </Form.Item>
+                </>
+              ) : (
+                <Form.Item name="contentUrl">
+                  <Input placeholder="Content URL" />
+                </Form.Item>
+              )}
               <Form.Item name="order">
                 <InputNumber placeholder="Order" min={0} />
               </Form.Item>
@@ -826,7 +952,12 @@ const AdminDashboard = () => {
                 <Input placeholder="Year" style={{ width: 100 }} />
               </Form.Item>
               <Form.Item name="teacherId">
-                <Input placeholder="Teacher ID" />
+                <Select
+                  placeholder="Teacher"
+                  options={teacherOptions}
+                  style={{ width: 200 }}
+                  allowClear
+                />
               </Form.Item>
               <Form.Item>
                 <Space>
@@ -837,6 +968,24 @@ const AdminDashboard = () => {
                 </Space>
               </Form.Item>
             </Form>
+            <Form
+              form={classroomModuleForm}
+              layout="inline"
+              onFinish={handleClassroomModuleAssign}
+              className="admin-form"
+            >
+              <Form.Item name="classId" rules={[{ required: true }]}>
+                <Select placeholder="Select Classroom" options={classroomOptions} style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item name="moduleId" rules={[{ required: true }]}>
+                <Select placeholder="Select Module" options={moduleOptions} style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item>
+                <Button type="default" htmlType="submit" icon={<PlusOutlined />}>
+                  Assign Module
+                </Button>
+              </Form.Item>
+            </Form>
             <Table
               columns={classroomColumns}
               dataSource={classrooms}
@@ -845,20 +994,47 @@ const AdminDashboard = () => {
               pagination={{ pageSize: 10 }}
               expandable={{
                 expandedRowRender: (record) =>
-                  classroomCourses[record.id] ? (
+                  classroomCourses[record.id] || classroomModules[record.id] ? (
                     <div className="classroom-courses">
-                      {classroomCourses[record.id].length === 0 ? (
-                        <Text type="secondary">No courses inherited.</Text>
-                      ) : (
-                        <Space wrap>
-                          {classroomCourses[record.id].map((course) => (
-                            <Tag key={course.id}>{course.title}</Tag>
-                          ))}
-                        </Space>
+                      {classroomCourses[record.id] && (
+                        <div>
+                          {classroomCourses[record.id].length === 0 ? (
+                            <Text type="secondary">No courses inherited.</Text>
+                          ) : (
+                            <Space wrap>
+                              {classroomCourses[record.id].map((course) => (
+                                <Tag key={course.id}>{course.title}</Tag>
+                              ))}
+                            </Space>
+                          )}
+                        </div>
+                      )}
+                      {classroomModules[record.id] && (
+                        <div style={{ marginTop: 8 }}>
+                          {classroomModules[record.id].length === 0 ? (
+                            <Text type="secondary">No modules assigned.</Text>
+                          ) : (
+                            <Space wrap>
+                              {classroomModules[record.id].map((module) => (
+                                <Tag
+                                  key={module.id}
+                                  closable
+                                  onClose={(event) => {
+                                    event.preventDefault();
+                                    handleClassroomModuleRemove(record.id, module.id);
+                                  }}
+                                >
+                                  {module.title}
+                                </Tag>
+                              ))}
+                            </Space>
+                          )}
+                        </div>
                       )}
                     </div>
                   ) : null,
-                rowExpandable: (record) => !!classroomCourses[record.id],
+                rowExpandable: (record) =>
+                  !!classroomCourses[record.id] || !!classroomModules[record.id],
               }}
             />
           </Card>

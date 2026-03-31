@@ -1,13 +1,18 @@
 import Cookies from "js-cookie";
 
 const API_BASE = "http://localhost:5000/api/admin";
+const PUBLIC_API_BASE = "http://localhost:5000/api";
 
-const getAuthHeaders = () => {
+const getAuthHeaders = (includeContentType = true) => {
   const token = Cookies.get("token");
-  return {
-    "Content-Type": "application/json",
-    Authorization: token ? `Bearer ${token}` : "",
-  };
+  const headers = {};
+  if (includeContentType) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 };
 
 const handleResponse = async (response) => {
@@ -24,6 +29,17 @@ const handleResponse = async (response) => {
 
 export const fetchGrades = async () => {
   const response = await fetch(`${API_BASE}/grades`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const fetchUsers = async () => {
+  const response = await fetch(`${PUBLIC_API_BASE}/getAllUsers`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
@@ -332,6 +348,27 @@ export const deleteLesson = async (id) => {
   return handleResponse(response);
 };
 
+export const uploadLessonFile = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}/lessons/upload`, {
+    method: "POST",
+    headers: getAuthHeaders(false),
+    body: formData,
+  });
+  return handleResponse(response);
+};
+
+export const uploadLessonPdf = async (file) => {
+  const formData = new FormData();
+  formData.append("pdf", file);
+  const response = await fetch(`${PUBLIC_API_BASE}/pdf/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  return handleResponse(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLASSROOMS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -347,6 +384,30 @@ export const fetchClassrooms = async (filters = {}) => {
     : `${API_BASE}/classrooms`;
 
   const response = await fetch(url, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const fetchClassroomModules = async (classroomId) => {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/modules`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const addClassroomModule = async (classroomId, moduleId) => {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/modules`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ moduleId }),
+  });
+  return handleResponse(response);
+};
+
+export const removeClassroomModule = async (classroomId, moduleId) => {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/modules/${moduleId}`, {
+    method: "DELETE",
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
