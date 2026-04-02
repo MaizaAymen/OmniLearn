@@ -2,6 +2,7 @@ import { TerminalIcon, CheckCircle2Icon, XCircleIcon } from "lucide-react";
 
 function OutputPanel({ output }) {
   return (
+    
     <div className="h-full bg-base-100 flex flex-col">
       <div className="flex-1 overflow-auto p-4">
         {output === null ? (
