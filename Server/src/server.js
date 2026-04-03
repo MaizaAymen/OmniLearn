@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const morgan = require("morgan");
 const path = require("path");
@@ -12,16 +13,16 @@ const adminRoutes = require("./routes/adminRoutes");
 
 const AiRoutes = require("./ai/Ai");
 const pdfRoutes = require("./routes/pdfRoutes");
+const { setupSessionHub } = require("./realtime/sessionHub");
 // Import models/index.js to register all models and associations
 const models = require("./models");
 
 
 const app = express();
+const server = http.createServer(app);
 
 // Middleware
-app.use(cors(
-  "*"
-));
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -49,7 +50,8 @@ app.get("/", (req, res) => {
     await models.Speciality.sync();
     await models.Level.sync();
     await sequelize.sync({ alter: true });
-    app.listen(PORT, () => {
+    setupSessionHub(server);
+    server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (err) {

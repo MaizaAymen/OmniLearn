@@ -11,8 +11,6 @@ import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
-import CollaborativeCodeEditorPage from "./Codeeditor/CollaborativeCodeEditorPage";
-import SessionsPage from "./Codeeditor/SessionsPage";
 
 
 function App() {
@@ -28,8 +26,6 @@ function App() {
       <Route path="/pdf-assistant" element={<PdfAssistant />} />
       <Route path="/classroom-pdf" element={<ClassroomPdf />} />
       <Route path="/admin" element={<AdminDashboard />} />
-      <Route path="/collab-editor" element={<CollaborativeCodeEditorPage />} />
-      <Route path="/sessions" element={<SessionsPage />} />
 
 
     </Routes>

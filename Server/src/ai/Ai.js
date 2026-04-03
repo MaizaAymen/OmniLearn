@@ -6,7 +6,7 @@ const {slugify} = require("../utils/slugify");
 
 
 const groq = new Groq({
-  apiKey: "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",
+  apiKey: "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",
 });
 
 async function generateRoadmap(topic) {

@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Document, Page, pdfjs } from "react-pdf";
+import { Worker, Viewer } from "@react-pdf-viewer/core";
+import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
+import "@react-pdf-viewer/core/lib/styles/index.css";
+import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 import axios from "axios";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
 import {
   Layout,
   Upload,
@@ -15,7 +16,6 @@ import {
   Spin,
   message,
   Empty,
-  Tooltip,
   Divider,
   FloatButton,
   Tabs,
@@ -28,8 +28,6 @@ import {
   SendOutlined,
   FileTextOutlined,
   RobotOutlined,
-  LeftOutlined,
-  RightOutlined,
   BulbOutlined,
   ReadOutlined,
   UserOutlined,
@@ -40,10 +38,8 @@ import {
   HighlightOutlined,
 } from "@ant-design/icons";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
 const { Sider, Content } = Layout;
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 
 const API_URL = "http://localhost:5000/api/pdf";
@@ -52,8 +48,9 @@ export default function PdfAssistant() {
   const location = useLocation();
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfId, setPdfId] = useState(null);
-  const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
+  const [viewerKey, setViewerKey] = useState(0);
+  const [initialPage, setInitialPage] = useState(0);
   const [selectedText, setSelectedText] = useState("");
   const [explanation, setExplanation] = useState("");
   const [messages, setMessages] = useState([]);
@@ -62,9 +59,10 @@ export default function PdfAssistant() {
   const [uploading, setUploading] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
-  const [pdfContainerWidth, setPdfContainerWidth] = useState(800);
   const pdfContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  const defaultLayoutPluginInstance = defaultLayoutPlugin({ sidebarTabs: () => [] });
 
   // Highlights & Notes state
   const [highlights, setHighlights] = useState([]);
@@ -94,6 +92,8 @@ export default function PdfAssistant() {
       setPdfId(state.pdfId);
       setPdfFile(state.pdfFile);
       setPageNumber(1);
+      setInitialPage(0);
+      setViewerKey((k) => k + 1);
       setSelectedText("");
       setExplanation("");
       setMessages([
@@ -115,7 +115,6 @@ export default function PdfAssistant() {
     (e) => {
       if (!isResizing) return;
       const newWidth = window.innerWidth - e.clientX;
-      // Constrain between 280px and 600px
       setSidebarWidth(Math.min(600, Math.max(280, newWidth)));
     },
     [isResizing]
@@ -125,7 +124,6 @@ export default function PdfAssistant() {
     setIsResizing(false);
   }, []);
 
-  // Add/remove event listeners for resize
   useEffect(() => {
     if (isResizing) {
       window.addEventListener("mousemove", handleMouseMove);
@@ -136,21 +134,6 @@ export default function PdfAssistant() {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
-
-  // Update PDF container width on resize
-  useEffect(() => {
-    const updatePdfWidth = () => {
-      if (pdfContainerRef.current) {
-        const containerWidth = pdfContainerRef.current.offsetWidth;
-        // Leave some padding, max 900px for readability
-        setPdfContainerWidth(Math.min(900, containerWidth - 80));
-      }
-    };
-
-    updatePdfWidth();
-    window.addEventListener("resize", updatePdfWidth);
-    return () => window.removeEventListener("resize", updatePdfWidth);
-  }, [sidebarWidth]);
 
   // Upload PDF
   const handleUpload = async (file) => {
@@ -167,6 +150,8 @@ export default function PdfAssistant() {
       const response = await axios.post(`${API_URL}/upload`, formData);
       setPdfId(response.data.pdfId);
       setPdfFile(file);
+      setInitialPage(0);
+      setViewerKey((k) => k + 1);
       message.success(`${response.data.filename} uploaded successfully!`);
       setMessages([
         {
@@ -308,7 +293,9 @@ export default function PdfAssistant() {
     fetchBookmarks();
   };
 
-  const goToBookmark = (page) => {
+  const goToPage = (page) => {
+    setInitialPage(page - 1); // Viewer uses 0-indexed
+    setViewerKey((k) => k + 1);
     setPageNumber(page);
   };
 
@@ -340,7 +327,7 @@ export default function PdfAssistant() {
   return (
     <Layout style={{ height: "100vh", background: "#f0f2f5" }}>
       {/* PDF Viewer */}
-      <Content ref={pdfContainerRef} style={{ padding: 24, overflow: "auto" }}>
+      <Content ref={pdfContainerRef} style={{ padding: 24, overflow: "hidden" }}>
         <Card
           title={
             <Space>
@@ -360,7 +347,7 @@ export default function PdfAssistant() {
             </Upload>
           }
           style={{ height: "100%", borderRadius: 12 }}
-          bodyStyle={{ height: "calc(100% - 57px)", overflow: "auto" }}
+          bodyStyle={{ height: "calc(100% - 57px)", overflow: "hidden", padding: 0 }}
         >
           {!pdfFile ? (
             <Empty
@@ -369,46 +356,25 @@ export default function PdfAssistant() {
               style={{ marginTop: 100 }}
             />
           ) : (
-            <div onMouseUp={handleTextSelection}>
-              {/* Page Navigation */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginBottom: 16,
-                  gap: 16,
-                }}
-              >
-                <Button
-                  icon={<LeftOutlined />}
-                  onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                  disabled={pageNumber <= 1}
-                />
-                <Text>
-                  Page {pageNumber} of {numPages}
-                </Text>
-                <Button
-                  icon={<RightOutlined />}
-                  onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
-                  disabled={pageNumber >= numPages}
-                />
-              </div>
-
-              {/* PDF Document */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <Document
-                  file={pdfFile}
-                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                  loading={<Spin size="large" />}
-                >
-                  <Page
-                    pageNumber={pageNumber}
-                    width={pdfContainerWidth}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
+            <div
+              onMouseUp={handleTextSelection}
+              style={{ height: "100%", display: "flex", flexDirection: "column" }}
+            >
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
+                  <Viewer
+                    key={viewerKey}
+                    fileUrl={pdfFile}
+                    initialPage={initialPage}
+                    plugins={[defaultLayoutPluginInstance]}
+                    onPageChange={({ currentPage }) => setPageNumber(currentPage + 1)}
+                    renderLoader={() => (
+                      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                        <Spin size="large" />
+                      </div>
+                    )}
                   />
-                </Document>
+                </Worker>
               </div>
 
               {/* Explanation Card */}
@@ -427,7 +393,7 @@ export default function PdfAssistant() {
                     </Button>
                   }
                   style={{
-                    marginTop: 16,
+                    margin: 12,
                     background: "#fffbe6",
                     border: "1px solid #ffe58f",
                   }}
@@ -570,7 +536,7 @@ export default function PdfAssistant() {
                       renderItem={(item) => (
                         <List.Item
                           actions={[
-                            <Button size="small" onClick={() => setPageNumber(item.page)}>Go</Button>,
+                            <Button size="small" onClick={() => goToPage(item.page)}>Go</Button>,
                             <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHighlight(item.id)} />,
                           ]}
                         >
@@ -598,7 +564,7 @@ export default function PdfAssistant() {
                       renderItem={(item) => (
                         <List.Item
                           actions={[
-                            <Button size="small" type="primary" onClick={() => goToBookmark(item.page)}>Go</Button>,
+                            <Button size="small" type="primary" onClick={() => goToPage(item.page)}>Go</Button>,
                             <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteBookmark(item.id)} />,
                           ]}
                         >

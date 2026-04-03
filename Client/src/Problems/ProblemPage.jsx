@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { io } from "socket.io-client";
 
 import { PROBLEMS } from "./problems";
 import ProblemDescription from "./ProblemDescription";
@@ -8,6 +9,7 @@ import CodeEditorPanel from "../Codeeditor/Codeeditor";
 import { executeCode } from "../Codeeditor/Api";
 import { StreamVideoProvider } from "../ScreenShare/StreamVideoProvider";
 import { ScreenRecorder } from "../ScreenShare/ScreenRecorder";
+import SessionWhiteboard from "./SessionWhiteboard";
 
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -21,6 +23,9 @@ import {
   RotateCcwIcon,
   ListIcon,
   WandSparklesIcon, //correcting state
+  UsersIcon,
+  PlusIcon,
+  LogOutIcon,
 } from "lucide-react";
 
 import "./ProblemPage.css";
@@ -39,9 +44,20 @@ function ProblemPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false); //correcting state
-  const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result
+  const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result | board
   const [showDiff, setShowDiff] = useState(false);
   const [originalCode, setOriginalCode] = useState("");
+  const socketRef = useRef(null);
+
+  // Realtime sessions (per-problem)
+  const [displayName, setDisplayName] = useState("Guest");
+  const [sessionName, setSessionName] = useState("");
+  const [availableSessions, setAvailableSessions] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
+  const [sessionParticipants, setSessionParticipants] = useState([]);
+  const [sessionCodeByLanguage, setSessionCodeByLanguage] = useState({});
+  const [sharedStrokes, setSharedStrokes] = useState([]);
+  const selectedLanguageRef = useRef("javascript");
 
   // Timer
   const [seconds, setSeconds] = useState(0);
@@ -54,6 +70,8 @@ function ProblemPage() {
 
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
+
+  const isInSession = Boolean(activeSession?.id);
 
   const allProblemsById = useMemo(() => {
     const mergedProblems = { ...PROBLEMS };
@@ -69,12 +87,91 @@ function ProblemPage() {
   const currentProblem = allProblemsById[currentProblemId] || null;
   const currentIndex = problemIds.indexOf(currentProblemId);
 
+  useEffect(() => {
+    selectedLanguageRef.current = selectedLanguage;
+  }, [selectedLanguage]);
+
   // Timer effect
   useEffect(() => {
     if (!timerRunning) return;
     const interval = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [timerRunning]);
+
+  useEffect(() => {
+    const savedName = localStorage.getItem("collabDisplayName");
+    if (savedName) {
+      setDisplayName(savedName);
+      return;
+    }
+
+    const randomSuffix = Math.floor(Math.random() * 1000);
+    setDisplayName(`Guest-${randomSuffix}`);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("collabDisplayName", displayName);
+  }, [displayName]);
+
+  useEffect(() => {
+    const socket = io("http://localhost:5000", {
+      transports: ["websocket", "polling"],
+    });
+
+    socketRef.current = socket;
+
+    socket.on("session:list", ({ sessions }) => {
+      setAvailableSessions(sessions || []);
+    });
+
+    socket.on("session:participants", ({ participants }) => {
+      setSessionParticipants(participants || []);
+    });
+
+    socket.on("session:code:updated", ({ language, code }) => {
+      if (!language) return;
+
+      setSessionCodeByLanguage((prev) => ({
+        ...prev,
+        [language]: code || "",
+      }));
+
+      if (language === selectedLanguageRef.current) {
+        setCode(code || "");
+      }
+    });
+
+    socket.on("session:draw:added", ({ stroke }) => {
+      if (!stroke) return;
+      setSharedStrokes((prev) => [...prev, stroke]);
+    });
+
+    socket.on("session:draw:cleared", () => {
+      setSharedStrokes([]);
+    });
+
+    return () => {
+      socket.emit("session:leave");
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!socketRef.current || !currentProblemId) return;
+
+    socketRef.current.emit("session:leave");
+
+    // Keep lobby list synced to current problem only.
+    socketRef.current.emit("session:list:subscribe", {
+      problemId: currentProblemId,
+    });
+
+    setActiveSession(null);
+    setSessionParticipants([]);
+    setSessionCodeByLanguage({});
+    setSharedStrokes([]);
+  }, [currentProblemId]);
 
   const formatTime = (totalSeconds) => {
     const m = Math.floor(totalSeconds / 60)
@@ -139,14 +236,43 @@ function ProblemPage() {
 
   useEffect(() => {
     if (!currentProblem) return;
+    if (isInSession && sessionCodeByLanguage[selectedLanguage] !== undefined) {
+      setCode(sessionCodeByLanguage[selectedLanguage] || "");
+      return;
+    }
+
     setCode(currentProblem.starterCode?.[selectedLanguage] || "");
-  }, [currentProblem, selectedLanguage]);
+  }, [currentProblem, selectedLanguage, isInSession, sessionCodeByLanguage]);
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
     setSelectedLanguage(newLang);
+
+    if (isInSession && sessionCodeByLanguage[newLang] !== undefined) {
+      setCode(sessionCodeByLanguage[newLang] || "");
+    }
+
     setOutput(null);
     setShowDiff(false);
+  };
+
+  const handleCodeChange = (nextCode) => {
+    const safeCode = nextCode ?? "";
+    setCode(safeCode);
+
+    if (!isInSession || !socketRef.current) return;
+
+    setSessionCodeByLanguage((prev) => ({
+      ...prev,
+      [selectedLanguage]: safeCode,
+    }));
+
+    socketRef.current.emit("session:code:update", {
+      problemId: currentProblemId,
+      sessionId: activeSession.id,
+      language: selectedLanguage,
+      code: safeCode,
+    });
   };
 
   const handleProblemChange = (newProblemId) =>
@@ -163,10 +289,112 @@ function ProblemPage() {
 
   const handleResetCode = () => {
     if (!currentProblem) return;
-    setCode(currentProblem.starterCode[selectedLanguage] || "");
+    const resetCode = currentProblem.starterCode[selectedLanguage] || "";
+    setCode(resetCode);
+
+    if (isInSession && socketRef.current) {
+      setSessionCodeByLanguage((prev) => ({
+        ...prev,
+        [selectedLanguage]: resetCode,
+      }));
+
+      socketRef.current.emit("session:code:update", {
+        problemId: currentProblemId,
+        sessionId: activeSession.id,
+        language: selectedLanguage,
+        code: resetCode,
+      });
+    }
+
     setOutput(null);
     setShowDiff(false);
     toast.success("Code reset to starter template");
+  };
+
+  const handleCreateSession = () => {
+    if (!socketRef.current || !currentProblemId) return;
+
+    socketRef.current.emit(
+      "session:create",
+      {
+        problemId: currentProblemId,
+        sessionName: sessionName || `${currentProblem?.title || "Problem"} Session`,
+        hostName: displayName || "Host",
+        language: selectedLanguage,
+        starterCode: code,
+      },
+      (response) => {
+        if (!response?.ok) {
+          toast.error(response?.message || "Could not create session");
+          return;
+        }
+
+        setSessionName("");
+        toast.success("Session created");
+      }
+    );
+  };
+
+  const handleJoinSession = (sessionId) => {
+    if (!socketRef.current || !sessionId) return;
+
+    socketRef.current.emit(
+      "session:join",
+      {
+        problemId: currentProblemId,
+        sessionId,
+        userName: displayName || "Guest",
+      },
+      (response) => {
+        if (!response?.ok) {
+          toast.error(response?.message || "Could not join session");
+          return;
+        }
+
+        const joined = response.session;
+        setActiveSession({ id: joined.id, name: joined.name });
+        setSessionCodeByLanguage(joined.codeByLanguage || {});
+        setSharedStrokes(joined.drawStrokes || []);
+
+        const codeForLanguage = joined.codeByLanguage?.[selectedLanguage];
+        if (codeForLanguage !== undefined) {
+          setCode(codeForLanguage || "");
+        }
+
+        toast.success(`Joined: ${joined.name}`);
+      }
+    );
+  };
+
+  const handleLeaveSession = () => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("session:leave");
+    setActiveSession(null);
+    setSessionParticipants([]);
+    setSessionCodeByLanguage({});
+    setSharedStrokes([]);
+    toast.success("Left session");
+  };
+
+  const handleAddStroke = (stroke) => {
+    setSharedStrokes((prev) => [...prev, stroke]);
+
+    if (!isInSession || !socketRef.current) return;
+    socketRef.current.emit("session:draw:add", {
+      problemId: currentProblemId,
+      sessionId: activeSession.id,
+      stroke,
+    });
+  };
+
+  const handleClearBoard = () => {
+    setSharedStrokes([]);
+
+    if (!isInSession || !socketRef.current) return;
+    socketRef.current.emit("session:draw:clear", {
+      problemId: currentProblemId,
+      sessionId: activeSession.id,
+    });
   };
 
   const handleRunCode = async () => {
@@ -483,6 +711,64 @@ function ProblemPage() {
         </div>
       </div>
 
+        {/* COLLAB BAR (same page, same problem) */}
+        <div className="px-2 py-2 border-b border-base-300 bg-base-100/80">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <UsersIcon className="size-4 text-primary" />
+              <input
+                className="input input-xs input-bordered w-28"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+              />
+            </div>
+
+            <input
+              className="input input-xs input-bordered w-44"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              placeholder="New session name"
+            />
+
+            <button className="btn btn-xs btn-primary gap-1" onClick={handleCreateSession}>
+              <PlusIcon className="size-3.5" />
+              Create Session
+            </button>
+
+            {isInSession && (
+              <button className="btn btn-xs btn-outline gap-1" onClick={handleLeaveSession}>
+                <LogOutIcon className="size-3.5" />
+                Leave
+              </button>
+            )}
+
+            <div className="text-xs text-base-content/70">
+              {isInSession
+                ? `In session: ${activeSession.name} (${sessionParticipants.length} users)`
+                : "Not in a session"}
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {availableSessions.length === 0 && (
+              <span className="text-xs text-base-content/60">No sessions yet for this problem.</span>
+            )}
+
+            {availableSessions.map((session) => (
+              <button
+                key={session.id}
+                className={`btn btn-xs ${
+                  activeSession?.id === session.id ? "btn-success" : "btn-outline"
+                }`}
+                onClick={() => handleJoinSession(session.id)}
+              >
+                {session.name} ({session.participantCount})
+              </button>
+            ))}
+          </div>
+        </div>
+
       {/* MAIN CONTENT */}
       <div ref={containerRef} className="flex flex-1 min-h-0 gap-1 p-1">
         {/* LEFT PANEL — Problem Description */}
@@ -532,7 +818,7 @@ function ProblemPage() {
               code={code}
               isRunning={isRunning}
               onLanguageChange={handleLanguageChange}
-              onCodeChange={setCode}
+              onCodeChange={handleCodeChange}
               onRunCode={handleRunCode}
               showDiff={showDiff}
               originalCode={originalCode}
@@ -586,6 +872,16 @@ function ProblemPage() {
                   />
                 )}
               </button>
+              <button
+                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+                  activeRightTab === "board"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-base-content/50 hover:text-base-content/80"
+                }`}
+                onClick={() => setActiveRightTab("board")}
+              >
+                Board
+              </button>
             </div>
 
             {/* Tab content */}
@@ -615,8 +911,15 @@ function ProblemPage() {
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : activeRightTab === "result" ? (
                 <OutputPanel output={output} />
+              ) : (
+                <SessionWhiteboard
+                  enabled={isInSession}
+                  strokes={sharedStrokes}
+                  onAddStroke={handleAddStroke}
+                  onClear={handleClearBoard}
+                />
               )}
             </div>
           </div>
