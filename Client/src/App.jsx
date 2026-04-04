@@ -11,6 +11,7 @@ import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
+import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
 
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
       <Route path="/users" element={<User />} />
       <Route path="/pdf-assistant" element={<PdfAssistant />} />
       <Route path="/classroom-pdf" element={<ClassroomPdf />} />
+      <Route path="/live-sessions" element={<LiveSessionsPage />} />
       <Route path="/admin" element={<AdminDashboard />} />
 
 

@@ -6,6 +6,7 @@ function CodeEditorPanel({
   selectedLanguage,
   code,
   isRunning,
+  readOnly = false,
   onLanguageChange,
   onCodeChange,
   onRunCode,
@@ -73,7 +74,7 @@ function CodeEditorPanel({
               scrollBeyondLastLine: false,
               automaticLayout: true,
               minimap: { enabled: false },
-              readOnly: false,
+              readOnly,
               renderSideBySide: true,
             }}
             onModifiedChange={onCodeChange}
@@ -91,6 +92,7 @@ function CodeEditorPanel({
               scrollBeyondLastLine: false,
               automaticLayout: true,
               minimap: { enabled: false },
+              readOnly,
             }}
           />
         )}

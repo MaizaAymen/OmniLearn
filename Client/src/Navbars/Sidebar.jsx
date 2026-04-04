@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   CodeOutlined,
   CompassOutlined,
+  DeploymentUnitOutlined,
   LoginOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -35,6 +36,11 @@ const Sidebar = ({ children }) => {
         key: '/problems',
         icon: <ProjectOutlined />,
         label: 'Problems',
+      },
+      {
+        key: '/live-sessions',
+        icon: <DeploymentUnitOutlined />,
+        label: 'Live Sessions',
       },
       {
         key: '/classroom-pdf',
@@ -77,6 +83,7 @@ const Sidebar = ({ children }) => {
 
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/problems')) return '/problems';
+    if (location.pathname.startsWith('/live-sessions')) return '/live-sessions';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
