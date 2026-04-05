@@ -53,59 +53,49 @@ function ProblemPage() {
   const [originalCode, setOriginalCode] = useState("");
   const socketRef = useRef(null);
   const attemptedJoinFromLinkRef = useRef(null);
+  const whiteboardRef = useRef(null);
 
   // Realtime sessions (per-problem)
   const [displayName, setDisplayName] = useState("Guest");
+  // Create modal – basic
   const [sessionName, setSessionName] = useState("");
-  const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
+  // Create modal – B. Access & Security
   const [sessionVisibility, setSessionVisibility] = useState("public");
   const [sessionPassword, setSessionPassword] = useState("");
-  const [sessionReadOnlyUsers, setSessionReadOnlyUsers] = useState("");
-  const [sessionEditableUsers, setSessionEditableUsers] = useState("");
+  const [sessionAllowAnonymous, setSessionAllowAnonymous] = useState(true);
+  const [sessionWhitelist, setSessionWhitelist] = useState("");
+  const [sessionBlacklist, setSessionBlacklist] = useState("");
+  const [sessionRequireJoinApproval, setSessionRequireJoinApproval] = useState(false);
+  // Create modal – C. Limits
+  const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
+  const [sessionAutoLock, setSessionAutoLock] = useState(false);
+  const [sessionAllowOverflow, setSessionAllowOverflow] = useState(false);
+  // Create modal – D. Roles
+  const [sessionDefaultRole, setSessionDefaultRole] = useState("editor");
+  // Create modal – E. Collaboration
+  const [sessionCollabMode, setSessionCollabMode] = useState("free");
+  const [sessionTurnDuration, setSessionTurnDuration] = useState(30);
+  const [sessionShowCursors, setSessionShowCursors] = useState(true);
+  const [sessionShowSelections, setSessionShowSelections] = useState(true);
+  const [sessionTypingIndicators, setSessionTypingIndicators] = useState(true);
+  // Create modal tab
+  const [createModalTab, setCreateModalTab] = useState("basic");
+
   const [sessionJoinId, setSessionJoinId] = useState("");
   const [sessionJoinPassword, setSessionJoinPassword] = useState("");
   const [currentUserPermission, setCurrentUserPermission] = useState("editable");
-  const [currentUserRole, setCurrentUserRole] = useState("viewer");
+  const [currentUserRole, setCurrentUserRole] = useState("editor");
   const [availableSessions, setAvailableSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [sessionParticipants, setSessionParticipants] = useState([]);
   const [sessionParticipantDetails, setSessionParticipantDetails] = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState([]);
-  const [selectedRoles, setSelectedRoles] = useState({});
-  const [sessionSettings, setSessionSettings] = useState(null);
-  const [countdownInfo, setCountdownInfo] = useState(null);
   const [sessionCodeByLanguage, setSessionCodeByLanguage] = useState({});
   const [sharedStrokes, setSharedStrokes] = useState([]);
+  const [waitingRoomUsers, setWaitingRoomUsers] = useState([]);
+  const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
   const [participantHistory, setParticipantHistory] = useState([]);
-
-  const [sessionAllowAnonymous, setSessionAllowAnonymous] = useState(true);
-  const [sessionWhitelistUsers, setSessionWhitelistUsers] = useState("");
-  const [sessionBlacklistUsers, setSessionBlacklistUsers] = useState("");
-  const [sessionWaitingRoom, setSessionWaitingRoom] = useState(false);
-
-  const [sessionAutoLockWhenFull, setSessionAutoLockWhenFull] = useState(true);
-  const [sessionAllowOverflow, setSessionAllowOverflow] = useState(false);
-
-  const [sessionDefaultRole, setSessionDefaultRole] = useState("viewer");
-
-  const [sessionCollabMode, setSessionCollabMode] = useState("free");
-  const [sessionTurnDurationSeconds, setSessionTurnDurationSeconds] = useState(60);
-  const [sessionShowLiveCursors, setSessionShowLiveCursors] = useState(true);
-  const [sessionShowSelections, setSessionShowSelections] = useState(true);
-  const [sessionTypingIndicators, setSessionTypingIndicators] = useState(true);
-
-  const [sessionEnableChat, setSessionEnableChat] = useState(true);
-  const [sessionEnableReactions, setSessionEnableReactions] = useState(true);
-  const [sessionEnableVoice, setSessionEnableVoice] = useState(false);
-  const [sessionMessageModeration, setSessionMessageModeration] = useState(false);
-
-  const [sessionStartTime, setSessionStartTime] = useState("");
-  const [sessionEndTime, setSessionEndTime] = useState("");
-  const [sessionMaxDurationMinutes, setSessionMaxDurationMinutes] = useState("");
-  const [sessionAutoClose, setSessionAutoClose] = useState(false);
-  const [sessionCountdownWarnings, setSessionCountdownWarnings] = useState("10,5,1");
   const selectedLanguageRef = useRef("javascript");
   const prevParticipantsRef = useRef([]);
 
@@ -122,9 +112,6 @@ function ProblemPage() {
   const rightPanelRef = useRef(null);
 
   const isInSession = Boolean(activeSession?.id);
-  const canManageRoles = currentUserRole === "host" || currentUserRole === "co-host";
-  const isTurnBased = sessionSettings?.collaboration?.mode === "turn-based";
-  const currentTurnName = sessionSettings?.collaboration?.currentTurnName || "";
   const requestedSessionId = searchParams.get("session") || "";
   const requestedJoinPassword = searchParams.get("joinPassword") || "";
 
@@ -197,78 +184,67 @@ function ProblemPage() {
       setSessionParticipantDetails(participantDetails || []);
     });
 
-    socket.on("session:join:pending", ({ pendingApprovals: pending }) => {
-      setPendingApprovals(pending || []);
-    });
-
-    socket.on("session:join:approved", ({ joined }) => {
-      if (!joined) return;
-      applyJoinedSession(joined);
-      toast.success(`Joined: ${joined.name}`);
-    });
-
-    socket.on("session:join:denied", ({ message }) => {
-      toast.error(message || "Join request was denied");
-    });
-
-    socket.on("session:participant:role:updated", ({ role, permission }) => {
-      setCurrentUserRole(role || "viewer");
-      setCurrentUserPermission(permission || "read-only");
-    });
-
-    socket.on("session:participant:muted", ({ muted }) => {
-      toast(muted ? "You were muted" : "You were unmuted");
-    });
-
-    socket.on("session:kicked", ({ message }) => {
-      toast.error(message || "You were removed from this session");
-      clearActiveSessionState();
-    });
-
-    socket.on("session:countdown", ({ warningMinutes, remainingSeconds }) => {
-      setCountdownInfo({ warningMinutes, remainingSeconds });
-      toast(`Session ends in ${warningMinutes} min`);
-    });
-
-    socket.on("session:turn:changed", ({ currentTurnName: turnName }) => {
-      setSessionSettings((prev) => ({
-        ...(prev || {}),
-        collaboration: {
-          ...(prev?.collaboration || {}),
-          currentTurnName: turnName,
-        },
-      }));
-    });
-
-    socket.on("session:closed", ({ reason }) => {
-      toast.error(reason || "Session closed");
-      clearActiveSessionState();
-    });
-
     socket.on("session:permission:error", ({ message }) => {
-      toast.error(message || "You do not have permission to edit this session");
+      toast.error(message || "You do not have permission to perform this action");
     });
 
     socket.on("session:code:updated", ({ language, code }) => {
       if (!language) return;
-
-      setSessionCodeByLanguage((prev) => ({
-        ...prev,
-        [language]: code || "",
-      }));
-
-      if (language === selectedLanguageRef.current) {
-        setCode(code || "");
-      }
+      setSessionCodeByLanguage((prev) => ({ ...prev, [language]: code || "" }));
+      if (language === selectedLanguageRef.current) setCode(code || "");
     });
 
     socket.on("session:draw:added", ({ stroke }) => {
       if (!stroke) return;
+      // 1. Update persistent state so strokes survive tab switches / remounts
       setSharedStrokes((prev) => [...prev, stroke]);
+      // 2. If the whiteboard is currently mounted, draw immediately (no flicker)
+      whiteboardRef.current?.addRemoteStroke(stroke);
     });
 
     socket.on("session:draw:cleared", () => {
+      // Setting sharedStrokes to [] triggers the strokes-sync useEffect in
+      // SessionWhiteboard, which clears the canvas and resets allStrokesRef
       setSharedStrokes([]);
+    });
+
+    // Waiting room events
+    socket.on("session:waiting:placed", ({ sessionName: sName }) => {
+      setIsInWaitingRoom(true);
+      toast(`Waiting for approval to join "${sName}"`, { icon: "⏳" });
+    });
+
+    socket.on("session:waiting:approved", ({ userRole, userPermission, session: joined }) => {
+      setIsInWaitingRoom(false);
+      setActiveSession({ id: joined.id, name: joined.name });
+      setCurrentUserRole(userRole || "editor");
+      setCurrentUserPermission(userPermission || "editable");
+      setSessionCodeByLanguage(joined.codeByLanguage || {});
+      setSharedStrokes(joined.drawStrokes || []);
+      const codeForLang = joined.codeByLanguage?.[selectedLanguageRef.current];
+      if (codeForLang !== undefined) setCode(codeForLang || "");
+      toast.success("Approved! You have joined the session.");
+    });
+
+    socket.on("session:waiting:rejected", ({ reason }) => {
+      setIsInWaitingRoom(false);
+      toast.error(`Join request rejected: ${reason || "Request denied"}`);
+    });
+
+    socket.on("session:waiting:update", ({ waiting }) => {
+      setWaitingRoomUsers(waiting || []);
+    });
+
+    // Role change
+    socket.on("session:role:changed", ({ newRole, userPermission }) => {
+      setCurrentUserRole(newRole);
+      setCurrentUserPermission(userPermission || "read-only");
+      toast(`Your role changed to ${newRole}`, { icon: "🔄" });
+    });
+
+    // Collab settings updated by host
+    socket.on("session:collab:updated", ({ collab }) => {
+      setActiveSession((prev) => prev ? { ...prev, collab } : prev);
     });
 
     return () => {
@@ -290,12 +266,7 @@ function ProblemPage() {
 
     setActiveSession(null);
     setCurrentUserPermission("editable");
-    setCurrentUserRole("viewer");
     setSessionParticipants([]);
-    setSessionParticipantDetails([]);
-    setPendingApprovals([]);
-    setSessionSettings(null);
-    setCountdownInfo(null);
     setSessionCodeByLanguage({});
     setSharedStrokes([]);
     setParticipantHistory([]);
@@ -442,114 +413,37 @@ function ProblemPage() {
     toast.success("Code reset to starter template");
   };
 
-  const parseUsers = (csvValue) =>
-    String(csvValue || "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
-
-  const clearActiveSessionState = () => {
-    setActiveSession(null);
-    setCurrentUserPermission("editable");
-    setCurrentUserRole("viewer");
-    setSessionParticipants([]);
-    setSessionParticipantDetails([]);
-    setPendingApprovals([]);
-    setSessionSettings(null);
-    setCountdownInfo(null);
-    setSessionCodeByLanguage({});
-    setSharedStrokes([]);
-    setParticipantHistory([]);
-    setParticipantsSidebarOpen(false);
-    prevParticipantsRef.current = [];
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete("session");
-      return next;
-    });
-  };
-
-  const applyJoinedSession = (joined) => {
-    if (!joined) return;
-
-    setActiveSession({ id: joined.id, name: joined.name });
-    setCurrentUserPermission(joined.userPermission || "editable");
-    setCurrentUserRole(joined.userRole || "viewer");
-    setSessionCodeByLanguage(joined.codeByLanguage || {});
-    setSharedStrokes(joined.drawStrokes || []);
-    setSessionSettings(joined.settings || null);
-    setPendingApprovals(joined.pendingApprovals || []);
-    setSessionJoinId("");
-    setSessionJoinPassword("");
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("session", joined.id);
-      next.delete("joinPassword");
-      return next;
-    });
-
-    const codeForLanguage = joined.codeByLanguage?.[selectedLanguage];
-    if (codeForLanguage !== undefined) {
-      setCode(codeForLanguage || "");
-    }
-  };
-
   const handleCreateSession = () => {
     if (!socketRef.current || !currentProblemId) return;
-
-    const warningValues = parseUsers(sessionCountdownWarnings)
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value > 0);
 
     socketRef.current.emit(
       "session:create",
       {
-        problemId: currentProblemId,
+        problemId:   currentProblemId,
         sessionName: sessionName || `${currentProblem?.title || "Problem"} Session`,
-        hostName: displayName || "Host",
-        language: selectedLanguage,
+        hostName:    displayName || "Host",
+        language:    selectedLanguage,
         starterCode: code,
+        // B. Access & Security
+        visibility:          sessionVisibility,
+        password:            sessionPassword,
+        allowAnonymous:      sessionAllowAnonymous,
+        whitelist:           sessionWhitelist,
+        blacklist:           sessionBlacklist,
+        requireJoinApproval: sessionRequireJoinApproval,
+        // C. Limits
         maxParticipants: Number(sessionMaxParticipants) || 10,
-        visibility: sessionVisibility,
-        password: sessionPassword,
-        allowAnonymous: sessionAllowAnonymous,
-        whitelist: parseUsers(sessionWhitelistUsers),
-        blacklist: parseUsers(sessionBlacklistUsers),
-        waitingRoom: sessionWaitingRoom,
-        autoLockWhenFull: sessionAutoLockWhenFull,
-        allowOverflow: sessionAllowOverflow,
-        roles: {
-          defaultRole: sessionDefaultRole,
-          assignments: {
-            ...parseUsers(sessionReadOnlyUsers).reduce((acc, name) => {
-              acc[name.toLowerCase()] = "viewer";
-              return acc;
-            }, {}),
-            ...parseUsers(sessionEditableUsers).reduce((acc, name) => {
-              acc[name.toLowerCase()] = "editor";
-              return acc;
-            }, {}),
-          },
-        },
-        collaboration: {
-          mode: sessionCollabMode,
-          turnDurationSeconds: Number(sessionTurnDurationSeconds) || 60,
-          showLiveCursors: sessionShowLiveCursors,
-          showSelections: sessionShowSelections,
+        autoLock:        sessionAutoLock,
+        allowOverflow:   sessionAllowOverflow,
+        // D. Roles
+        defaultRole: sessionDefaultRole,
+        // E. Collaboration
+        collab: {
+          mode:             sessionCollabMode,
+          turnDuration:     Number(sessionTurnDuration) || 30,
+          showLiveCursors:  sessionShowCursors,
+          showSelections:   sessionShowSelections,
           typingIndicators: sessionTypingIndicators,
-        },
-        communication: {
-          enableChat: sessionEnableChat,
-          enableReactions: sessionEnableReactions,
-          enableVoice: sessionEnableVoice,
-          messageModeration: sessionMessageModeration,
-        },
-        timing: {
-          startTime: sessionStartTime || null,
-          endTime: sessionEndTime || null,
-          maxDurationMinutes: Number(sessionMaxDurationMinutes) || null,
-          autoClose: sessionAutoClose,
-          countdownWarnings: warningValues.length > 0 ? warningValues : [10, 5, 1],
         },
       },
       (response) => {
@@ -558,13 +452,23 @@ function ProblemPage() {
           return;
         }
 
+        // Server auto-joins creator as host — hydrate session state
+        const joined = response.session;
+        setActiveSession({ id: joined.id, name: joined.name });
+        setCurrentUserRole(response.userRole || "host");
+        setCurrentUserPermission(response.userPermission || "editable");
+        setSessionCodeByLanguage(joined.codeByLanguage || {});
+        setSharedStrokes(joined.drawStrokes || []);
+
+        // Reset form
         setSessionName("");
         setSessionPassword("");
-        setSessionWhitelistUsers("");
-        setSessionBlacklistUsers("");
-        setSessionJoinId(response.sessionId || "");
+        setSessionWhitelist("");
+        setSessionBlacklist("");
         setCreateModalOpen(false);
-        toast.success(`Session created (ID: ${response.sessionId})`);
+        setCreateModalTab("basic");
+
+        toast.success(`Session created & joined (ID: ${response.sessionId})`);
       }
     );
   };
@@ -582,21 +486,34 @@ function ProblemPage() {
       },
       (response) => {
         if (!response?.ok) {
-          if (response?.waitingApproval) {
-            toast(response.message || "Waiting for host approval");
-            return;
-          }
           toast.error(response?.message || "Could not join session");
           return;
         }
 
+        // Placed in waiting room
+        if (response.waiting) {
+          setSessionJoinId("");
+          setSessionJoinPassword("");
+          return;
+        }
+
         const joined = response.session;
-        applyJoinedSession({
-          ...joined,
-          userPermission: response.userPermission,
-          userRole: response.userRole,
-          pendingApprovals: response.pendingApprovals || [],
+        setActiveSession({ id: joined.id, name: joined.name });
+        setCurrentUserRole(response.userRole || "editor");
+        setCurrentUserPermission(response.userPermission || "editable");
+        setSessionCodeByLanguage(joined.codeByLanguage || {});
+        setSharedStrokes(joined.drawStrokes || []);
+        setSessionJoinId("");
+        setSessionJoinPassword("");
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("session", joined.id);
+          next.delete("joinPassword");
+          return next;
         });
+
+        const codeForLanguage = joined.codeByLanguage?.[selectedLanguage];
+        if (codeForLanguage !== undefined) setCode(codeForLanguage || "");
 
         toast.success(`Joined: ${joined.name}`);
       }
@@ -606,7 +523,23 @@ function ProblemPage() {
   const handleLeaveSession = () => {
     if (!socketRef.current) return;
     socketRef.current.emit("session:leave");
-    clearActiveSessionState();
+    setActiveSession(null);
+    setCurrentUserRole("editor");
+    setCurrentUserPermission("editable");
+    setSessionParticipants([]);
+    setSessionParticipantDetails([]);
+    setSessionCodeByLanguage({});
+    setSharedStrokes([]);
+    setParticipantHistory([]);
+    setWaitingRoomUsers([]);
+    setIsInWaitingRoom(false);
+    setParticipantsSidebarOpen(false);
+    prevParticipantsRef.current = [];
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("session");
+      return next;
+    });
     toast.success("Left session");
   };
 
@@ -643,8 +576,9 @@ function ProblemPage() {
   }, [currentProblemId]);
 
   const handleAddStroke = (stroke) => {
+    // 1. Persist locally so the stroke survives tab switches / remounts
     setSharedStrokes((prev) => [...prev, stroke]);
-
+    // 2. Broadcast to the server
     if (!isInSession || !socketRef.current) return;
     socketRef.current.emit("session:draw:add", {
       problemId: currentProblemId,
@@ -654,6 +588,8 @@ function ProblemPage() {
   };
 
   const handleClearBoard = () => {
+    // setSharedStrokes([]) → triggers strokes-sync useEffect in SessionWhiteboard
+    // → clears the canvas and resets its allStrokesRef
     setSharedStrokes([]);
 
     if (!isInSession || !socketRef.current) return;
@@ -661,85 +597,6 @@ function ProblemPage() {
       problemId: currentProblemId,
       sessionId: activeSession.id,
     });
-  };
-
-  const handleApprovalAction = (requestId, action) => {
-    if (!socketRef.current || !activeSession?.id || !canManageRoles) return;
-
-    socketRef.current.emit(
-      "session:join:approval",
-      {
-        problemId: currentProblemId,
-        sessionId: activeSession.id,
-        requestId,
-        action,
-      },
-      (response) => {
-        if (!response?.ok) {
-          toast.error(response?.message || "Could not process join request");
-        }
-      }
-    );
-  };
-
-  const handleRoleChange = (name, role) => {
-    if (!socketRef.current || !activeSession?.id || !canManageRoles || !name) return;
-
-    socketRef.current.emit(
-      "session:participant:role",
-      {
-        problemId: currentProblemId,
-        sessionId: activeSession.id,
-        targetName: name,
-        role,
-      },
-      (response) => {
-        if (!response?.ok) {
-          toast.error(response?.message || "Could not update role");
-          return;
-        }
-        toast.success(`Updated ${name} to ${role}`);
-      }
-    );
-  };
-
-  const handleKickParticipant = (name) => {
-    if (!socketRef.current || !activeSession?.id || !canManageRoles || !name) return;
-
-    socketRef.current.emit(
-      "session:participant:kick",
-      {
-        problemId: currentProblemId,
-        sessionId: activeSession.id,
-        targetName: name,
-      },
-      (response) => {
-        if (!response?.ok) {
-          toast.error(response?.message || "Could not remove participant");
-          return;
-        }
-        toast.success(`${name} removed from session`);
-      }
-    );
-  };
-
-  const handleToggleMuteParticipant = (participant) => {
-    if (!socketRef.current || !activeSession?.id || !canManageRoles || !participant?.name) return;
-
-    socketRef.current.emit(
-      "session:participant:mute",
-      {
-        problemId: currentProblemId,
-        sessionId: activeSession.id,
-        targetName: participant.name,
-        muted: !participant.muted,
-      },
-      (response) => {
-        if (!response?.ok) {
-          toast.error(response?.message || "Could not update mute state");
-        }
-      }
-    );
   };
 
   const handleRunCode = async () => {
@@ -1080,23 +937,7 @@ function ProblemPage() {
                 <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
                 <span className="text-success font-semibold truncate max-w-[140px]">{activeSession.name}</span>
                 <span className="text-base-content/40">·</span>
-                <span className="text-base-content/60 capitalize">{currentUserRole}</span>
-                <span className="text-base-content/40">·</span>
                 <span className="text-base-content/50 capitalize">{currentUserPermission}</span>
-                {isTurnBased && currentTurnName && (
-                  <>
-                    <span className="text-base-content/40">·</span>
-                    <span className="text-warning">Turn: {currentTurnName}</span>
-                  </>
-                )}
-                {countdownInfo?.remainingSeconds > 0 && (
-                  <>
-                    <span className="text-base-content/40">·</span>
-                    <span className="text-error">
-                      {Math.ceil(countdownInfo.remainingSeconds / 60)}m left
-                    </span>
-                  </>
-                )}
               </span>
 
               <button
@@ -1358,6 +1199,7 @@ function ProblemPage() {
                 <OutputPanel output={output} />
               ) : (
                 <SessionWhiteboard
+                  ref={whiteboardRef}
                   enabled={isInSession}
                   strokes={sharedStrokes}
                   onAddStroke={handleAddStroke}
@@ -1373,358 +1215,285 @@ function ProblemPage() {
       {/* ── CREATE SESSION MODAL ── */}
       {createModalOpen && (
         <dialog className="modal modal-open">
-          <div className="modal-box w-full max-w-lg">
+          <div className="modal-box w-full max-w-xl">
             <button
               className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-              onClick={() => setCreateModalOpen(false)}
+              onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }}
             >
               <XIcon className="size-4" />
             </button>
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
               <UsersIcon className="size-5 text-primary" />
               Create Live Session
             </h3>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Session Name</span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionName}
-                  onChange={(e) => setSessionName(e.target.value)}
-                  placeholder={`${currentProblem?.title || "Problem"} Session`}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Max Participants</span>
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  className="input input-sm input-bordered w-full"
-                  value={sessionMaxParticipants}
-                  onChange={(e) => setSessionMaxParticipants(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Visibility</span>
-                </label>
-                <select
-                  className="select select-sm select-bordered w-full"
-                  value={sessionVisibility}
-                  onChange={(e) => setSessionVisibility(e.target.value)}
+            {/* Tabs */}
+            <div className="tabs tabs-boxed tabs-sm mb-4 flex-wrap gap-1">
+              {[
+                { key: "basic",  label: "Basic" },
+                { key: "access", label: "Access" },
+                { key: "limits", label: "Limits" },
+                { key: "roles",  label: "Roles" },
+                { key: "collab", label: "Collab" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`tab tab-sm ${createModalTab === key ? "tab-active" : ""}`}
+                  onClick={() => setCreateModalTab(key)}
                 >
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                  <option value="unlisted">Unlisted</option>
-                </select>
-              </div>
-
-              <div className="col-span-2">
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">
-                    Password
-                    <span className="text-base-content/40 font-normal ml-1">(optional)</span>
-                  </span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionPassword}
-                  onChange={(e) => setSessionPassword(e.target.value)}
-                  placeholder="Leave empty for no password"
-                  type="password"
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">
-                    Read-only users
-                    <span className="text-base-content/40 font-normal ml-1">(comma-separated)</span>
-                  </span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionReadOnlyUsers}
-                  onChange={(e) => setSessionReadOnlyUsers(e.target.value)}
-                  placeholder="ali, sara"
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">
-                    Editable users
-                    <span className="text-base-content/40 font-normal ml-1">(comma-separated)</span>
-                  </span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionEditableUsers}
-                  onChange={(e) => setSessionEditableUsers(e.target.value)}
-                  placeholder="ali, sara"
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Allow Anonymous</span>
-                </label>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={sessionAllowAnonymous}
-                  onChange={(e) => setSessionAllowAnonymous(e.target.checked)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Waiting Room</span>
-                </label>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={sessionWaitingRoom}
-                  onChange={(e) => setSessionWaitingRoom(e.target.checked)}
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Whitelist users</span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionWhitelistUsers}
-                  onChange={(e) => setSessionWhitelistUsers(e.target.value)}
-                  placeholder="Only these users can join (optional)"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Blacklist users</span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionBlacklistUsers}
-                  onChange={(e) => setSessionBlacklistUsers(e.target.value)}
-                  placeholder="Banned users (optional)"
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Auto-lock when full</span>
-                </label>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={sessionAutoLockWhenFull}
-                  onChange={(e) => setSessionAutoLockWhenFull(e.target.checked)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Allow Overflow</span>
-                </label>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={sessionAllowOverflow}
-                  onChange={(e) => setSessionAllowOverflow(e.target.checked)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Default Role</span>
-                </label>
-                <select
-                  className="select select-sm select-bordered w-full"
-                  value={sessionDefaultRole}
-                  onChange={(e) => setSessionDefaultRole(e.target.value)}
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="editor">Editor</option>
-                  <option value="co-host">Co-host</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Collaboration Mode</span>
-                </label>
-                <select
-                  className="select select-sm select-bordered w-full"
-                  value={sessionCollabMode}
-                  onChange={(e) => setSessionCollabMode(e.target.value)}
-                >
-                  <option value="free">Free</option>
-                  <option value="controlled">Controlled</option>
-                  <option value="turn-based">Turn-based</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Turn Duration (sec)</span>
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  className="input input-sm input-bordered w-full"
-                  value={sessionTurnDurationSeconds}
-                  onChange={(e) => setSessionTurnDurationSeconds(e.target.value)}
-                  disabled={sessionCollabMode !== "turn-based"}
-                />
-              </div>
-
-              <div className="col-span-2 grid grid-cols-3 gap-2">
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionShowLiveCursors}
-                    onChange={(e) => setSessionShowLiveCursors(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Live cursors</span>
-                </label>
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionShowSelections}
-                    onChange={(e) => setSessionShowSelections(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Selections</span>
-                </label>
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionTypingIndicators}
-                    onChange={(e) => setSessionTypingIndicators(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Typing indicators</span>
-                </label>
-              </div>
-
-              <div className="col-span-2 grid grid-cols-2 gap-2">
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionEnableChat}
-                    onChange={(e) => setSessionEnableChat(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Enable chat</span>
-                </label>
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionEnableReactions}
-                    onChange={(e) => setSessionEnableReactions(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Enable reactions</span>
-                </label>
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionEnableVoice}
-                    onChange={(e) => setSessionEnableVoice(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Enable voice</span>
-                </label>
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs"
-                    checked={sessionMessageModeration}
-                    onChange={(e) => setSessionMessageModeration(e.target.checked)}
-                  />
-                  <span className="label-text text-xs">Message moderation</span>
-                </label>
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Start Time</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  className="input input-sm input-bordered w-full"
-                  value={sessionStartTime}
-                  onChange={(e) => setSessionStartTime(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">End Time</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  className="input input-sm input-bordered w-full"
-                  value={sessionEndTime}
-                  onChange={(e) => setSessionEndTime(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Max Duration (min)</span>
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  className="input input-sm input-bordered w-full"
-                  value={sessionMaxDurationMinutes}
-                  onChange={(e) => setSessionMaxDurationMinutes(e.target.value)}
-                  placeholder="e.g. 90"
-                />
-              </div>
-
-              <div>
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Auto-close</span>
-                </label>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={sessionAutoClose}
-                  onChange={(e) => setSessionAutoClose(e.target.checked)}
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="label pb-1">
-                  <span className="label-text text-xs font-medium">Countdown Warnings (minutes)</span>
-                </label>
-                <input
-                  className="input input-sm input-bordered w-full"
-                  value={sessionCountdownWarnings}
-                  onChange={(e) => setSessionCountdownWarnings(e.target.value)}
-                  placeholder="10,5,1"
-                />
-              </div>
+                  {label}
+                </button>
+              ))}
             </div>
+
+            {/* ── BASIC ── */}
+            {createModalTab === "basic" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Session Name</span>
+                  </label>
+                  <input
+                    className="input input-sm input-bordered w-full"
+                    value={sessionName}
+                    onChange={(e) => setSessionName(e.target.value)}
+                    placeholder={`${currentProblem?.title || "Problem"} Session`}
+                  />
+                </div>
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Your Display Name</span>
+                  </label>
+                  <input
+                    className="input input-sm input-bordered w-full"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Host"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── ACCESS & SECURITY ── */}
+            {createModalTab === "access" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label pb-1">
+                      <span className="label-text text-xs font-medium">Visibility</span>
+                    </label>
+                    <select
+                      className="select select-sm select-bordered w-full"
+                      value={sessionVisibility}
+                      onChange={(e) => setSessionVisibility(e.target.value)}
+                    >
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label pb-1">
+                      <span className="label-text text-xs font-medium">
+                        Password <span className="text-base-content/40 font-normal">(optional)</span>
+                      </span>
+                    </label>
+                    <input
+                      type="password"
+                      className="input input-sm input-bordered w-full"
+                      value={sessionPassword}
+                      onChange={(e) => setSessionPassword(e.target.value)}
+                      placeholder="Leave empty for none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">
+                      Whitelist <span className="text-base-content/40 font-normal">(comma-separated, empty = anyone)</span>
+                    </span>
+                  </label>
+                  <input
+                    className="input input-sm input-bordered w-full"
+                    value={sessionWhitelist}
+                    onChange={(e) => setSessionWhitelist(e.target.value)}
+                    placeholder="alice, bob"
+                  />
+                </div>
+
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">
+                      Blacklist <span className="text-base-content/40 font-normal">(comma-separated)</span>
+                    </span>
+                  </label>
+                  <input
+                    className="input input-sm input-bordered w-full"
+                    value={sessionBlacklist}
+                    onChange={(e) => setSessionBlacklist(e.target.value)}
+                    placeholder="baduser"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionAllowAnonymous}
+                      onChange={(e) => setSessionAllowAnonymous(e.target.checked)}
+                    />
+                    <span className="text-xs">Allow anonymous users (Guest-…)</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionRequireJoinApproval}
+                      onChange={(e) => setSessionRequireJoinApproval(e.target.checked)}
+                    />
+                    <span className="text-xs">Waiting room — require host approval to join</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* ── LIMITS ── */}
+            {createModalTab === "limits" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Max Participants</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    className="input input-sm input-bordered w-full"
+                    value={sessionMaxParticipants}
+                    onChange={(e) => setSessionMaxParticipants(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionAutoLock}
+                      onChange={(e) => setSessionAutoLock(e.target.checked)}
+                    />
+                    <span className="text-xs">Auto-lock session when full</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionAllowOverflow}
+                      onChange={(e) => setSessionAllowOverflow(e.target.checked)}
+                    />
+                    <span className="text-xs">Allow overflow (ignore limit after lock)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* ── ROLES ── */}
+            {createModalTab === "roles" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Default role for new joiners</span>
+                  </label>
+                  <select
+                    className="select select-sm select-bordered w-full"
+                    value={sessionDefaultRole}
+                    onChange={(e) => setSessionDefaultRole(e.target.value)}
+                  >
+                    <option value="editor">Editor — can edit &amp; comment</option>
+                    <option value="viewer">Viewer — read-only</option>
+                  </select>
+                </div>
+                <div className="bg-base-200 rounded-lg p-3 text-xs space-y-1.5 text-base-content/70">
+                  <p className="font-semibold text-base-content mb-1">Role permissions summary</p>
+                  <p><span className="badge badge-xs badge-primary mr-1">host</span>Full control — edit, kick, mute, change permissions</p>
+                  <p><span className="badge badge-xs badge-secondary mr-1">co-host</span>Same as host except cannot be demoted</p>
+                  <p><span className="badge badge-xs badge-accent mr-1">editor</span>Edit &amp; comment only</p>
+                  <p><span className="badge badge-xs badge-ghost mr-1">viewer</span>Read &amp; comment only</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── COLLABORATION ── */}
+            {createModalTab === "collab" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Collaboration Mode</span>
+                  </label>
+                  <select
+                    className="select select-sm select-bordered w-full"
+                    value={sessionCollabMode}
+                    onChange={(e) => setSessionCollabMode(e.target.value)}
+                  >
+                    <option value="free">Free — anyone with edit role can type</option>
+                    <option value="controlled">Controlled — only host/co-host can edit</option>
+                    <option value="turn-based">Turn-based — one person edits at a time</option>
+                  </select>
+                </div>
+
+                {sessionCollabMode === "turn-based" && (
+                  <div>
+                    <label className="label pb-1">
+                      <span className="label-text text-xs font-medium">Turn Duration (seconds)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={5}
+                      max={300}
+                      className="input input-sm input-bordered w-full"
+                      value={sessionTurnDuration}
+                      onChange={(e) => setSessionTurnDuration(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionShowCursors}
+                      onChange={(e) => setSessionShowCursors(e.target.checked)}
+                    />
+                    <span className="text-xs">Show live cursors</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionShowSelections}
+                      onChange={(e) => setSessionShowSelections(e.target.checked)}
+                    />
+                    <span className="text-xs">Show selections</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionTypingIndicators}
+                      onChange={(e) => setSessionTypingIndicators(e.target.checked)}
+                    />
+                    <span className="text-xs">Typing indicators</span>
+                  </label>
+                </div>
+              </div>
+            )}
 
             <div className="modal-action mt-5">
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => setCreateModalOpen(false)}
+                onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }}
               >
                 Cancel
               </button>
@@ -1733,11 +1502,11 @@ function ProblemPage() {
                 onClick={handleCreateSession}
               >
                 <PlusIcon className="size-3.5" />
-                Create Session
+                Create &amp; Join
               </button>
             </div>
           </div>
-          <div className="modal-backdrop" onClick={() => setCreateModalOpen(false)} />
+          <div className="modal-backdrop" onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }} />
         </dialog>
       )}
 
@@ -1774,13 +1543,53 @@ function ProblemPage() {
             <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
             <span className="font-medium truncate">{activeSession.name}</span>
             <span className="ml-auto text-base-content/40 capitalize shrink-0">
-              {currentUserPermission}
+              {currentUserRole}
             </span>
           </div>
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {/* current participants */}
+
+          {/* ── Waiting room (visible to host/co-host) ── */}
+          {waitingRoomUsers.length > 0 && (currentUserRole === "host" || currentUserRole === "co-host") && (
+            <div className="px-4 py-3 border-b border-warning/30 bg-warning/5">
+              <p className="text-[10px] font-semibold text-warning uppercase tracking-wider mb-2">
+                Waiting Room · {waitingRoomUsers.length}
+              </p>
+              <div className="space-y-2">
+                {waitingRoomUsers.map((w) => (
+                  <div key={w.socketId} className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center text-xs font-bold text-warning shrink-0">
+                      {w.name[0]?.toUpperCase()}
+                    </div>
+                    <span className="text-xs truncate flex-1">{w.name}</span>
+                    <button
+                      className="btn btn-success btn-xs px-2"
+                      onClick={() => socketRef.current?.emit("session:waiting:approve", { socketId: w.socketId })}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      className="btn btn-error btn-xs px-2"
+                      onClick={() => socketRef.current?.emit("session:waiting:reject", { socketId: w.socketId })}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Waiting room notice (for the waiting user) ── */}
+          {isInWaitingRoom && (
+            <div className="px-4 py-3 bg-warning/10 border-b border-warning/20 text-xs text-warning flex items-center gap-2">
+              <span className="animate-spin text-base">⏳</span>
+              Waiting for host approval…
+            </div>
+          )}
+
+          {/* ── Current participants ── */}
           <div className="px-4 py-3">
             <p className="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-2">
               In session now · {sessionParticipants.length}
@@ -1789,95 +1598,60 @@ function ProblemPage() {
               <p className="text-xs text-base-content/40 italic">No one here yet</p>
             ) : (
               <div className="space-y-2">
-                {(sessionParticipantDetails.length > 0
-                  ? sessionParticipantDetails
-                  : sessionParticipants.map((name) => ({ name, role: "viewer", muted: false }))
-                ).map((participant, i) => (
-                  <div key={`${participant.name}-${i}`} className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {participant.name[0]?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm truncate block">{participant.name}</span>
-                      <span className="text-[10px] text-base-content/50 capitalize">
-                        {participant.role || "viewer"}
-                        {participant.muted ? " · muted" : ""}
-                      </span>
-                    </div>
-                    {canManageRoles && participant.name !== displayName && (
-                      <select
-                        className="select select-xs select-bordered w-20"
-                        value={selectedRoles[participant.name] || participant.role || "viewer"}
-                        onChange={(e) => {
-                          const nextRole = e.target.value;
-                          setSelectedRoles((prev) => ({
-                            ...prev,
-                            [participant.name]: nextRole,
-                          }));
-                          handleRoleChange(participant.name, nextRole);
-                        }}
-                      >
-                        <option value="viewer">viewer</option>
-                        <option value="editor">editor</option>
-                        <option value="co-host">co-host</option>
-                      </select>
-                    )}
-                    {canManageRoles && participant.name !== displayName && (
-                      <button
-                        className="btn btn-ghost btn-xs"
-                        onClick={() => handleToggleMuteParticipant(participant)}
-                        title={participant.muted ? "Unmute" : "Mute"}
-                      >
-                        {participant.muted ? "Unmute" : "Mute"}
-                      </button>
-                    )}
-                    {canManageRoles && participant.name !== displayName && (
-                      <button
-                        className="btn btn-ghost btn-xs text-error"
-                        onClick={() => handleKickParticipant(participant.name)}
-                        title="Kick participant"
-                      >
-                        Kick
-                      </button>
-                    )}
-                    <span
-                      className="w-2 h-2 rounded-full bg-success shrink-0"
-                      title="Online"
-                    />
-                  </div>
-                ))}
+                {sessionParticipantDetails.length > 0
+                  ? sessionParticipantDetails.map((p) => {
+                      const roleBadge = {
+                        host:      "badge-primary",
+                        "co-host": "badge-secondary",
+                        editor:    "badge-accent",
+                        viewer:    "badge-ghost",
+                      }[p.role] || "badge-ghost";
+                      const canChangeRole =
+                        (currentUserRole === "host" || currentUserRole === "co-host") &&
+                        p.role !== "host";
+
+                      return (
+                        <div key={p.socketId} className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                            {p.name[0]?.toUpperCase()}
+                          </div>
+                          <span className="text-sm truncate flex-1">{p.name}</span>
+                          {canChangeRole ? (
+                            <select
+                              className="select select-xs select-bordered py-0 h-6 min-h-0 text-[10px]"
+                              value={p.role}
+                              onChange={(e) =>
+                                socketRef.current?.emit("session:role:change", {
+                                  socketId: p.socketId,
+                                  newRole:  e.target.value,
+                                })
+                              }
+                            >
+                              <option value="co-host">co-host</option>
+                              <option value="editor">editor</option>
+                              <option value="viewer">viewer</option>
+                            </select>
+                          ) : (
+                            <span className={`badge badge-xs ${roleBadge}`}>{p.role}</span>
+                          )}
+                          <span className="w-2 h-2 rounded-full bg-success shrink-0" title="Online" />
+                        </div>
+                      );
+                    })
+                  : sessionParticipants.map((name, i) => (
+                      <div key={i} className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {name[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-sm truncate flex-1">{name}</span>
+                        <span className="w-2 h-2 rounded-full bg-success shrink-0" title="Online" />
+                      </div>
+                    ))}
               </div>
             )}
           </div>
 
-          {canManageRoles && pendingApprovals.length > 0 && (
-            <div className="px-4 py-3 border-t border-base-300">
-              <p className="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-                Waiting Room · {pendingApprovals.length}
-              </p>
-              <div className="space-y-2">
-                {pendingApprovals.map((request) => (
-                  <div key={request.requestId} className="flex items-center gap-2">
-                    <span className="text-xs truncate flex-1">{request.userName}</span>
-                    <button
-                      className="btn btn-xs btn-success"
-                      onClick={() => handleApprovalAction(request.requestId, "approve")}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="btn btn-xs btn-error"
-                      onClick={() => handleApprovalAction(request.requestId, "deny")}
-                    >
-                      Deny
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* activity history */}
+          {/* ── Activity history ── */}
           {participantHistory.length > 0 && (
             <div className="px-4 py-3 border-t border-base-300">
               <p className="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-2">

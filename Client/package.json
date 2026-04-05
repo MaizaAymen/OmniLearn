@@ -12,6 +12,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@ant-design/plots": "^2.6.8",
+    "@antv/x6": "^3.1.7",
     "@base-ui/react": "^1.2.0",
     "@chakra-ui/react": "^3.33.0",
     "@excalidraw/excalidraw": "^0.18.0",
@@ -32,6 +33,7 @@
     "dagre": "^0.8.5",
     "daisyui": "^5.5.19",
     "dayjs": "^1.11.19",
+    "jointjs": "^3.7.7",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.575.0",
     "pdfjs-dist": "^3.11.174",

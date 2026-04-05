@@ -1,119 +1,51 @@
-const crypto = require("crypto");
 const { Server } = require("socket.io");
+const bcrypt = require("bcryptjs");
 
-// In-memory store: { [problemId]: { [sessionId]: session } }
-const sessionsByProblem = {};
-const socketToMembership = new Map();
-
+// ── Role permission matrix ─────────────────────────────────────────────────
 const ROLE_PERMISSIONS = {
-  host: {
-    canEdit: true,
-    canComment: true,
-    canKick: true,
-    canMute: true,
-    canChangePermissions: true,
-  },
-  "co-host": {
-    canEdit: true,
-    canComment: true,
-    canKick: true,
-    canMute: true,
-    canChangePermissions: true,
-  },
-  editor: {
-    canEdit: true,
-    canComment: true,
-    canKick: false,
-    canMute: false,
-    canChangePermissions: false,
-  },
-  viewer: {
-    canEdit: false,
-    canComment: true,
-    canKick: false,
-    canMute: false,
-    canChangePermissions: false,
-  },
+  host:       { canEdit: true,  canComment: true, canKick: true,  canMute: true,  canChangePermissions: true  },
+  "co-host":  { canEdit: true,  canComment: true, canKick: true,  canMute: true,  canChangePermissions: true  },
+  editor:     { canEdit: true,  canComment: true, canKick: false, canMute: false, canChangePermissions: false },
+  viewer:     { canEdit: false, canComment: true, canKick: false, canMute: false, canChangePermissions: false },
 };
 
+const VALID_ROLES        = new Set(["host", "co-host", "editor", "viewer"]);
+const VALID_COLLAB_MODES = new Set(["free", "controlled", "turn-based"]);
+const VALID_VISIBILITIES = new Set(["public", "private", "unlisted"]);
+
+// ── In-memory stores ──────────────────────────────────────────────────────
+// { [problemId]: { [sessionId]: session } }
+const sessionsByProblem = {};
+// socketId → { problemId, sessionId }
+const socketToMembership = new Map();
+// socketId → { problemId, sessionId }  (waiting room reverse-lookup)
+const socketToWaiting = new Map();
+
+// ── Utilities ──────────────────────────────────────────────────────────────
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
 }
 
 function parseNameList(value) {
-  const values = Array.isArray(value)
+  const arr = Array.isArray(value)
     ? value
-    : String(value || "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-  return Array.from(new Set(values.map((item) => normalizeName(item)).filter(Boolean)));
-}
-
-function parseBoolean(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    if (value.toLowerCase() === "true") return true;
-    if (value.toLowerCase() === "false") return false;
-  }
-  return fallback;
-}
-
-function parsePositiveNumber(value, fallback) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return fallback;
-  return num;
-}
-
-function parseDateMs(value) {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function hashPassword(password, salt) {
-  return crypto.createHash("sha256").update(`${salt}:${password}`).digest("hex");
-}
-
-function buildPasswordRecord(password) {
-  const raw = String(password || "").trim();
-  if (!raw) return { passwordHash: "", passwordSalt: "" };
-  const passwordSalt = crypto.randomBytes(12).toString("hex");
-  return {
-    passwordSalt,
-    passwordHash: hashPassword(raw, passwordSalt),
-  };
-}
-
-function verifyPassword(password, session) {
-  if (!session?.accessSecurity?.passwordHash) return true;
-  const incoming = String(password || "");
-  const incomingHash = hashPassword(incoming, session.accessSecurity.passwordSalt);
-  return incomingHash === session.accessSecurity.passwordHash;
+    : String(value || "").split(",").map((v) => v.trim()).filter(Boolean);
+  return Array.from(new Set(arr.map(normalizeName).filter(Boolean)));
 }
 
 function listAllSessions() {
-  return Object.values(sessionsByProblem).flatMap((problemSessions) =>
-    Object.values(problemSessions)
-  );
+  return Object.values(sessionsByProblem).flatMap((ps) => Object.values(ps));
 }
 
-function isSessionIdTaken(sessionId) {
-  return listAllSessions().some((session) => session.id === sessionId);
+function isSessionIdTaken(id) {
+  return listAllSessions().some((s) => s.id === id);
 }
 
 function generateUniqueSessionId() {
-  let sessionId = "";
-  do {
-    sessionId = `S-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  } while (isSessionIdTaken(sessionId));
-
-  return sessionId;
-}
-
-function generateRequestId() {
-  return `REQ-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+  let id;
+  do { id = `S-${Math.random().toString(36).slice(2, 8).toUpperCase()}`; }
+  while (isSessionIdTaken(id));
+  return id;
 }
 
 function getProblemSessions(problemId) {
@@ -124,50 +56,48 @@ function getSessionRoom(problemId, sessionId) {
   return `problem:${problemId}:session:${sessionId}`;
 }
 
-function getSessionCountdownInfo(session) {
-  if (!session?.timing?.autoCloseAt) return null;
-  const remainingMs = session.timing.autoCloseAt - Date.now();
-  return {
-    remainingMs,
-    remainingSeconds: Math.max(0, Math.ceil(remainingMs / 1000)),
-  };
+function hasPermission(session, socketId, action) {
+  const p = session?.participants?.[socketId];
+  return p ? Boolean(ROLE_PERMISSIONS[p.role]?.[action]) : false;
 }
 
-function shouldListInLobby(session) {
-  return session?.accessSecurity?.visibility !== "unlisted";
+function buildParticipantList(session) {
+  return Object.entries(session.participants).map(([socketId, p]) => ({
+    socketId,
+    name: p.name,
+    role: p.role,
+    permissions: ROLE_PERMISSIONS[p.role] || {},
+  }));
 }
 
 function buildSessionSummary(session) {
   return {
-    id: session.id,
-    problemId: session.problemId,
-    name: session.name,
-    hostName: session.hostName,
-    participantCount: Object.keys(session.participants).length,
-    maxParticipants: session.limits.maxParticipants,
-    visibility: session.accessSecurity.visibility,
-    requiresPassword: Boolean(session.accessSecurity.passwordHash),
-    waitingRoom: session.accessSecurity.waitingRoom,
-    isLocked: session.limits.isLocked,
-    collaborationMode: session.collaboration.mode,
-    createdAt: session.createdAt,
-    timing: {
-      startTime: session.timing.startTime,
-      endTime: session.timing.endTime,
-      maxDurationMinutes: session.timing.maxDurationMinutes,
-      autoClose: session.timing.autoClose,
-      countdownWarnings: session.timing.countdownWarnings,
-    },
+    id:                 session.id,
+    problemId:          session.problemId,
+    name:               session.name,
+    hostName:           session.hostName,
+    participantCount:   Object.keys(session.participants).length,
+    waitingCount:       Object.keys(session.waitingRoom).length,
+    maxParticipants:    session.maxParticipants,
+    visibility:         session.visibility,
+    requiresPassword:   Boolean(session.passwordHash),
+    locked:             session.locked,
+    requireJoinApproval: session.requireJoinApproval,
+    collab:             session.collab,
+    createdAt:          session.createdAt,
   };
 }
 
 function buildSessionList(problemId) {
-  const sessions = Object.values(getProblemSessions(problemId));
-  return sessions.filter(shouldListInLobby).map((session) => buildSessionSummary(session));
+  return Object.values(getProblemSessions(problemId))
+    .filter((s) => s.visibility !== "unlisted")
+    .map(buildSessionSummary);
 }
 
 function buildGlobalSessionList() {
-  return listAllSessions().filter(shouldListInLobby).map((session) => buildSessionSummary(session));
+  return listAllSessions()
+    .filter((s) => s.visibility !== "unlisted")
+    .map(buildSessionSummary);
 }
 
 function broadcastProblemSessionList(io, problemId) {
@@ -184,278 +114,116 @@ function broadcastGlobalSessionList(io) {
 }
 
 function broadcastSessionLists(io, problemId) {
-  if (problemId) {
-    broadcastProblemSessionList(io, problemId);
-  }
+  if (problemId) broadcastProblemSessionList(io, problemId);
   broadcastGlobalSessionList(io);
+}
+
+function broadcastParticipants(io, session) {
+  io.to(getSessionRoom(session.problemId, session.id)).emit("session:participants", {
+    participants:       Object.values(session.participants).map((p) => p.name),
+    participantDetails: buildParticipantList(session),
+  });
+}
+
+function broadcastWaitingRoom(io, session) {
+  io.to(getSessionRoom(session.problemId, session.id)).emit("session:waiting:update", {
+    waiting: Object.values(session.waitingRoom),
+  });
+}
+
+function findSession(problemId, sessionId) {
+  return sessionsByProblem?.[problemId]?.[sessionId] || null;
 }
 
 function findSessionById(sessionId) {
   const normalized = String(sessionId || "").trim();
   if (!normalized) return null;
-
-  const problemIds = Object.keys(sessionsByProblem);
-  for (const problemId of problemIds) {
-    const session = sessionsByProblem?.[problemId]?.[normalized];
+  for (const problemId of Object.keys(sessionsByProblem)) {
+    const session = sessionsByProblem[problemId]?.[normalized];
     if (session) return { problemId, session };
   }
-
   return null;
 }
 
-function resolveRoleForUser(session, normalizedName) {
-  if (normalizedName === session.hostNormalizedName) return "host";
-  return session.roles.assignments[normalizedName] || session.roles.defaultRole;
-}
-
-function resolvePermissionsForRole(session, role) {
-  const perms = session.roles.permissionsByRole[role] || ROLE_PERMISSIONS.viewer;
-  return {
-    canEdit: Boolean(perms.canEdit),
-    canComment: Boolean(perms.canComment),
-    canKick: Boolean(perms.canKick),
-    canMute: Boolean(perms.canMute),
-    canChangePermissions: Boolean(perms.canChangePermissions),
-  };
-}
-
-function resolveParticipantAccess(session, userName) {
-  const normalizedName = normalizeName(userName);
-  const role = resolveRoleForUser(session, normalizedName);
-  const permissions = resolvePermissionsForRole(session, role);
-  return {
-    normalizedName,
-    role,
-    permissions,
-    permission: permissions.canEdit ? "editable" : "read-only",
-  };
-}
-
-function getParticipantDetails(session) {
-  return Object.values(session.participants).map((participant) => ({
-    name: participant.name,
-    role: participant.role,
-    permission: participant.permission,
-    muted: Boolean(participant.muted),
-  }));
-}
-
-function emitSessionParticipants(io, problemId, sessionId) {
-  const session = sessionsByProblem?.[problemId]?.[sessionId];
-  if (!session) return;
-
-  io.to(getSessionRoom(problemId, sessionId)).emit("session:participants", {
-    participants: Object.values(session.participants).map((participant) => participant.name),
-    participantDetails: getParticipantDetails(session),
-  });
-}
-
-function canActor(session, socketId, capability) {
-  return Boolean(session?.participants?.[socketId]?.permissions?.[capability]);
-}
-
-function canEditSession(session, socketId) {
-  const participant = session?.participants?.[socketId];
-  if (!participant?.permissions?.canEdit) return false;
-
-  if (session.collaboration.mode !== "turn-based") {
-    return true;
-  }
-
-  if (participant.permissions.canChangePermissions) {
-    return true;
-  }
-
-  return participant.normalizedName === session.collaboration.currentTurnName;
-}
-
-function removeSession(problemId, sessionId) {
-  if (!sessionsByProblem?.[problemId]?.[sessionId]) return;
-
-  delete sessionsByProblem[problemId][sessionId];
-  if (Object.keys(sessionsByProblem[problemId]).length === 0) {
-    delete sessionsByProblem[problemId];
-  }
-}
-
-function cleanupExpiredSessions(io) {
-  const now = Date.now();
-  const problemIds = Object.keys(sessionsByProblem);
-
-  for (const problemId of problemIds) {
-    const sessionIds = Object.keys(sessionsByProblem[problemId]);
-    for (const sessionId of sessionIds) {
-      const session = sessionsByProblem[problemId][sessionId];
-      if (!session?.timing?.autoClose || !session?.timing?.autoCloseAt) continue;
-
-      if (now < session.timing.autoCloseAt) continue;
-
-      io.to(getSessionRoom(problemId, sessionId)).emit("session:closed", {
-        reason: "Session closed automatically by timing rules",
-      });
-
-      Object.keys(session.participants).forEach((socketId) => {
-        socketToMembership.delete(socketId);
-      });
-
-      removeSession(problemId, sessionId);
-      broadcastSessionLists(io, problemId);
-    }
-  }
-}
-
+// ── Session lifecycle ─────────────────────────────────────────────────────
 function createSession({
-  problemId,
-  sessionName,
-  hostName,
-  language,
-  starterCode,
-  maxParticipants,
-  visibility,
-  password,
-  allowAnonymous,
-  whitelist,
-  blacklist,
-  waitingRoom,
-  autoLockWhenFull,
-  allowOverflow,
-  roles,
-  collaboration,
-  communication,
-  timing,
+  problemId, sessionName, hostName, language, starterCode,
+  maxParticipants, autoLock, allowOverflow,
+  password, visibility, allowAnonymous,
+  whitelist, blacklist, requireJoinApproval,
+  defaultRole, collab,
 }) {
-  if (!sessionsByProblem[problemId]) {
-    sessionsByProblem[problemId] = {};
-  }
+  if (!sessionsByProblem[problemId]) sessionsByProblem[problemId] = {};
 
-  const safeHostName = String(hostName || "Host").trim() || "Host";
-  const hostNormalizedName = normalizeName(safeHostName);
-  const safeMaxParticipants = Math.max(1, Number(maxParticipants) || 10);
+  const safeMax        = Math.max(1, Math.min(200, Number(maxParticipants) || 10));
+  const safeVisibility = VALID_VISIBILITIES.has(visibility) ? visibility : "public";
+  const safeDefault    = ["editor", "viewer"].includes(defaultRole) ? defaultRole : "editor";
+  const safeMode       = VALID_COLLAB_MODES.has(collab?.mode) ? collab.mode : "free";
+  const passwordHash   = password ? bcrypt.hashSync(String(password), 8) : "";
 
-  const safeVisibility = ["public", "private", "unlisted"].includes(visibility)
-    ? visibility
-    : "public";
-
-  const safeWhitelist = parseNameList(whitelist);
-  const safeBlacklist = parseNameList(blacklist);
-
-  const safeRoles = {
-    defaultRole: ["host", "co-host", "editor", "viewer"].includes(roles?.defaultRole)
-      ? roles.defaultRole
-      : "viewer",
-    permissionsByRole: {
-      host: {
-        ...ROLE_PERMISSIONS.host,
-        ...(roles?.permissionsByRole?.host || {}),
-      },
-      "co-host": {
-        ...ROLE_PERMISSIONS["co-host"],
-        ...(roles?.permissionsByRole?.["co-host"] || {}),
-      },
-      editor: {
-        ...ROLE_PERMISSIONS.editor,
-        ...(roles?.permissionsByRole?.editor || {}),
-      },
-      viewer: {
-        ...ROLE_PERMISSIONS.viewer,
-        ...(roles?.permissionsByRole?.viewer || {}),
-      },
-    },
-    assignments: {
-      [hostNormalizedName]: "host",
-      ...(roles?.assignments || {}),
-    },
-  };
-
-  const safeCollaborationMode = ["free", "controlled", "turn-based"].includes(
-    collaboration?.mode
-  )
-    ? collaboration.mode
-    : "free";
-
-  const safeTurnDurationSeconds = parsePositiveNumber(collaboration?.turnDurationSeconds, 60);
-
-  const safeTiming = {
-    startTime: parseDateMs(timing?.startTime),
-    endTime: parseDateMs(timing?.endTime),
-    maxDurationMinutes: parsePositiveNumber(timing?.maxDurationMinutes, null),
-    autoClose: parseBoolean(timing?.autoClose, false),
-    countdownWarnings: Array.isArray(timing?.countdownWarnings)
-      ? timing.countdownWarnings
-          .map((v) => Number(v))
-          .filter((v) => Number.isFinite(v) && v > 0)
-      : [10, 5, 1],
-    warnedMinutes: {},
-    createdAt: Date.now(),
-    autoCloseAt: null,
-  };
-
-  if (safeTiming.maxDurationMinutes) {
-    safeTiming.autoCloseAt = safeTiming.createdAt + safeTiming.maxDurationMinutes * 60 * 1000;
-  }
-  if (safeTiming.endTime) {
-    safeTiming.autoCloseAt = safeTiming.autoCloseAt
-      ? Math.min(safeTiming.autoCloseAt, safeTiming.endTime)
-      : safeTiming.endTime;
-  }
-
-  const passwordRecord = buildPasswordRecord(password);
   const sessionId = generateUniqueSessionId();
 
-  const initialTurnName = hostNormalizedName;
-
   sessionsByProblem[problemId][sessionId] = {
-    id: sessionId,
+    id:        sessionId,
     problemId,
-    name: sessionName || "Untitled Session",
-    hostName: safeHostName,
-    hostNormalizedName,
-    createdAt: Date.now(),
-    accessSecurity: {
-      visibility: safeVisibility,
-      passwordHash: passwordRecord.passwordHash,
-      passwordSalt: passwordRecord.passwordSalt,
-      allowAnonymous: parseBoolean(allowAnonymous, true),
-      whitelist: safeWhitelist,
-      blacklist: safeBlacklist,
-      waitingRoom: parseBoolean(waitingRoom, false),
+    name:      sessionName || "Untitled Session",
+    hostName:  normalizeName(hostName || "host"),
+
+    // B. Access & Security
+    visibility:         safeVisibility,
+    passwordHash,
+    allowAnonymous:     allowAnonymous !== false,
+    whitelist:          parseNameList(whitelist),
+    blacklist:          parseNameList(blacklist),
+    requireJoinApproval: Boolean(requireJoinApproval),
+    waitingRoom:        {},   // { [socketId]: { socketId, name, requestedAt } }
+
+    // C. Limits
+    maxParticipants: safeMax,
+    autoLock:        Boolean(autoLock),
+    locked:          false,
+    allowOverflow:   Boolean(allowOverflow),
+
+    // D. Roles
+    defaultRole: safeDefault,
+
+    // E. Collaboration
+    collab: {
+      mode:              safeMode,
+      turnDuration:      Math.max(5, Number(collab?.turnDuration) || 30),
+      showLiveCursors:   collab?.showLiveCursors !== false,
+      showSelections:    collab?.showSelections !== false,
+      typingIndicators:  collab?.typingIndicators !== false,
+      currentTurnSocketId: null,
+      turnStartedAt:     null,
     },
-    limits: {
-      maxParticipants: safeMaxParticipants,
-      autoLockWhenFull: parseBoolean(autoLockWhenFull, true),
-      allowOverflow: parseBoolean(allowOverflow, false),
-      isLocked: false,
-    },
-    roles: safeRoles,
-    collaboration: {
-      mode: safeCollaborationMode,
-      turnDurationSeconds: safeTurnDurationSeconds,
-      showLiveCursors: parseBoolean(collaboration?.showLiveCursors, true),
-      showSelections: parseBoolean(collaboration?.showSelections, true),
-      typingIndicators: parseBoolean(collaboration?.typingIndicators, true),
-      currentTurnName: initialTurnName,
-      turnStartedAt: Date.now(),
-    },
-    communication: {
-      enableChat: parseBoolean(communication?.enableChat, true),
-      enableReactions: parseBoolean(communication?.enableReactions, true),
-      enableVoice: parseBoolean(communication?.enableVoice, false),
-      messageModeration: parseBoolean(communication?.messageModeration, false),
-    },
-    timing: safeTiming,
-    codeByLanguage: {
-      [language]: starterCode || "",
-    },
-    drawStrokes: [],
-    participants: {},
-    pendingApprovals: [],
+
+    participants:    {},
+    codeByLanguage:  { [language]: starterCode || "" },
+    drawStrokes:     [],
+    createdAt:       Date.now(),
   };
 
   return sessionsByProblem[problemId][sessionId];
 }
 
-function findSession(problemId, sessionId) {
-  return sessionsByProblem?.[problemId]?.[sessionId] || null;
+function addParticipant(session, socketId, userName, role) {
+  session.participants[socketId] = { name: userName, role };
+
+  // Auto-lock when full
+  if (
+    session.autoLock &&
+    !session.locked &&
+    Object.keys(session.participants).length >= session.maxParticipants
+  ) {
+    session.locked = true;
+  }
+
+  // Bootstrap turn-based
+  if (session.collab.mode === "turn-based" && !session.collab.currentTurnSocketId) {
+    session.collab.currentTurnSocketId = socketId;
+    session.collab.turnStartedAt = Date.now();
+  }
 }
 
 function removeMembership(socketId) {
@@ -464,11 +232,41 @@ function removeMembership(socketId) {
 
   const { problemId, sessionId } = member;
   const session = findSession(problemId, sessionId);
+
   if (session) {
     delete session.participants[socketId];
 
-    if (Object.keys(session.participants).length === 0) {
-      removeSession(problemId, sessionId);
+    // Unlock if no longer at capacity
+    if (session.locked && !session.allowOverflow) {
+      if (Object.keys(session.participants).length < session.maxParticipants) {
+        session.locked = false;
+      }
+    }
+
+    const entries = Object.entries(session.participants);
+
+    if (entries.length === 0) {
+      delete sessionsByProblem[problemId][sessionId];
+      if (Object.keys(sessionsByProblem[problemId]).length === 0) {
+        delete sessionsByProblem[problemId];
+      }
+    } else {
+      // Promote a new host if the host left
+      const hasHost = entries.some(([, p]) => p.role === "host");
+      if (!hasHost) {
+        const newHost =
+          entries.find(([, p]) => p.role === "co-host") ||
+          entries.find(([, p]) => p.role === "editor") ||
+          entries[0];
+        if (newHost) newHost[1].role = "host";
+      }
+
+      // Advance turn if it was the leaver's turn
+      if (session.collab.currentTurnSocketId === socketId) {
+        const ids = Object.keys(session.participants);
+        session.collab.currentTurnSocketId = ids[0] ?? null;
+        session.collab.turnStartedAt = ids[0] ? Date.now() : null;
+      }
     }
   }
 
@@ -476,614 +274,428 @@ function removeMembership(socketId) {
   return { problemId, sessionId };
 }
 
-function isAnonymousName(userName) {
-  const normalized = normalizeName(userName);
-  return !normalized || normalized.startsWith("guest");
+function removeFromWaiting(socketId) {
+  const entry = socketToWaiting.get(socketId);
+  if (!entry) return null;
+  const session = findSession(entry.problemId, entry.sessionId);
+  if (session) delete session.waitingRoom[socketId];
+  socketToWaiting.delete(socketId);
+  return entry;
 }
 
-function tryJoinChecks(session, userName, password) {
-  const normalizedName = normalizeName(userName);
-  const now = Date.now();
-
-  if (session.timing.startTime && now < session.timing.startTime) {
-    return { ok: false, message: "Session has not started yet" };
-  }
-
-  if (session.timing.endTime && now > session.timing.endTime) {
-    return { ok: false, message: "Session has ended" };
-  }
-
-  if (session.timing.maxDurationMinutes) {
-    const sessionDeadline =
-      session.timing.createdAt + session.timing.maxDurationMinutes * 60 * 1000;
-    if (now > sessionDeadline) {
-      return { ok: false, message: "Session maximum duration has passed" };
-    }
-  }
-
-  if (!session.accessSecurity.allowAnonymous && isAnonymousName(userName)) {
-    return { ok: false, message: "Anonymous users are not allowed" };
-  }
-
-  if (session.accessSecurity.blacklist.includes(normalizedName)) {
-    return { ok: false, message: "You are banned from this session" };
-  }
-
-  if (
-    session.accessSecurity.whitelist.length > 0 &&
-    !session.accessSecurity.whitelist.includes(normalizedName)
-  ) {
-    return { ok: false, message: "You are not in the allowed users list" };
-  }
-
-  if (!verifyPassword(password, session)) {
-    return { ok: false, message: "Wrong session password" };
-  }
-
-  const participantCount = Object.keys(session.participants).length;
-  if (participantCount >= session.limits.maxParticipants) {
-    if (session.limits.autoLockWhenFull) {
-      session.limits.isLocked = true;
-    }
-
-    if (!session.limits.allowOverflow) {
-      return { ok: false, message: "Session is full" };
-    }
-  }
-
-  if (session.limits.isLocked && !session.limits.allowOverflow) {
-    return { ok: false, message: "Session is locked" };
-  }
-
-  return { ok: true };
-}
-
-function attachParticipant(io, socket, problemId, sessionId, userName) {
-  const session = findSession(problemId, sessionId);
-  if (!session) {
-    return { ok: false, message: "Session not found" };
-  }
-
-  const safeUserName = String(userName || "Guest").trim() || "Guest";
-  const access = resolveParticipantAccess(session, safeUserName);
-
-  session.participants[socket.id] = {
-    name: safeUserName,
-    normalizedName: access.normalizedName,
-    role: access.role,
-    permissions: access.permissions,
-    permission: access.permission,
-    muted: false,
-    isAnonymous: isAnonymousName(safeUserName),
-  };
-
-  if (session.collaboration.mode === "turn-based" && !session.collaboration.currentTurnName) {
-    session.collaboration.currentTurnName = access.normalizedName;
-    session.collaboration.turnStartedAt = Date.now();
-  }
-
-  socketToMembership.set(socket.id, { problemId, sessionId });
-  socket.join(getSessionRoom(problemId, sessionId));
-
-  emitSessionParticipants(io, problemId, sessionId);
-  broadcastSessionLists(io, problemId);
-
+// ── Build shared session payload (used in create + join acks) ─────────────
+function buildSessionPayload(session) {
   return {
-    ok: true,
-    participant: session.participants[socket.id],
-    session,
+    id:             session.id,
+    problemId:      session.problemId,
+    name:           session.name,
+    hostName:       session.hostName,
+    visibility:     session.visibility,
+    maxParticipants: session.maxParticipants,
+    locked:         session.locked,
+    requireJoinApproval: session.requireJoinApproval,
+    allowAnonymous: session.allowAnonymous,
+    collab:         session.collab,
+    defaultRole:    session.defaultRole,
+    codeByLanguage: session.codeByLanguage,
+    drawStrokes:    session.drawStrokes,
   };
 }
 
+// ── Socket.IO setup ───────────────────────────────────────────────────────
 function setupSessionHub(httpServer) {
   const io = new Server(httpServer, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
+    cors: { origin: "*", methods: ["GET", "POST"] },
   });
 
-  setInterval(() => {
-    cleanupExpiredSessions(io);
-
-    const now = Date.now();
-    listAllSessions().forEach((session) => {
-      if (!session?.timing?.autoCloseAt) return;
-      const remainingMs = session.timing.autoCloseAt - now;
-      if (remainingMs <= 0) return;
-
-      const remainingMinutes = Math.ceil(remainingMs / 60000);
-      session.timing.countdownWarnings.forEach((warning) => {
-        if (remainingMinutes <= warning && !session.timing.warnedMinutes[warning]) {
-          session.timing.warnedMinutes[warning] = true;
-          io.to(getSessionRoom(session.problemId, session.id)).emit("session:countdown", {
-            warningMinutes: warning,
-            remainingSeconds: Math.ceil(remainingMs / 1000),
-          });
-        }
-      });
-
-      if (
-        session.collaboration.mode === "turn-based" &&
-        session.collaboration.turnDurationSeconds > 0 &&
-        Object.keys(session.participants).length > 1
-      ) {
-        const elapsed = Math.floor((now - session.collaboration.turnStartedAt) / 1000);
-        if (elapsed >= session.collaboration.turnDurationSeconds) {
-          const orderedParticipants = Object.values(session.participants).map(
-            (participant) => participant.normalizedName
-          );
-
-          const currentIndex = orderedParticipants.indexOf(session.collaboration.currentTurnName);
-          const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % orderedParticipants.length : 0;
-          session.collaboration.currentTurnName = orderedParticipants[nextIndex];
-          session.collaboration.turnStartedAt = now;
-
-          io.to(getSessionRoom(session.problemId, session.id)).emit("session:turn:changed", {
-            currentTurnName: session.collaboration.currentTurnName,
-            turnDurationSeconds: session.collaboration.turnDurationSeconds,
-          });
-        }
-      }
-    });
-  }, 5000);
-
   io.on("connection", (socket) => {
+
+    // ── Global lobby ──────────────────────────────────────────────────────
     socket.on("session:global:list:subscribe", () => {
       if (socket.data.currentGlobalLobby !== "session:global:lobby") {
         socket.join("session:global:lobby");
         socket.data.currentGlobalLobby = "session:global:lobby";
       }
-
-      socket.emit("session:global:list", {
-        sessions: buildGlobalSessionList(),
-      });
+      socket.emit("session:global:list", { sessions: buildGlobalSessionList() });
     });
 
+    // ── Problem lobby ─────────────────────────────────────────────────────
     socket.on("session:list:subscribe", ({ problemId }) => {
       if (!problemId) return;
-
-      cleanupExpiredSessions(io);
-
-      if (socket.data.currentLobby && socket.data.currentLobby !== `problem:${problemId}:lobby`) {
+      const lobbyRoom = `problem:${problemId}:lobby`;
+      if (socket.data.currentLobby && socket.data.currentLobby !== lobbyRoom) {
         socket.leave(socket.data.currentLobby);
       }
-
-      socket.join(`problem:${problemId}:lobby`);
-      socket.data.currentLobby = `problem:${problemId}:lobby`;
-      socket.emit("session:list", {
-        problemId,
-        sessions: buildSessionList(problemId),
-      });
+      socket.join(lobbyRoom);
+      socket.data.currentLobby = lobbyRoom;
+      socket.emit("session:list", { problemId, sessions: buildSessionList(problemId) });
     });
 
+    // ── Create session (auto-joins creator as host) ───────────────────────
     socket.on("session:create", (payload, ack) => {
       const {
-        problemId,
-        sessionName,
-        hostName,
-        language,
-        starterCode,
-        maxParticipants,
-        visibility,
-        password,
-        allowAnonymous,
-        whitelist,
-        blacklist,
-        waitingRoom,
-        autoLockWhenFull,
-        allowOverflow,
-        roles,
-        collaboration,
-        communication,
-        timing,
+        problemId, sessionName, hostName, language, starterCode,
+        maxParticipants, autoLock, allowOverflow,
+        password, visibility, allowAnonymous,
+        whitelist, blacklist, requireJoinApproval,
+        defaultRole, collab,
       } = payload || {};
 
       if (!problemId || !language) {
-        if (ack) ack({ ok: false, message: "Missing problemId or language" });
-        return;
+        return ack?.({ ok: false, message: "Missing problemId or language" });
       }
 
+      const safeHostName = (hostName || "Host").trim() || "Host";
       const session = createSession({
-        problemId,
-        sessionName,
-        hostName: hostName || "Host",
-        language,
-        starterCode,
-        maxParticipants,
-        visibility,
-        password,
-        allowAnonymous,
-        whitelist,
-        blacklist,
-        waitingRoom,
-        autoLockWhenFull,
-        allowOverflow,
-        roles,
-        collaboration,
-        communication,
-        timing,
+        problemId, sessionName, hostName: safeHostName, language, starterCode,
+        maxParticipants, autoLock, allowOverflow,
+        password, visibility, allowAnonymous,
+        whitelist, blacklist, requireJoinApproval,
+        defaultRole, collab,
       });
+
+      // Leave any previous session
+      const old = removeMembership(socket.id);
+      if (old?.problemId) socket.leave(getSessionRoom(old.problemId, old.sessionId));
+      removeFromWaiting(socket.id);
+
+      // Join as host
+      addParticipant(session, socket.id, safeHostName, "host");
+      socket.join(getSessionRoom(problemId, session.id));
+      socketToMembership.set(socket.id, { problemId, sessionId: session.id });
 
       broadcastSessionLists(io, problemId);
 
-      if (ack) {
-        ack({
-          ok: true,
-          sessionId: session.id,
-          problemId: session.problemId,
-          sessionSummary: buildSessionSummary(session),
-        });
-      }
+      ack?.({
+        ok:             true,
+        sessionId:      session.id,
+        userRole:       "host",
+        userPermission: "editable",
+        session:        buildSessionPayload(session),
+      });
     });
 
+    // ── Join session ──────────────────────────────────────────────────────
     socket.on("session:join", (payload, ack) => {
-      const { problemId: providedProblemId, sessionId, userName, password } = payload || {};
+      const { problemId: givenProblemId, sessionId, userName, password } = payload || {};
 
-      cleanupExpiredSessions(io);
-
-      let problemId = providedProblemId;
+      let problemId = givenProblemId;
       let session = findSession(problemId, sessionId);
 
       if (!session && sessionId) {
         const found = findSessionById(sessionId);
-        if (found) {
-          problemId = found.problemId;
-          session = found.session;
-        }
+        if (found) { problemId = found.problemId; session = found.session; }
       }
 
-      if (!session) {
-        if (ack) ack({ ok: false, message: "Session not found" });
-        return;
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+
+      const safeUser      = (userName || "Guest").trim() || "Guest";
+      const normalizedUser = normalizeName(safeUser);
+
+      // Blacklist
+      if (session.blacklist.length > 0 && session.blacklist.includes(normalizedUser)) {
+        return ack?.({ ok: false, message: "You are banned from this session" });
       }
 
-      const safeUserName = (userName || "Guest").trim() || "Guest";
-      const checks = tryJoinChecks(session, safeUserName, password);
-      if (!checks.ok) {
-        if (ack) ack(checks);
-        return;
+      // Anonymous guard
+      if (!session.allowAnonymous && normalizedUser.startsWith("guest")) {
+        return ack?.({ ok: false, message: "Anonymous users are not allowed in this session" });
       }
 
-      if (session.accessSecurity.waitingRoom) {
-        const requestId = generateRequestId();
-        session.pendingApprovals.push({
-          requestId,
-          socketId: socket.id,
-          userName: safeUserName,
-          normalizedName: normalizeName(safeUserName),
+      // Whitelist
+      if (
+        session.whitelist.length > 0 &&
+        normalizedUser !== session.hostName &&
+        !session.whitelist.includes(normalizedUser)
+      ) {
+        return ack?.({ ok: false, message: "You are not on the allowed users list" });
+      }
+
+      // Password
+      if (session.passwordHash && !bcrypt.compareSync(String(password || ""), session.passwordHash)) {
+        return ack?.({ ok: false, message: "Wrong session password" });
+      }
+
+      // Capacity
+      const count = Object.keys(session.participants).length;
+      if (session.locked && !session.allowOverflow) {
+        return ack?.({ ok: false, message: "Session is locked" });
+      }
+      if (!session.allowOverflow && count >= session.maxParticipants) {
+        return ack?.({ ok: false, message: "Session is full" });
+      }
+
+      // Waiting room (skip for host)
+      const isHost = normalizedUser === session.hostName;
+      if (session.requireJoinApproval && !isHost) {
+        session.waitingRoom[socket.id] = {
+          socketId:    socket.id,
+          name:        safeUser,
           requestedAt: Date.now(),
-          password: String(password || ""),
-        });
-
-        io.to(getSessionRoom(problemId, sessionId)).emit("session:join:pending", {
-          pendingApprovals: session.pendingApprovals.map((request) => ({
-            requestId: request.requestId,
-            userName: request.userName,
-            requestedAt: request.requestedAt,
-          })),
-        });
-
-        if (ack) {
-          ack({
-            ok: false,
-            waitingApproval: true,
-            message: "Waiting room enabled. Host approval required.",
-          });
-        }
-        return;
+        };
+        socketToWaiting.set(socket.id, { problemId, sessionId: session.id });
+        socket.emit("session:waiting:placed", { sessionId: session.id, sessionName: session.name });
+        broadcastWaitingRoom(io, session);
+        return ack?.({ ok: true, waiting: true, message: "Waiting for host approval" });
       }
 
-      const oldMembership = removeMembership(socket.id);
-      if (oldMembership?.problemId) {
-        socket.leave(getSessionRoom(oldMembership.problemId, oldMembership.sessionId));
-        emitSessionParticipants(io, oldMembership.problemId, oldMembership.sessionId);
-        broadcastSessionLists(io, oldMembership.problemId);
+      // All checks passed — perform join
+      const old = removeMembership(socket.id);
+      if (old?.problemId) {
+        socket.leave(getSessionRoom(old.problemId, old.sessionId));
+        broadcastSessionLists(io, old.problemId);
       }
+      removeFromWaiting(socket.id);
 
-      const attached = attachParticipant(io, socket, problemId, sessionId, safeUserName);
-      if (!attached.ok) {
-        if (ack) ack(attached);
-        return;
-      }
+      const role = isHost ? "host" : session.defaultRole;
+      addParticipant(session, socket.id, safeUser, role);
+      socket.join(getSessionRoom(problemId, session.id));
+      socketToMembership.set(socket.id, { problemId, sessionId: session.id });
 
-      if (ack) {
-        ack({
-          ok: true,
-          userPermission: attached.participant.permission,
-          userRole: attached.participant.role,
-          pendingApprovals: session.pendingApprovals.map((request) => ({
-            requestId: request.requestId,
-            userName: request.userName,
-            requestedAt: request.requestedAt,
-          })),
-          session: {
-            id: session.id,
-            problemId: session.problemId,
-            name: session.name,
-            visibility: session.accessSecurity.visibility,
-            maxParticipants: session.limits.maxParticipants,
-            codeByLanguage: session.codeByLanguage,
-            drawStrokes: session.drawStrokes,
-            settings: {
-              accessSecurity: {
-                visibility: session.accessSecurity.visibility,
-                allowAnonymous: session.accessSecurity.allowAnonymous,
-                whitelist: session.accessSecurity.whitelist,
-                blacklist: session.accessSecurity.blacklist,
-                waitingRoom: session.accessSecurity.waitingRoom,
-              },
-              limits: session.limits,
-              roles: {
-                defaultRole: session.roles.defaultRole,
-                permissionsByRole: session.roles.permissionsByRole,
-              },
-              collaboration: session.collaboration,
-              communication: session.communication,
-              timing: {
-                ...session.timing,
-                ...getSessionCountdownInfo(session),
-              },
-            },
-          },
-        });
-      }
-    });
-
-    socket.on("session:join:approval", ({ problemId, sessionId, requestId, action } = {}, ack) => {
-      const session = findSession(problemId, sessionId);
-      if (!session) {
-        if (ack) ack({ ok: false, message: "Session not found" });
-        return;
-      }
-
-      if (!canActor(session, socket.id, "canChangePermissions")) {
-        if (ack) ack({ ok: false, message: "Permission denied" });
-        return;
-      }
-
-      const requestIndex = session.pendingApprovals.findIndex((request) => request.requestId === requestId);
-      if (requestIndex === -1) {
-        if (ack) ack({ ok: false, message: "Join request not found" });
-        return;
-      }
-
-      const request = session.pendingApprovals[requestIndex];
-      session.pendingApprovals.splice(requestIndex, 1);
-
-      if (action === "approve") {
-        const targetSocket = io.sockets.sockets.get(request.socketId);
-        if (targetSocket) {
-          const checks = tryJoinChecks(session, request.userName, request.password);
-          if (checks.ok) {
-            const oldMembership = removeMembership(targetSocket.id);
-            if (oldMembership?.problemId) {
-              targetSocket.leave(getSessionRoom(oldMembership.problemId, oldMembership.sessionId));
-              emitSessionParticipants(io, oldMembership.problemId, oldMembership.sessionId);
-            }
-
-            const attached = attachParticipant(io, targetSocket, problemId, sessionId, request.userName);
-            if (attached.ok) {
-              targetSocket.emit("session:join:approved", {
-                joined: {
-                  id: session.id,
-                  problemId: session.problemId,
-                  name: session.name,
-                  visibility: session.accessSecurity.visibility,
-                  maxParticipants: session.limits.maxParticipants,
-                  codeByLanguage: session.codeByLanguage,
-                  drawStrokes: session.drawStrokes,
-                  userRole: attached.participant.role,
-                  userPermission: attached.participant.permission,
-                  pendingApprovals: session.pendingApprovals.map((pending) => ({
-                    requestId: pending.requestId,
-                    userName: pending.userName,
-                    requestedAt: pending.requestedAt,
-                  })),
-                  settings: {
-                    accessSecurity: {
-                      visibility: session.accessSecurity.visibility,
-                      allowAnonymous: session.accessSecurity.allowAnonymous,
-                      whitelist: session.accessSecurity.whitelist,
-                      blacklist: session.accessSecurity.blacklist,
-                      waitingRoom: session.accessSecurity.waitingRoom,
-                    },
-                    limits: session.limits,
-                    roles: {
-                      defaultRole: session.roles.defaultRole,
-                      permissionsByRole: session.roles.permissionsByRole,
-                    },
-                    collaboration: session.collaboration,
-                    communication: session.communication,
-                    timing: {
-                      ...session.timing,
-                      ...getSessionCountdownInfo(session),
-                    },
-                  },
-                },
-              });
-            }
-          } else {
-            targetSocket.emit("session:join:denied", { message: checks.message });
-          }
-        }
-      } else {
-        const targetSocket = io.sockets.sockets.get(request.socketId);
-        if (targetSocket) {
-          targetSocket.emit("session:join:denied", {
-            message: "Join request denied by host",
-          });
-        }
-      }
-
-      io.to(getSessionRoom(problemId, sessionId)).emit("session:join:pending", {
-        pendingApprovals: session.pendingApprovals.map((pending) => ({
-          requestId: pending.requestId,
-          userName: pending.userName,
-          requestedAt: pending.requestedAt,
-        })),
-      });
-
-      if (ack) ack({ ok: true });
-    });
-
-    socket.on("session:participant:role", ({ problemId, sessionId, targetName, role } = {}, ack) => {
-      const session = findSession(problemId, sessionId);
-      if (!session) {
-        if (ack) ack({ ok: false, message: "Session not found" });
-        return;
-      }
-
-      if (!canActor(session, socket.id, "canChangePermissions")) {
-        if (ack) ack({ ok: false, message: "Permission denied" });
-        return;
-      }
-
-      if (!["host", "co-host", "editor", "viewer"].includes(role)) {
-        if (ack) ack({ ok: false, message: "Invalid role" });
-        return;
-      }
-
-      const normalizedTarget = normalizeName(targetName);
-      if (!normalizedTarget) {
-        if (ack) ack({ ok: false, message: "Target user is required" });
-        return;
-      }
-
-      session.roles.assignments[normalizedTarget] = role;
-
-      Object.entries(session.participants).forEach(([targetSocketId, participant]) => {
-        if (participant.normalizedName !== normalizedTarget) return;
-
-        participant.role = role;
-        participant.permissions = resolvePermissionsForRole(session, role);
-        participant.permission = participant.permissions.canEdit ? "editable" : "read-only";
-
-        io.to(targetSocketId).emit("session:participant:role:updated", {
-          role: participant.role,
-          permission: participant.permission,
-        });
-      });
-
-      emitSessionParticipants(io, problemId, sessionId);
-
-      if (ack) ack({ ok: true });
-    });
-
-    socket.on("session:participant:kick", ({ problemId, sessionId, targetName } = {}, ack) => {
-      const session = findSession(problemId, sessionId);
-      if (!session) {
-        if (ack) ack({ ok: false, message: "Session not found" });
-        return;
-      }
-
-      if (!canActor(session, socket.id, "canKick")) {
-        if (ack) ack({ ok: false, message: "Permission denied" });
-        return;
-      }
-
-      const normalizedTarget = normalizeName(targetName);
-      const hit = Object.entries(session.participants).find(
-        ([, participant]) => participant.normalizedName === normalizedTarget
-      );
-
-      if (!hit) {
-        if (ack) ack({ ok: false, message: "Participant not found" });
-        return;
-      }
-
-      const [targetSocketId] = hit;
-      const targetSocket = io.sockets.sockets.get(targetSocketId);
-
-      session.accessSecurity.blacklist = Array.from(
-        new Set([...session.accessSecurity.blacklist, normalizedTarget])
-      );
-
-      if (targetSocket) {
-        targetSocket.emit("session:kicked", { message: "You were removed from the session" });
-        targetSocket.leave(getSessionRoom(problemId, sessionId));
-      }
-
-      delete session.participants[targetSocketId];
-      socketToMembership.delete(targetSocketId);
-
-      emitSessionParticipants(io, problemId, sessionId);
+      broadcastParticipants(io, session);
       broadcastSessionLists(io, problemId);
 
-      if (ack) ack({ ok: true });
+      ack?.({
+        ok:             true,
+        waiting:        false,
+        userRole:       role,
+        userPermission: ROLE_PERMISSIONS[role]?.canEdit ? "editable" : "read-only",
+        session:        buildSessionPayload(session),
+      });
     });
 
-    socket.on("session:participant:mute", ({ problemId, sessionId, targetName, muted } = {}, ack) => {
-      const session = findSession(problemId, sessionId);
-      if (!session) {
-        if (ack) ack({ ok: false, message: "Session not found" });
-        return;
+    // ── Approve waiting user ──────────────────────────────────────────────
+    socket.on("session:waiting:approve", ({ socketId: targetId } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canKick")) {
+        return ack?.({ ok: false, message: "No permission to approve users" });
       }
 
-      if (!canActor(session, socket.id, "canMute")) {
-        if (ack) ack({ ok: false, message: "Permission denied" });
-        return;
+      const entry = session.waitingRoom[targetId];
+      if (!entry) return ack?.({ ok: false, message: "User not in waiting room" });
+
+      // Re-check capacity
+      const count = Object.keys(session.participants).length;
+      if (!session.allowOverflow && count >= session.maxParticipants) {
+        io.sockets.sockets.get(targetId)?.emit("session:waiting:rejected", { reason: "Session is now full" });
+        delete session.waitingRoom[targetId];
+        socketToWaiting.delete(targetId);
+        broadcastWaitingRoom(io, session);
+        return ack?.({ ok: false, message: "Session full" });
       }
 
-      const normalizedTarget = normalizeName(targetName);
-      const hit = Object.entries(session.participants).find(
-        ([, participant]) => participant.normalizedName === normalizedTarget
-      );
+      delete session.waitingRoom[targetId];
+      socketToWaiting.delete(targetId);
 
-      if (!hit) {
-        if (ack) ack({ ok: false, message: "Participant not found" });
-        return;
+      const role = session.defaultRole;
+      addParticipant(session, targetId, entry.name, role);
+
+      const targetSocket = io.sockets.sockets.get(targetId);
+      if (targetSocket) {
+        targetSocket.join(getSessionRoom(mem.problemId, mem.sessionId));
+        socketToMembership.set(targetId, { problemId: mem.problemId, sessionId: mem.sessionId });
+        targetSocket.emit("session:waiting:approved", {
+          userRole:       role,
+          userPermission: ROLE_PERMISSIONS[role]?.canEdit ? "editable" : "read-only",
+          session:        buildSessionPayload(session),
+        });
       }
 
-      const [targetSocketId, participant] = hit;
-      participant.muted = Boolean(muted);
+      broadcastParticipants(io, session);
+      broadcastWaitingRoom(io, session);
+      broadcastSessionLists(io, mem.problemId);
+      ack?.({ ok: true });
+    });
 
-      io.to(targetSocketId).emit("session:participant:muted", {
-        muted: participant.muted,
+    // ── Reject waiting user ───────────────────────────────────────────────
+    socket.on("session:waiting:reject", ({ socketId: targetId, reason } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canKick")) {
+        return ack?.({ ok: false, message: "No permission to reject users" });
+      }
+
+      const entry = session.waitingRoom[targetId];
+      if (!entry) return ack?.({ ok: false, message: "User not in waiting room" });
+
+      delete session.waitingRoom[targetId];
+      socketToWaiting.delete(targetId);
+      io.sockets.sockets.get(targetId)?.emit("session:waiting:rejected", {
+        reason: reason || "Request denied by host",
       });
 
-      emitSessionParticipants(io, problemId, sessionId);
-      if (ack) ack({ ok: true });
+      broadcastWaitingRoom(io, session);
+      ack?.({ ok: true });
     });
 
+    // ── Change participant role ────────────────────────────────────────────
+    socket.on("session:role:change", ({ socketId: targetId, newRole } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "No permission to change roles" });
+      }
+
+      if (!VALID_ROLES.has(newRole) || newRole === "host") {
+        return ack?.({ ok: false, message: "Invalid target role" });
+      }
+
+      const target = session.participants[targetId];
+      if (!target) return ack?.({ ok: false, message: "User not in session" });
+      if (target.role === "host") return ack?.({ ok: false, message: "Cannot demote the host" });
+
+      target.role = newRole;
+
+      io.sockets.sockets.get(targetId)?.emit("session:role:changed", {
+        newRole,
+        userPermission: ROLE_PERMISSIONS[newRole]?.canEdit ? "editable" : "read-only",
+      });
+
+      broadcastParticipants(io, session);
+      ack?.({ ok: true });
+    });
+
+    // ── Update collab settings ────────────────────────────────────────────
+    socket.on("session:collab:update", (payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "No permission to change settings" });
+      }
+
+      const { mode, turnDuration, showLiveCursors, showSelections, typingIndicators } = payload || {};
+      const c = session.collab;
+
+      if (mode !== undefined && VALID_COLLAB_MODES.has(mode)) c.mode = mode;
+      if (turnDuration !== undefined) c.turnDuration = Math.max(5, Number(turnDuration) || 30);
+      if (showLiveCursors !== undefined) c.showLiveCursors = Boolean(showLiveCursors);
+      if (showSelections !== undefined) c.showSelections = Boolean(showSelections);
+      if (typingIndicators !== undefined) c.typingIndicators = Boolean(typingIndicators);
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:collab:updated", {
+        collab: session.collab,
+      });
+      ack?.({ ok: true, collab: session.collab });
+    });
+
+    // ── Advance turn ──────────────────────────────────────────────────────
+    socket.on("session:turn:next", (_payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session || session.collab.mode !== "turn-based") return ack?.({ ok: false });
+
+      const isAuthority = hasPermission(session, socket.id, "canChangePermissions");
+      const isTurnHolder = session.collab.currentTurnSocketId === socket.id;
+      if (!isAuthority && !isTurnHolder) return ack?.({ ok: false, message: "Not your turn" });
+
+      const ids = Object.keys(session.participants);
+      const idx = ids.indexOf(session.collab.currentTurnSocketId);
+      session.collab.currentTurnSocketId = ids[(idx + 1) % ids.length] ?? null;
+      session.collab.turnStartedAt = Date.now();
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:turn:changed", {
+        currentTurnSocketId: session.collab.currentTurnSocketId,
+        turnStartedAt:       session.collab.turnStartedAt,
+        turnDuration:        session.collab.turnDuration,
+      });
+      ack?.({ ok: true });
+    });
+
+    // ── Live cursor ───────────────────────────────────────────────────────
+    socket.on("session:cursor:update", (payload) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return;
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session?.collab?.showLiveCursors) return;
+
+      socket.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:cursor:updated", {
+        socketId: socket.id,
+        name:     session.participants[socket.id]?.name,
+        ...payload,
+      });
+    });
+
+    // ── Typing indicator ──────────────────────────────────────────────────
+    socket.on("session:typing", (payload) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return;
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session?.collab?.typingIndicators) return;
+
+      socket.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:typing:update", {
+        socketId: socket.id,
+        name:     session.participants[socket.id]?.name,
+        isTyping: Boolean(payload?.isTyping),
+      });
+    });
+
+    // ── Leave session ─────────────────────────────────────────────────────
     socket.on("session:leave", () => {
-      const oldMembership = removeMembership(socket.id);
-      if (!oldMembership) return;
+      removeFromWaiting(socket.id);
+      const old = removeMembership(socket.id);
+      if (!old) return;
 
-      socket.leave(getSessionRoom(oldMembership.problemId, oldMembership.sessionId));
-      emitSessionParticipants(io, oldMembership.problemId, oldMembership.sessionId);
-      broadcastSessionLists(io, oldMembership.problemId);
+      socket.leave(getSessionRoom(old.problemId, old.sessionId));
+      const session = findSession(old.problemId, old.sessionId);
+      if (session) broadcastParticipants(io, session);
+      broadcastSessionLists(io, old.problemId);
     });
 
+    // ── Code update ───────────────────────────────────────────────────────
     socket.on("session:code:update", (payload) => {
       const { problemId, sessionId, language, code } = payload || {};
       const session = findSession(problemId, sessionId);
       if (!session || !language) return;
 
-      if (!canEditSession(session, socket.id)) {
-        socket.emit("session:permission:error", {
-          message: "You do not have edit permission right now",
-        });
+      if (!hasPermission(session, socket.id, "canEdit")) {
+        socket.emit("session:permission:error", { message: "You do not have edit access" });
+        return;
+      }
+
+      const { mode, currentTurnSocketId } = session.collab;
+      if (mode === "controlled" && !hasPermission(session, socket.id, "canChangePermissions")) {
+        socket.emit("session:permission:error", { message: "Session is in controlled mode — only host/co-host can edit" });
+        return;
+      }
+      if (
+        mode === "turn-based" &&
+        currentTurnSocketId !== socket.id &&
+        !hasPermission(session, socket.id, "canChangePermissions")
+      ) {
+        socket.emit("session:permission:error", { message: "It is not your turn" });
         return;
       }
 
       session.codeByLanguage[language] = code || "";
-
       socket.to(getSessionRoom(problemId, sessionId)).emit("session:code:updated", {
         language,
         code: code || "",
       });
     });
 
+    // ── Draw ──────────────────────────────────────────────────────────────
     socket.on("session:draw:add", (payload) => {
       const { problemId, sessionId, stroke } = payload || {};
       const session = findSession(problemId, sessionId);
       if (!session || !stroke) return;
 
-      if (!canEditSession(session, socket.id)) {
-        socket.emit("session:permission:error", {
-          message: "You do not have edit permission right now",
-        });
+      if (!hasPermission(session, socket.id, "canEdit")) {
+        socket.emit("session:permission:error", { message: "You do not have edit access" });
         return;
       }
 
@@ -1093,25 +705,20 @@ function setupSessionHub(httpServer) {
 
     socket.on("session:draw:clear", ({ problemId, sessionId } = {}) => {
       const session = findSession(problemId, sessionId);
-      if (!session) return;
-
-      if (!canEditSession(session, socket.id)) {
-        socket.emit("session:permission:error", {
-          message: "You do not have edit permission right now",
-        });
-        return;
-      }
-
+      if (!session || !hasPermission(session, socket.id, "canEdit")) return;
       session.drawStrokes = [];
       io.to(getSessionRoom(problemId, sessionId)).emit("session:draw:cleared");
     });
 
+    // ── Disconnect ────────────────────────────────────────────────────────
     socket.on("disconnect", () => {
-      const oldMembership = removeMembership(socket.id);
-      if (!oldMembership) return;
+      removeFromWaiting(socket.id);
+      const old = removeMembership(socket.id);
+      if (!old) return;
 
-      emitSessionParticipants(io, oldMembership.problemId, oldMembership.sessionId);
-      broadcastSessionLists(io, oldMembership.problemId);
+      const session = findSession(old.problemId, old.sessionId);
+      if (session) broadcastParticipants(io, session);
+      broadcastSessionLists(io, old.problemId);
     });
   });
 

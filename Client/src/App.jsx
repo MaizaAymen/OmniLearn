@@ -12,7 +12,7 @@ import { useLocation } from "react-router-dom";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
 import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
-
+import Uml from "./Uml/Uml";
 
 function App() {
   const location = useLocation();
@@ -28,6 +28,7 @@ function App() {
       <Route path="/classroom-pdf" element={<ClassroomPdf />} />
       <Route path="/live-sessions" element={<LiveSessionsPage />} />
       <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/uml" element={<Uml />} />
 
 
     </Routes>
