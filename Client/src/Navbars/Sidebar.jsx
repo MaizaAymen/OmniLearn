@@ -63,6 +63,11 @@ const Sidebar = ({ children }) => {
         label: 'Problem Roadmap',
       },
       {
+        key: '/uml/problems',
+        icon: <ProjectOutlined />,
+        label: 'UML Problems',
+      },
+      {
         key: '/users',
         icon: <TeamOutlined />,
         label: 'Users',
@@ -88,6 +93,7 @@ const Sidebar = ({ children }) => {
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
+    if (location.pathname.startsWith('/uml/problems')) return '/uml/problems';
     if (location.pathname.startsWith('/users')) return '/users';
     if (location.pathname.startsWith('/admin')) return '/admin';
     if (location.pathname.startsWith('/auth')) return '/auth';

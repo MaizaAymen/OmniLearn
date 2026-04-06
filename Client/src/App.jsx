@@ -12,7 +12,8 @@ import { useLocation } from "react-router-dom";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
 import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
-import Uml from "./Uml/Uml";
+import UMLEditor from "./Uml/UMLEditor";
+import UmlProblems from "./Uml/Problem";
 
 function App() {
   const location = useLocation();
@@ -28,7 +29,9 @@ function App() {
       <Route path="/classroom-pdf" element={<ClassroomPdf />} />
       <Route path="/live-sessions" element={<LiveSessionsPage />} />
       <Route path="/admin" element={<AdminDashboard />} />
-      <Route path="/uml" element={<Uml />} />
+      <Route path="/uml" element={<UMLEditor />} />
+      <Route path="/uml/problems" element={<UmlProblems />} />
+      <Route path="/uml/problems/:id" element={<UMLEditor />} />
 
 
     </Routes>

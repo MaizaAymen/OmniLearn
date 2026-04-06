@@ -10,7 +10,7 @@ const { ensureDatabase } = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const UserRoutes = require("./routes/UserRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-
+const UmlRoutes = require("./ai/UmlRoute");
 const AiRoutes = require("./ai/Ai");
 const pdfRoutes = require("./routes/pdfRoutes");
 const { setupSessionHub } = require("./realtime/sessionHub");
@@ -33,6 +33,7 @@ app.use("/api/", UserRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/ai", AiRoutes);
 app.use("/api/pdf", pdfRoutes);
+app.use("/api/uml", UmlRoutes);
 
 
 app.get("/", (req, res) => {

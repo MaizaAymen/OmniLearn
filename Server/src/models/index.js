@@ -27,6 +27,7 @@ const Grade = require("./Grade");
 const Speciality = require("./Speciality");
 const Level = require("./Level");
 const Lesson = require("./Lesson");
+const UmlDiagram = require("./UmlDiagram");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -192,5 +193,6 @@ module.exports = {
   Speciality,
   Level,
   Lesson,
+  UmlDiagram,
 };
 
