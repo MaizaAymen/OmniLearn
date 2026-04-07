@@ -22,6 +22,8 @@ import {
   List,
   Modal,
   Tag,
+  Radio,
+  InputNumber,
 } from "antd";
 import {
   UploadOutlined,
@@ -36,6 +38,7 @@ import {
   PushpinOutlined,
   DeleteOutlined,
   HighlightOutlined,
+  QuestionCircleOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -76,6 +79,16 @@ export default function PdfAssistant() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+
+  // Quiz state
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizCount, setQuizCount] = useState(10);
+  const [quizPageFrom, setQuizPageFrom] = useState(1);
+  const [quizPageTo, setQuizPageTo] = useState(3);
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
 
   // Sidebar tab
   const [activeTab, setActiveTab] = useState("chat");
@@ -314,6 +327,72 @@ export default function PdfAssistant() {
     } finally {
       setSearching(false);
     }
+  };
+
+  // ─── Quiz Generation ─────────────────────────────────────────────
+  const generateQuiz = async (count) => {
+    if (!pdfId) {
+      message.warning("Upload a PDF first");
+      return;
+    }
+
+    if (Number(quizPageTo) < Number(quizPageFrom)) {
+      message.warning("'To page' must be greater than or equal to 'From page'");
+      return;
+    }
+
+    setQuizCount(count);
+    setQuizLoading(true);
+    try {
+      const res = await axios.post(`${API_URL}/quiz`, {
+        pdfId,
+        count,
+        pageFrom: Number(quizPageFrom) || 1,
+        pageTo: Number(quizPageTo) || Number(quizPageFrom) || 1,
+      });
+      setQuizQuestions(res.data.questions || []);
+      setQuizAnswers({});
+      setQuizSubmitted(false);
+      setQuizScore(0);
+      message.success(`Generated ${count} questions`);
+    } catch (error) {
+      message.error(error?.response?.data?.error || "Failed to generate quiz");
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  const normalizeAnswer = (value) => String(value || "").trim().toLowerCase();
+
+  const getCorrectIndex = (item) => {
+    const answer = normalizeAnswer(item?.answer);
+    if (!answer || !Array.isArray(item?.options)) return -1;
+
+    if (/^[a-d]$/.test(answer)) return answer.charCodeAt(0) - 97;
+
+    const letterMatch = answer.match(/\b([a-d])\b/);
+    if (letterMatch) return letterMatch[1].charCodeAt(0) - 97;
+
+    return item.options.findIndex((option) => normalizeAnswer(option) === answer);
+  };
+
+  const submitQuiz = () => {
+    if (!quizQuestions.length) return;
+
+    if (Object.keys(quizAnswers).length < quizQuestions.length) {
+      message.warning("Please answer all questions first");
+      return;
+    }
+
+    let score = 0;
+    quizQuestions.forEach((item, index) => {
+      const selectedIndex = quizAnswers[index];
+      const correctIndex = getCorrectIndex(item);
+      if (selectedIndex === correctIndex) score += 1;
+    });
+
+    setQuizScore(score);
+    setQuizSubmitted(true);
   };
 
   // Load highlights & bookmarks when PDF loads
@@ -602,6 +681,133 @@ export default function PdfAssistant() {
                         </List.Item>
                       )}
                     />
+                  </div>
+                ),
+              },
+              {
+                key: "quiz",
+                label: <span><QuestionCircleOutlined /> Quiz</span>,
+                children: (
+                  <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary">Pages to use</Text>
+                      <Space style={{ width: "100%", marginTop: 6 }}>
+                        <InputNumber
+                          min={1}
+                          value={quizPageFrom}
+                          onChange={(value) => setQuizPageFrom(value || 1)}
+                          disabled={!pdfId || quizLoading}
+                          style={{ width: "100%" }}
+                          placeholder="From"
+                        />
+                        <InputNumber
+                          min={1}
+                          value={quizPageTo}
+                          onChange={(value) => setQuizPageTo(value || 1)}
+                          disabled={!pdfId || quizLoading}
+                          style={{ width: "100%" }}
+                          placeholder="To"
+                        />
+                      </Space>
+                    </div>
+
+                    <Space style={{ width: "100%", marginBottom: 16 }}>
+                      <Button
+                        type={quizCount === 10 ? "primary" : "default"}
+                        onClick={() => generateQuiz(10)}
+                        loading={quizLoading && quizCount === 10}
+                        disabled={!pdfId || quizLoading}
+                      >
+                        10 Questions
+                      </Button>
+                      <Button
+                        type={quizCount === 20 ? "primary" : "default"}
+                        onClick={() => generateQuiz(20)}
+                        loading={quizLoading && quizCount === 20}
+                        disabled={!pdfId || quizLoading}
+                      >
+                        20 Questions
+                      </Button>
+                    </Space>
+
+                    <List
+                      dataSource={quizQuestions}
+                      loading={quizLoading}
+                      locale={{ emptyText: "Generate a quiz from your PDF" }}
+                      renderItem={(item, index) => (
+                        <List.Item>
+                          <Card size="small" style={{ width: "100%" }}>
+                            <Text strong>{`Q${index + 1}. ${item.question || "Question"}`}</Text>
+                            {Array.isArray(item.options) && item.options.length > 0 && (
+                              <Radio.Group
+                                style={{ marginTop: 10, width: "100%" }}
+                                value={quizAnswers[index]}
+                                onChange={(e) =>
+                                  setQuizAnswers((prev) => ({ ...prev, [index]: e.target.value }))
+                                }
+                                disabled={quizSubmitted}
+                              >
+                                <Space direction="vertical" style={{ width: "100%" }}>
+                                  {item.options.map((option, optionIndex) => (
+                                    <Radio key={`${index}-${optionIndex}`} value={optionIndex}>
+                                      {`${String.fromCharCode(65 + optionIndex)}. ${option}`}
+                                    </Radio>
+                                  ))}
+                                </Space>
+                              </Radio.Group>
+                            )}
+
+                            {quizSubmitted && (
+                              <div style={{ marginTop: 10 }}>
+                                {quizAnswers[index] === getCorrectIndex(item) ? (
+                                  <Tag color="green">Correct</Tag>
+                                ) : (
+                                  <Tag color="red">Wrong</Tag>
+                                )}
+                                <Text type="secondary" style={{ marginLeft: 8 }}>
+                                  Correct answer: {item.answer || "Not provided"}
+                                </Text>
+                              </div>
+                            )}
+                          </Card>
+                        </List.Item>
+                      )}
+                    />
+
+                    {quizQuestions.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        {!quizSubmitted ? (
+                          <Button
+                            type="primary"
+                            block
+                            onClick={submitQuiz}
+                            disabled={quizLoading}
+                          >
+                            Submit Quiz
+                          </Button>
+                        ) : (
+                          <Card size="small" style={{ textAlign: "center" }}>
+                            <Text strong style={{ fontSize: 16 }}>
+                              Your result: {quizScore} / {quizQuestions.length}
+                            </Text>
+                            <div style={{ marginTop: 10 }}>
+                              <Button onClick={() => setQuizSubmitted(false)}>Review Answers</Button>
+                              <Button
+                                type="primary"
+                                style={{ marginLeft: 8 }}
+                                onClick={() => {
+                                  setQuizAnswers({});
+                                  setQuizSubmitted(false);
+                                  setQuizScore(0);
+                                }}
+                              >
+                                Retry Quiz
+                              </Button>
+                            </div>
+                          </Card>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ),
               },

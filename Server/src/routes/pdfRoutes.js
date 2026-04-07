@@ -20,7 +20,7 @@ const CHROMA_PERSIST_DIR = process.env.CHROMA_PERSIST_DIR || "./chroma_db";
 // Initialize embeddings model using HuggingFace Inference API
 // Uses sentence-transformers model for high-quality semantic embeddings
 const embeddings = new HuggingFaceInferenceEmbeddings({
-  apiKey: process.env.HF_API_KEY || "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",
+  apiKey: process.env.HF_API_KEY || "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",
   model: "sentence-transformers/all-MiniLM-L6-v2", // Fast, good quality embeddings
 });
 
@@ -90,6 +90,38 @@ const loadPdfData = async (pdfId) => {
   return loaded;
 };
 
+// Load only text/chunks without vector store (used by quiz to avoid Chroma dependency)
+const loadPdfTextOnly = async (pdfId) => {
+  const cached = pdfCache.get(pdfId);
+  if (cached?.chunks?.length) return cached;
+
+  const indexItems = readIndex();
+  const item = indexItems.find((entry) => entry.pdfId === pdfId);
+  if (!item) return null;
+
+  const storedName = item.storedName || pdfId;
+  const filePath = path.join(UPLOAD_DIR, storedName);
+  if (!fs.existsSync(filePath)) return null;
+
+  const pdfBuffer = fs.readFileSync(filePath);
+  const parsed = await pdfParse(pdfBuffer);
+  const fullText = parsed.text || "";
+  const chunks = chunkText(fullText, 800);
+
+  const loaded = {
+    filename: item.filename || storedName,
+    fullText,
+    chunks,
+    totalPages: parsed.numpages || 0,
+    filePath,
+    fileUrl: item.fileUrl || "",
+    uploadedAt: item.uploadedAt ? new Date(item.uploadedAt) : new Date(),
+  };
+
+  pdfCache.set(pdfId, { ...cached, ...loaded });
+  return loaded;
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOAD_DIR);
@@ -156,6 +188,7 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       filename: req.file.originalname,
       fullText: fullText,
       chunks: chunks,
+      totalPages: pdfData.numpages || 0,
       vectorStore: vectorStore, // NEW: Store vector store for similarity search
       collectionName: collectionName,
       filePath: filePath,
@@ -318,7 +351,114 @@ router.post("/summarize", async (req, res) => {
   }
 });
 
-// ─── 5. Save Highlight with Note ──────────────────────────────────────
+// ─── 5. Generate Quiz (10 or 20 questions) ─────────────────────────
+router.post("/quiz", async (req, res) => {
+  try {
+    const { pdfId, count, pages, pageFrom, pageTo } = req.body;
+    const questionCount = Number(count) === 20 ? 20 : 10;
+
+    if (!pdfId) {
+      return res.status(400).json({ error: "PDF ID required" });
+    }
+
+    const pdfData = await loadPdfTextOnly(pdfId);
+    if (!pdfData) {
+      return res.status(404).json({ error: "PDF not found" });
+    }
+
+    const chunks = pdfData.chunks || [];
+    const totalPages = Number(pdfData.totalPages) || 0;
+
+    let fromPage = Math.max(1, Number(pageFrom) || 1);
+    let toPage = Math.max(fromPage, Number(pageTo) || fromPage);
+
+    // Backward compatibility with old pages option.
+    if (pageFrom == null && pageTo == null && pages != null) {
+      if (String(pages).toLowerCase() === "all") {
+        fromPage = 1;
+        toPage = totalPages > 0 ? totalPages : 999;
+      } else {
+        const pagesToUse = Math.max(1, Number(pages) || 3);
+        fromPage = 1;
+        toPage = pagesToUse;
+      }
+    }
+
+    if (totalPages > 0) {
+      fromPage = Math.min(fromPage, totalPages);
+      toPage = Math.min(toPage, totalPages);
+    }
+
+    let selectedChunks = chunks;
+    if (chunks.length > 0 && totalPages > 0) {
+      const startIndex = Math.floor(((fromPage - 1) / totalPages) * chunks.length);
+      const endIndex = Math.ceil((toPage / totalPages) * chunks.length);
+      selectedChunks = chunks.slice(startIndex, Math.max(startIndex + 1, endIndex));
+    }
+
+    if (!selectedChunks.length) {
+      selectedChunks = chunks.slice(0, 6);
+    }
+
+    // Keep context compact to reduce model failures on large PDFs.
+    const quizContext = selectedChunks.join("\n\n").slice(0, 12000);
+    if (!quizContext.trim()) {
+      return res.status(400).json({ error: "No readable text found in this PDF" });
+    }
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a quiz generator. Return only a JSON array. Each item must be: {\"question\": string, \"options\": [string, string, string, string], \"answer\": string}.",
+        },
+        {
+          role: "user",
+          content: `Create exactly ${questionCount} multiple-choice quiz questions from this PDF content:\n\n${quizContext}`,
+        },
+      ],
+      temperature: 0.5,
+      max_tokens: 3000,
+    });
+
+    const content = completion.choices?.[0]?.message?.content || "[]";
+    let questions = [];
+
+    try {
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      questions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    } catch (parseError) {
+      questions = [];
+    }
+
+    if (!Array.isArray(questions)) {
+      questions = [];
+    }
+
+    questions = questions.slice(0, questionCount).map((q, index) => ({
+      question: q?.question || `Question ${index + 1}`,
+      options: Array.isArray(q?.options) ? q.options.slice(0, 4) : [],
+      answer: q?.answer || "",
+    }));
+
+    res.json({
+      questions,
+      count: questionCount,
+      pageFrom: fromPage,
+      pageTo: toPage,
+    });
+  } catch (error) {
+    console.error("Quiz generation error:", error);
+    res.status(500).json({
+      error: "Failed to generate quiz",
+      details: error?.message || "Unknown server error",
+    });
+  }
+});
+
+// ─── 6. Save Highlight with Note ──────────────────────────────────────
 router.post("/highlights", async (req, res) => {
   try {
     const { pdfId, text, note, page, color } = req.body;
@@ -363,7 +503,7 @@ router.delete("/highlights/:pdfId/:highlightId", (req, res) => {
   res.json({ success: true });
 });
 
-// ─── 6. Bookmarks ─────────────────────────────────────────────────────
+// ─── 7. Bookmarks ─────────────────────────────────────────────────────
 router.post("/bookmarks", async (req, res) => {
   try {
     const { pdfId, page, title } = req.body;
@@ -406,7 +546,7 @@ router.delete("/bookmarks/:pdfId/:bookmarkId", (req, res) => {
   res.json({ success: true });
 });
 
-// ─── 7. Smart Search (Semantic Concept Search) ─────────────────────────
+// ─── 8. Smart Search (Semantic Concept Search) ─────────────────────────
 router.post("/smart-search", async (req, res) => {
   try {
     const { pdfId, query } = req.body;
