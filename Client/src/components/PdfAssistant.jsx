@@ -65,6 +65,8 @@ export default function PdfAssistant() {
   const pdfContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  
+
   const defaultLayoutPluginInstance = defaultLayoutPlugin({ sidebarTabs: () => [] });
 
   // Highlights & Notes state
