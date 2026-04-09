@@ -13,6 +13,8 @@ import {
   getBezierPath,
 } from '@xyflow/react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Drawer, Button, Tag, Collapse, Typography, Spin, Alert, Space } from 'antd';
+import { MenuUnfoldOutlined } from '@ant-design/icons';
 import '@xyflow/react/dist/style.css';
 
 const STORAGE_KEY = 'omnilearn_uml_reactflow_v1';
@@ -366,41 +368,6 @@ const S = {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  problemSidebar: {
-    width: 320,
-    flexShrink: 0,
-    borderLeft: '1px solid #E2E8F0',
-    background: '#FFFFFF',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  problemBody: {
-    padding: '14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    overflowY: 'auto',
-    color: '#334155',
-  },
-  problemButton: {
-    border: 'none',
-    borderRadius: 8,
-    padding: '10px 12px',
-    fontWeight: 700,
-    background: '#2563EB',
-    color: '#FFFFFF',
-    cursor: 'pointer',
-  },
-  secondaryButton: {
-    border: '1px solid #CBD5E1',
-    borderRadius: 8,
-    padding: '10px 12px',
-    fontWeight: 600,
-    background: '#FFFFFF',
-    color: '#1E293B',
-    cursor: 'pointer',
-  },
 };
 // initial diagram that will be find by default 
 function initialDiagram() {
@@ -520,6 +487,7 @@ function UMLEditorInner() {
   const [problemLoading, setProblemLoading] = useState(false);
   const [problemError, setProblemError] = useState('');
   const [solutionLoading, setSolutionLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(true);
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
 
@@ -943,7 +911,7 @@ function UMLEditorInner() {
             style={{
               position: 'absolute',
               top: 14,
-              right: panel || problemId ? 334 : 14,
+              right: panel ? 294 : 14,
               display: 'flex',
               gap: 6,
               alignItems: 'center',
@@ -1076,60 +1044,88 @@ function UMLEditorInner() {
           </div>
         )}
 
-        {problemId && (
-          <div style={S.problemSidebar}>
-            <div style={S.panelHeader}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>Problem Details</span>
-            </div>
-
-            <div style={S.problemBody}>
-              {problemLoading ? (
-                <div style={{ color: '#64748B' }}>Loading problem...</div>
-              ) : null}
-
-              {problemError ? (
-                <div
-                  style={{
-                    border: '1px solid #FECACA',
-                    background: '#FEF2F2',
-                    color: '#B91C1C',
-                    borderRadius: 8,
-                    padding: '8px 10px',
-                    fontSize: 13,
-                  }}
-                >
-                  {problemError}
-                </div>
-              ) : null}
-
-              {problemMeta ? (
-                <>
-                  <div>
-                    <div style={S.fieldLabel}>Title</div>
-                    <div style={{ fontWeight: 700, color: '#0F172A' }}>{problemMeta.title}</div>
-                  </div>
-
-                  <div>
-                    <div style={S.fieldLabel}>Topic</div>
-                    <div style={{ color: '#334155' }}>{problemMeta.topic || 'General'}</div>
-                  </div>
-
-                  <div>
-                    <div style={S.fieldLabel}>Description</div>
-                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{problemMeta.problemDescription}</div>
-                  </div>
-                </>
-              ) : null}
-
-              <button style={S.problemButton} onClick={loadProblemSolution} disabled={solutionLoading || problemLoading}>
-                {solutionLoading ? 'Loading solution...' : 'Show Solution'}
-              </button>
-              <button style={S.secondaryButton} onClick={() => navigate('/uml/problems')}>
-                Back to Problems
-              </button>
-            </div>
-          </div>
+        {problemId && !drawerOpen && (
+          <Button
+            type="primary"
+            icon={<MenuUnfoldOutlined />}
+            onClick={() => setDrawerOpen(true)}
+            style={{
+              position: 'absolute',
+              top: 70,
+              right: 16,
+              zIndex: 10,
+            }}
+          >
+            Problem
+          </Button>
         )}
+
+        <Drawer
+          title="Problem Details"
+          placement="right"
+          open={problemId && drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={380}
+          mask={false}
+          styles={{ body: { padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 } }}
+          getContainer={false}
+        >
+          {problemLoading && (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <Spin tip="Loading problem..." />
+            </div>
+          )}
+
+          {problemError && (
+            <Alert message={problemError} type="error" showIcon closable onClose={() => setProblemError('')} />
+          )}
+
+          {problemMeta && (
+            <>
+              <div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>Title</Typography.Text>
+                <Typography.Title level={5} style={{ margin: '4px 0 0' }}>
+                  {problemMeta.title || 'Untitled Problem'}
+                </Typography.Title>
+              </div>
+
+              <Tag color="purple">{problemMeta.topic || 'General'}</Tag>
+
+              <Collapse
+                defaultActiveKey={[]}
+                items={[
+                  {
+                    key: 'desc',
+                    label: 'Description',
+                    children: (
+                      <Typography.Paragraph
+                        style={{ whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.7 }}
+                      >
+                        {problemMeta.problemDescription}
+                      </Typography.Paragraph>
+                    ),
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          <Space direction="vertical" style={{ width: '100%', marginTop: 'auto' }} size="middle">
+            <Button
+              type="primary"
+              block
+              size="large"
+              loading={solutionLoading}
+              disabled={problemLoading}
+              onClick={loadProblemSolution}
+            >
+              Show Solution
+            </Button>
+            <Button block size="large" onClick={() => navigate('/uml/problems')}>
+              Back to Problems
+            </Button>
+          </Space>
+        </Drawer>
       </div>
     </div>
   );
