@@ -14,6 +14,7 @@ import AdminDashboard from "./Admin/AdminDashboard";
 import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
 import UMLEditor from "./Uml/UMLEditor";
 import UmlProblems from "./Uml/Problem";
+import VideoCall from "./components/VideoCall";
 
 function App() {
   const location = useLocation();
@@ -28,6 +29,7 @@ function App() {
       <Route path="/pdf-assistant" element={<PdfAssistant />} />
       <Route path="/classroom-pdf" element={<ClassroomPdf />} />
       <Route path="/live-sessions" element={<LiveSessionsPage />} />
+      <Route path="/video-call" element={<VideoCall />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/uml" element={<UMLEditor />} />
       <Route path="/uml/problems" element={<UmlProblems />} />
