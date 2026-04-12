@@ -15,10 +15,12 @@ import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
 import UMLEditor from "./Uml/UMLEditor";
 import UmlProblems from "./Uml/Problem";
 import VideoCall from "./components/VideoCall";
+import MeetingRoom from "./components/MeetingRoom";
 
 function App() {
   const location = useLocation();
   const isAuthPage = location.pathname.startsWith("/auth");
+  const isMeetingPage = location.pathname.startsWith("/meeting");
 
   const appRoutes = (
     <Routes>
@@ -41,10 +43,10 @@ function App() {
 
   return (
     <TooltipProvider>
-      {isAuthPage ? (
+      {isAuthPage || isMeetingPage ? (
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          
+          <Route path="/meeting/:roomId" element={<MeetingRoom />} />
         </Routes>
       ) : (
         <Sidebar>{appRoutes}</Sidebar>

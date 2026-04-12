@@ -1,4 +1,4 @@
-import React, { useMemo, useState, lazy, Suspense } from "react";
+import React, { useMemo, useState, lazy, Suspense, useEffect, useRef } from "react";
 import {
   VideoIcon,
   CopyIcon,
@@ -21,9 +21,73 @@ const ExcalidrawPanel = lazy(() =>
   }))
 );
 
-
 const generateRoomName = () =>
   `omni-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const JITSI_DOMAIN = (import.meta.env.VITE_JITSI_DOMAIN || "meet.jit.si")
+  .replace(/^https?:\/\//, "")
+  .replace(/\/$/, "");
+
+function loadJitsiScript(domain) {
+  return new Promise((resolve, reject) => {
+    if (window.JitsiMeetExternalAPI) return resolve();
+    const script = document.createElement("script");
+    script.src = `https://${domain}/external_api.js`;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+function JitsiMeeting({ roomName, containerStyle }) {
+  const containerRef = useRef(null);
+  const apiRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadJitsiScript(JITSI_DOMAIN).then(() => {
+      if (cancelled || !containerRef.current) return;
+      if (apiRef.current) {
+        apiRef.current.dispose();
+        apiRef.current = null;
+      }
+
+      apiRef.current = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, {
+        roomName,
+        parentNode: containerRef.current,
+        userInfo: { displayName: "Guest" },
+        configOverwrite: {
+          prejoinPageEnabled: false,
+          requireDisplayName: false,
+          disableProfile: true,
+          disableDeepLinking: true,
+          startWithAudioMuted: false,
+          disableThirdPartyRequests: false,
+        },
+        interfaceConfigOverwrite: {
+          SHOW_JITSI_WATERMARK: false,
+          SHOW_WATERMARK_FOR_GUESTS: false,
+          TOOLBAR_BUTTONS: [
+            "microphone","camera","closedcaptions","desktop","fullscreen",
+            "fodeviceselection","hangup","chat","recording","raisehand",
+            "videoquality","filmstrip","tileview","shortcuts","mute-everyone",
+          ],
+        },
+      });
+    }).catch(console.error);
+
+    return () => {
+      cancelled = true;
+      if (apiRef.current) {
+        apiRef.current.dispose();
+        apiRef.current = null;
+      }
+    };
+  }, [roomName]);
+
+  return <div ref={containerRef} style={containerStyle} />;
+}
 
 const VideoCall = () => {
   const [roomName, setRoomName] = useState(generateRoomName);
@@ -32,8 +96,7 @@ const VideoCall = () => {
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
 
   const meetingUrl = useMemo(
-    () =>
-      `https://meet.jit.si/${roomName}#config.startWithAudioMuted=false&config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false`,
+    () => `${window.location.origin}/meeting/${roomName}`,
     [roomName]
   );
 
@@ -187,11 +250,9 @@ const VideoCall = () => {
           <PanelGroup direction="horizontal" className="h-full">
             {/* Video Panel */}
             <Panel defaultSize={50} minSize={30}>
-              <iframe
-                title="Jitsi Meet"
-                src={meetingUrl}
-                allow="camera; microphone; fullscreen; display-capture"
-                className="w-full h-full border-0"
+              <JitsiMeeting
+                roomName={roomName}
+                containerStyle={{ width: "100%", height: "100%" }}
               />
             </Panel>
 
@@ -233,11 +294,9 @@ const VideoCall = () => {
             </Panel>
           </PanelGroup>
         ) : (
-          <iframe
-            title="Jitsi Meet"
-            src={meetingUrl}
-            allow="camera; microphone; fullscreen; display-capture"
-            className="w-full h-full border-0"
+          <JitsiMeeting
+            roomName={roomName}
+            containerStyle={{ width: "100%", height: "100%" }}
           />
         )}
       </div>
