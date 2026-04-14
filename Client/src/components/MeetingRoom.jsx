@@ -1,12 +1,8 @@
 import { useParams } from "react-router-dom";
 
-const JITSI_DOMAIN = (import.meta.env.VITE_JITSI_DOMAIN || "meet.jit.si")
-  .replace(/^https?:\/\//, "")
-  .replace(/\/$/, "");
-
 const MeetingRoom = () => {
   const { roomId } = useParams();
-  const src = `https://${JITSI_DOMAIN}/${roomId}#config.prejoinPageEnabled=false&config.requireDisplayName=false&config.skipPrejoin=true&config.startWithAudioMuted=false&interfaceConfig.SHOW_JITSI_WATERMARK=false`;
+  const src = `https://meet.ffmuc.net/${roomId}#config.prejoinPageEnabled=false&config.requireDisplayName=false&config.skipPrejoin=true&config.startWithAudioMuted=false&interfaceConfig.SHOW_JITSI_WATERMARK=false`;
 
   return (
     <iframe
