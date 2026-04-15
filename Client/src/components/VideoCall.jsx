@@ -35,12 +35,12 @@ const VideoCall = () => {
     () => `${window.location.origin}/meeting/${roomName}`,
     [roomName]
   );
-
   const jitsiUrl = useMemo(
     () =>
       `https://meet.ffmuc.net/${roomName}#config.prejoinPageEnabled=false&config.requireDisplayName=false&config.skipPrejoin=true&config.startWithAudioMuted=false&interfaceConfig.SHOW_JITSI_WATERMARK=false`,
     [roomName]
   );
+
 
   const handleNewRoom = () => {
     setRoomName(generateRoomName());
