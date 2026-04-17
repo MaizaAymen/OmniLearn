@@ -442,8 +442,9 @@ router.get("/courses/:id", async (req, res) => {
 // Create course
 router.post("/courses", async (req, res) => {
   try {
-    const {
+    let {
       levelId,
+      classId,
       title,
       description,
       teacherId,
@@ -453,11 +454,16 @@ router.post("/courses", async (req, res) => {
       isPublished,
       estimatedDuration,
     } = req.body;
+    if (!levelId && classId) {
+      const classroom = await Class.findByPk(classId);
+      if (classroom) levelId = classroom.levelId;
+    }
     if (!levelId || !title) {
       return res.status(400).json({ error: "levelId and title are required" });
     }
     const course = await Course.create({
       levelId,
+      classId: classId || null,
       title,
       description,
       teacherId,
@@ -714,13 +720,14 @@ router.get("/lessons/:id", async (req, res) => {
 // Create lesson
 router.post("/lessons", async (req, res) => {
   try {
-    const { moduleId, title, type, contentUrl, description, duration, order, isPublished } =
+    const { moduleId, courseId, title, type, contentUrl, description, duration, order, isPublished } =
       req.body;
-    if (!moduleId || !title) {
-      return res.status(400).json({ error: "moduleId and title are required" });
+    if (!title || (!moduleId && !courseId)) {
+      return res.status(400).json({ error: "title and either moduleId or courseId are required" });
     }
     const lesson = await Lesson.create({
-      moduleId,
+      moduleId: moduleId || null,
+      courseId: courseId || null,
       title,
       type: type || "pdf",
       contentUrl,
@@ -848,30 +855,15 @@ router.get("/classrooms/:id", async (req, res) => {
   }
 });
 
-// Get classroom's inherited courses (through Level)
+// Get courses directly assigned to this classroom
 router.get("/classrooms/:id/courses", async (req, res) => {
   try {
-    const classroom = await Class.findByPk(req.params.id, {
+    const courses = await Course.findAll({
+      where: { classId: req.params.id },
       include: [
-        {
-          model: Level,
-          as: "level",
-          include: [
-            {
-              model: Course,
-              as: "courses",
-              include: [
-                { model: Module, as: "modules", include: [{ model: Lesson, as: "lessons" }] },
-              ],
-            },
-          ],
-        },
+        { model: Module, as: "modules", include: [{ model: Lesson, as: "lessons" }] },
       ],
     });
-    if (!classroom) {
-      return res.status(404).json({ error: "Classroom not found" });
-    }
-    const courses = classroom.level?.courses || [];
     res.json(courses);
   } catch (error) {
     console.error("Error fetching classroom courses:", error);

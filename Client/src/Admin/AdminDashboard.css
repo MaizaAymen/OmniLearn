@@ -1,113 +1,326 @@
+/* ── Base ── */
 .admin-dashboard {
   min-height: 100%;
+  background: #f8f9fb;
 }
 
+/* ── Cards ── */
 .admin-card {
   background: #fff;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e8eaed;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .admin-card .ant-card-head {
-  background: #fafafa;
-  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+  border-bottom: 1px solid #e8eaed;
 }
 
 .admin-card .ant-card-head-title {
   font-weight: 600;
-  color: #000;
+  color: #202124;
 }
 
-.admin-form {
+/* ── Overview welcome banner ── */
+.overview-welcome {
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 12px;
+  padding: 28px 32px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* ── Stat cards ── */
+.stat-card {
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: box-shadow 0.18s, transform 0.18s;
+  padding: 4px 0;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #5f6368;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ── Section header ── */
+.section-form-header {
   margin-bottom: 20px;
-  padding: 16px;
-  background: #fafafa;
-  border-radius: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-start;
 }
 
-.admin-form .ant-form-item {
-  margin-bottom: 0;
+.section-form-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #202124 !important;
 }
 
 .admin-hint {
   display: block;
+  font-size: 12px;
+  color: #80868b;
+  margin-top: 2px;
+}
+
+/* ── Section divider ── */
+.section-divider {
+  margin: 20px 0;
+  border-color: #e8eaed;
+}
+
+/* ── Forms ── */
+.admin-form {
+  margin-bottom: 0;
+}
+
+.admin-form .ant-form-item {
   margin-bottom: 16px;
-  font-size: 13px;
 }
 
-.classroom-courses {
-  padding: 12px 16px;
-  background: #fafafa;
-  border-radius: 4px;
+.admin-form-secondary {
+  padding: 0;
+  background: transparent;
 }
 
-/* Table styling */
+/* ── Table ── */
 .admin-card .ant-table {
   background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .admin-card .ant-table-thead > tr > th {
-  background: #fafafa;
-  color: #000;
+  background: #f8f9fa;
+  color: #3c4043;
   font-weight: 600;
-  border-bottom: 1px solid #e0e0e0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #e8eaed;
 }
 
 .admin-card .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f1f3f4;
+  color: #202124;
 }
 
 .admin-card .ant-table-tbody > tr:hover > td {
-  background: #fafafa;
+  background: #f8f9fa;
 }
 
-/* Button styling */
-.admin-form .ant-btn-primary {
-  background: #000;
-  border-color: #000;
+.admin-card .ant-table-tbody > tr:last-child > td {
+  border-bottom: none;
 }
 
-.admin-form .ant-btn-primary:hover {
-  background: #333 !important;
-  border-color: #333 !important;
+/* ── Classroom grid cards ── */
+.classroom-drill-card {
+  background: #fff;
+  border: 1px solid #e8eaed !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s, transform 0.2s;
 }
 
-.admin-form .ant-btn-default:hover {
-  color: #000 !important;
-  border-color: #000 !important;
+.classroom-drill-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
-/* Tag styling */
-.ant-tag {
-  background: #f0f0f0;
-  border: 1px solid #d9d9d9;
-  color: #333;
+.classroom-card-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 20px 18px;
+  cursor: pointer;
+  min-height: 110px;
+  position: relative;
+  transition: filter 0.15s;
 }
 
-/* Input styling */
-.admin-form .ant-input,
-.admin-form .ant-input-number,
-.admin-form .ant-select-selector {
-  border-color: #d9d9d9;
+.classroom-card-banner:hover {
+  filter: brightness(0.95);
 }
 
-.admin-form .ant-input:hover,
-.admin-form .ant-input-number:hover,
-.admin-form .ant-select-selector:hover {
-  border-color: #000 !important;
+.classroom-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-.admin-form .ant-input:focus,
-.admin-form .ant-input-number-focused,
-.admin-form .ant-select-focused .ant-select-selector {
-  border-color: #000 !important;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1) !important;
+.classroom-card-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 6px;
+  font-weight: 500;
 }
 
-/* Spin styling */
+.classroom-card-avatar {
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 16px !important;
+  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  flex-shrink: 0;
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 36px !important;
+}
+
+.classroom-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid #f1f3f4;
+  background: #fff;
+  min-height: 48px;
+}
+
+.classroom-card-teacher-name {
+  font-size: 13px;
+  color: #5f6368;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.classroom-card-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.classroom-card-footer-actions .ant-btn {
+  color: #80868b;
+  border-radius: 6px;
+}
+
+.classroom-card-footer-actions .ant-btn:hover {
+  color: #202124;
+  background: #f1f3f4;
+}
+
+/* ── Add classroom card ── */
+.classroom-add-card {
+  border: 2px dashed #dadce0 !important;
+  background: #fafbfc !important;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  box-shadow: none !important;
+}
+
+.classroom-add-card:hover {
+  border-color: #1a73e8 !important;
+  background: #f0f4ff !important;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.classroom-add-card .ant-card-body {
+  color: #80868b;
+}
+
+.classroom-add-card:hover .ant-card-body {
+  color: #1a73e8;
+}
+
+/* ── Back button ── */
+.classroom-back-button {
+  padding: 0 !important;
+  font-weight: 500;
+  color: #1a73e8 !important;
+  height: auto !important;
+  font-size: 13px;
+}
+
+.classroom-back-button:hover {
+  color: #1557b0 !important;
+}
+
+/* ── Classroom courses inline list ── */
+.classroom-courses {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e8eaed;
+}
+
+/* ── Lesson type tag ── */
+.lesson-type-tag {
+  border-radius: 20px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+  padding: 1px 8px !important;
+  text-transform: uppercase;
+}
+
+/* ── Code to PDF modal ── */
+.code-pdf-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.code-panel {
+  min-width: 0;
+}
+
+.code-editor-shell,
+.code-preview-shell {
+  border: 1px solid #2a2f3a;
+  border-radius: 10px;
+  background: #0f1117;
+  overflow: auto;
+  min-height: 320px;
+}
+
+.code-editor-shell textarea,
+.code-editor-shell pre,
+.code-preview-block {
+  margin: 0;
+  color: #e6edf3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.code-preview-block {
+  padding: 14px;
+  min-height: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .code-pdf-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Spin ── */
 .ant-spin-dot-item {
-  background: #000 !important;
+  background: #1a73e8 !important;
 }

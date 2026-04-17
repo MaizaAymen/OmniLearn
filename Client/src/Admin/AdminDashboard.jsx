@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   Col,
+  List,
+  Breadcrumb,
+  Avatar,
   Divider,
   Table,
   Button,
@@ -28,7 +31,14 @@ import {
   EyeInvisibleOutlined,
   AppstoreOutlined,
   UploadOutlined,
+  LeftOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
+import Editor from "react-simple-code-editor";
+import Prism from "prismjs";
+import "prismjs/components/prism-javascript";
+import "prismjs/themes/prism-tomorrow.css";
+import LessonPdfViewer from "./LessonPdfViewer";
 import AdminLayout from "./AdminLayout";
 import "./AdminDashboard.css";
 import {
@@ -58,7 +68,6 @@ import {
   updateLesson,
   deleteLesson,
   uploadLessonFile,
-  uploadLessonPdf,
   fetchClassrooms,
   createClassroom,
   updateClassroom,
@@ -73,29 +82,32 @@ const { Title, Text } = Typography;
 
 const blackWhiteTheme = {
   token: {
-    colorPrimary: "#0a0a0a",
+    colorPrimary: "#1a73e8",
     colorBgContainer: "#ffffff",
-    colorBorder: "#d4d4d8",
-    colorBorderSecondary: "#e4e4e7",
-    borderRadius: 8,
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-    colorText: "#18181b",
-    colorTextSecondary: "#71717a",
-    colorFillAlter: "#fafafa",
+    colorBorder: "#dadce0",
+    colorBorderSecondary: "#e8eaed",
+    borderRadius: 6,
+    fontFamily: "'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    colorText: "#202124",
+    colorTextSecondary: "#5f6368",
+    colorFillAlter: "#f8f9fa",
   },
   components: {
     Table: {
-      headerBg: "#fafafa",
-      rowHoverBg: "#f8f8f8",
-      borderColor: "#e4e4e7",
+      headerBg: "#f8f9fa",
+      rowHoverBg: "#f1f3f4",
+      borderColor: "#e8eaed",
     },
     Button: {
-      borderRadius: 8,
+      borderRadius: 6,
     },
     Input: {
-      borderRadius: 8,
+      borderRadius: 6,
     },
     Select: {
+      borderRadius: 6,
+    },
+    Modal: {
       borderRadius: 8,
     },
   },
@@ -103,7 +115,7 @@ const blackWhiteTheme = {
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState("grades");
+  const [activeSection, setActiveSection] = useState("overview");
 
   const [grades, setGrades] = useState([]);
   const [specialities, setSpecialities] = useState([]);
@@ -115,12 +127,22 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
 
   const [editingId, setEditingId] = useState(null);
+  const [courseFromClassroom, setCourseFromClassroom] = useState(false);
   const [entityModal, setEntityModal] = useState({ open: false, section: null });
   const [classroomModuleModalOpen, setClassroomModuleModalOpen] = useState(false);
+  const [codeModalOpen, setCodeModalOpen] = useState(false);
+  const [codeContent, setCodeContent] = useState("// Paste JavaScript code here\nfunction hello(name) {\n  return `Hello, ${name}`;\n}\n\nconsole.log(hello('OmniLearn'));\n");
   const [classroomCourses, setClassroomCourses] = useState({});
   const [classroomModules, setClassroomModules] = useState({});
   const [lessonUploading, setLessonUploading] = useState(false);
-
+  const [selectedClassroom, setSelectedClassroom] = useState(null);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [selectedClassroomCourses, setSelectedClassroomCourses] = useState([]);
+  const [selectedCourseModules, setSelectedCourseModules] = useState([]);
+  const [selectedModuleLessons, setSelectedModuleLessons] = useState([]);
+  const [selectedCourseLessons, setSelectedCourseLessons] = useState([]);
+  const [lessonFromCourse, setLessonFromCourse] = useState(false);
   const [gradeForm] = Form.useForm();
   const [specialityForm] = Form.useForm();
   const [levelForm] = Form.useForm();
@@ -130,6 +152,7 @@ const AdminDashboard = () => {
   const [classroomForm] = Form.useForm();
   const [classroomModuleForm] = Form.useForm();
   const lessonType = Form.useWatch("type", lessonForm);
+  const codePreviewRef = useRef(null);
 
   const gradeOptions = useMemo(
     () => grades.map((g) => ({ value: g.id, label: g.displayName || g.name })),
@@ -163,6 +186,34 @@ const AdminDashboard = () => {
     () => classrooms.map((c) => ({ value: c.id, label: c.name })),
     [classrooms]
   );
+
+  const cardPalette = ["#1a73e8", "#34a853", "#8430ce", "#e8710a", "#00897b", "#ea4335", "#d81b60"];
+
+  const getCardColor = (index = 0) => cardPalette[index % cardPalette.length];
+
+  const getTeacherName = (teacherId) => {
+    const teacher = users.find((u) => u.id === teacherId);
+    if (!teacher) {
+      return "Unknown teacher";
+    }
+    const fullName = `${teacher.firstname || ""} ${teacher.lastname || ""}`.trim();
+    return fullName || teacher.email || "Unknown teacher";
+  };
+
+  const getLessonTypeTagColor = (type) => {
+    switch (type) {
+      case "pdf":
+        return "blue";
+      case "video":
+        return "green";
+      case "code":
+        return "purple";
+      case "quiz":
+        return "gold";
+      default:
+        return "default";
+    }
+  };
 
   const loadAll = async () => {
     try {
@@ -243,6 +294,8 @@ const AdminDashboard = () => {
     form.resetFields();
     setEditingId(null);
     if (closeModal) {
+      setCourseFromClassroom(false);
+      setLessonFromCourse(false);
       setEntityModal({ open: false, section: null });
     }
   };
@@ -278,6 +331,8 @@ const AdminDashboard = () => {
       activeForm.resetFields();
     }
     setEditingId(null);
+    setCourseFromClassroom(false);
+    setLessonFromCourse(false);
     setEntityModal({ open: false, section: null });
   };
 
@@ -460,16 +515,29 @@ const AdminDashboard = () => {
 
   // Lessons Section
   const handleLessonSubmit = async (values) => {
+    const payload = {
+      ...values,
+      contentUrl: values.contentUrl || values.file_url || "",
+    };
+    delete payload.file_url;
+
     try {
       if (editingId) {
-        await updateLesson(editingId, values);
+        await updateLesson(editingId, payload);
         message.success("Lesson updated");
       } else {
-        await createLesson(values);
+        await createLesson(payload);
         message.success("Lesson created");
       }
       resetForm(lessonForm, true);
       loadAll();
+      const freshLessons = await fetchLessons();
+      if (selectedModule) {
+        setSelectedModuleLessons((freshLessons || []).filter((l) => l.moduleId === selectedModule.id));
+      }
+      if (selectedCourse) {
+        setSelectedCourseLessons((freshLessons || []).filter((l) => l.courseId === selectedCourse.id && !l.moduleId));
+      }
     } catch (err) {
       message.error(err.message || "Operation failed");
     }
@@ -478,6 +546,9 @@ const AdminDashboard = () => {
   const handleLessonEdit = (record) => {
     setEditingId(record.id);
     lessonForm.setFieldsValue(record);
+    if (record.type === "code") {
+      setCodeContent(record.contentUrl || "");
+    }
     openEntityModal("lessons");
   };
 
@@ -486,6 +557,13 @@ const AdminDashboard = () => {
       await deleteLesson(id);
       message.success("Lesson deleted");
       loadAll();
+      const freshLessons = await fetchLessons();
+      if (selectedModule) {
+        setSelectedModuleLessons((freshLessons || []).filter((l) => l.moduleId === selectedModule.id));
+      }
+      if (selectedCourse) {
+        setSelectedCourseLessons((freshLessons || []).filter((l) => l.courseId === selectedCourse.id && !l.moduleId));
+      }
     } catch (err) {
       message.error(err.message || "Delete failed");
     }
@@ -500,10 +578,9 @@ const AdminDashboard = () => {
         return;
       }
 
-      const result =
-        lessonType === "pdf" ? await uploadLessonPdf(file) : await uploadLessonFile(file);
+      const result = await uploadLessonFile(file);
       const fileUrl = result?.fileUrl || "";
-      lessonForm.setFieldsValue({ contentUrl: fileUrl });
+      lessonForm.setFieldsValue({ contentUrl: fileUrl, file_url: fileUrl });
       message.success("File uploaded");
       onSuccess?.(result);
     } catch (err) {
@@ -512,6 +589,28 @@ const AdminDashboard = () => {
     } finally {
       setLessonUploading(false);
     }
+  };
+
+  const highlightCode = (code) =>
+    Prism.highlight(code || "", Prism.languages.javascript, "javascript");
+
+  const handleLessonTypeChange = (value) => {
+    if (value === "code") {
+      const existingCode = lessonForm.getFieldValue("contentUrl");
+      setCodeContent(existingCode || "");
+      setCodeModalOpen(true);
+    }
+  };
+
+  const saveCodeToLesson = () => {
+    if (!codeContent.trim()) {
+      message.error("Please paste some JavaScript code first");
+      return;
+    }
+
+    lessonForm.setFieldsValue({ contentUrl: codeContent, file_url: codeContent });
+    setCodeModalOpen(false);
+    message.success("Code saved in lesson");
   };
 
   // Classrooms Section
@@ -578,6 +677,97 @@ const AdminDashboard = () => {
     } catch (err) {
       message.error(err.message || "Remove failed");
     }
+  };
+
+  const handleSelectClassroom = async (record) => {
+    try {
+      const coursesData = await fetchClassroomCourses(record.id);
+      setSelectedClassroom(record);
+      setSelectedCourse(null);
+      setSelectedModule(null);
+      setSelectedClassroomCourses(coursesData || []);
+      setSelectedCourseModules([]);
+      setSelectedModuleLessons([]);
+    } catch (err) {
+      message.error(err.message || "Failed to load classroom courses");
+    }
+  };
+
+  const handleSelectCourse = async (record) => {
+    try {
+      const [modulesData, lessonsData] = await Promise.all([fetchModules(), fetchLessons()]);
+      const filteredModules = (modulesData || []).filter((module) => module.courseId === record.id);
+      const directLessons = (lessonsData || []).filter((lesson) => lesson.courseId === record.id && !lesson.moduleId);
+      setSelectedCourse(record);
+      setSelectedModule(null);
+      setSelectedCourseModules(filteredModules);
+      setSelectedModuleLessons([]);
+      setSelectedCourseLessons(directLessons);
+    } catch (err) {
+      message.error(err.message || "Failed to load course content");
+    }
+  };
+
+  const handleSelectModule = async (record) => {
+    try {
+      const lessonsData = await fetchLessons();
+      const filteredLessons = (lessonsData || []).filter((lesson) => lesson.moduleId === record.id);
+      setSelectedModule(record);
+      setSelectedModuleLessons(filteredLessons);
+    } catch (err) {
+      message.error(err.message || "Failed to load lessons");
+    }
+  };
+
+  const handleBackToClassrooms = () => {
+    setSelectedClassroom(null);
+    setSelectedCourse(null);
+    setSelectedModule(null);
+    setSelectedClassroomCourses([]);
+    setSelectedCourseModules([]);
+    setSelectedModuleLessons([]);
+  };
+
+  const handleBackToClassroomView = () => {
+    setSelectedCourse(null);
+    setSelectedModule(null);
+    setSelectedCourseModules([]);
+    setSelectedModuleLessons([]);
+  };
+
+  const handleBackToCourseView = () => {
+    setSelectedModule(null);
+    setSelectedModuleLessons([]);
+  };
+
+  const openCourseModalFromClassroom = () => {
+    courseForm.resetFields();
+    courseForm.setFieldsValue({ classId: selectedClassroom?.id, levelId: selectedClassroom?.levelId });
+    setEditingId(null);
+    setCourseFromClassroom(true);
+    openEntityModal("courses");
+  };
+
+  const openModuleModalFromCourse = () => {
+    moduleForm.resetFields();
+    moduleForm.setFieldsValue({ courseId: selectedCourse?.id });
+    setEditingId(null);
+    openEntityModal("modules");
+  };
+
+  const openLessonModalFromCourse = () => {
+    lessonForm.resetFields();
+    lessonForm.setFieldsValue({ courseId: selectedCourse?.id, type: "pdf" });
+    setEditingId(null);
+    setLessonFromCourse(true);
+    openEntityModal("lessons");
+  };
+
+  const openLessonModalFromModule = () => {
+    lessonForm.resetFields();
+    lessonForm.setFieldsValue({ moduleId: selectedModule?.id, type: "pdf" });
+    setEditingId(null);
+    openEntityModal("lessons");
   };
 
   const gradeColumns = [
@@ -862,7 +1052,10 @@ const AdminDashboard = () => {
       case "courses":
         return (
           <Form form={courseForm} layout="vertical" onFinish={handleCourseSubmit} className="admin-form">
-            <Form.Item name="levelId" label="Level" rules={[{ required: true }]}>
+            <Form.Item name="classId" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name="levelId" label="Level" hidden={courseFromClassroom} rules={courseFromClassroom ? [] : [{ required: true }]}>
               <Select placeholder="Select level" options={levelOptions} />
             </Form.Item>
             <Form.Item name="title" label="Title" rules={[{ required: true }]}>
@@ -898,7 +1091,9 @@ const AdminDashboard = () => {
       case "lessons":
         return (
           <Form form={lessonForm} layout="vertical" onFinish={handleLessonSubmit} className="admin-form">
-            <Form.Item name="moduleId" label="Module" rules={[{ required: true }]}>
+            <Form.Item name="courseId" hidden><Input /></Form.Item>
+            <Form.Item name="file_url" hidden><Input /></Form.Item>
+            <Form.Item name="moduleId" label="Module" hidden={lessonFromCourse} rules={lessonFromCourse ? [] : [{ required: true }]}>
               <Select placeholder="Select module" options={moduleOptions} />
             </Form.Item>
             <Form.Item name="title" label="Title" rules={[{ required: true }]}>
@@ -906,6 +1101,7 @@ const AdminDashboard = () => {
             </Form.Item>
             <Form.Item name="type" label="Type" initialValue="pdf">
               <Select
+                onChange={handleLessonTypeChange}
                 options={[
                   { value: "pdf", label: "PDF" },
                   { value: "video", label: "Video" },
@@ -919,21 +1115,25 @@ const AdminDashboard = () => {
                 <Form.Item name="contentUrl" label="File URL">
                   <Input placeholder="Uploaded file URL" readOnly />
                 </Form.Item>
-                <Form.Item label="Upload File">
-                  <Upload
-                    showUploadList={false}
-                    customRequest={handleLessonUpload}
-                    accept={
-                      lessonType === "pdf"
-                        ? "application/pdf"
-                        : ".zip,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.cs"
-                    }
-                  >
-                    <Button icon={<UploadOutlined />} loading={lessonUploading} style={{ width: "100%" }}>
-                      Upload
+                {lessonType === "pdf" ? (
+                  <Form.Item label="Upload File">
+                    <Upload
+                      showUploadList={false}
+                      customRequest={handleLessonUpload}
+                      accept="application/pdf"
+                    >
+                      <Button icon={<UploadOutlined />} loading={lessonUploading} style={{ width: "100%" }}>
+                        Upload
+                      </Button>
+                    </Upload>
+                  </Form.Item>
+                ) : (
+                  <Form.Item label="Code">
+                    <Button type="primary" style={{ width: "100%" }} onClick={() => setCodeModalOpen(true)}>
+                      Open Code Editor
                     </Button>
-                  </Upload>
-                </Form.Item>
+                  </Form.Item>
+                )}
               </>
             ) : (
               <Form.Item name="contentUrl" label="Content URL">
@@ -983,7 +1183,7 @@ const AdminDashboard = () => {
         </Title>
         {count != null && (
           <span style={{
-            background: "#18181b",
+            background: "#1a73e8",
             color: "#fff",
             fontSize: 11,
             fontWeight: 700,
@@ -1001,6 +1201,95 @@ const AdminDashboard = () => {
 
   const renderSection = () => {
     switch (activeSection) {
+      case "overview":
+        return (
+          <div>
+            <div className="overview-welcome">
+              <Title level={4} style={{ margin: 0, color: "#202124", fontSize: 22 }}>
+                Welcome to OmniLearn Admin
+              </Title>
+              <Text style={{ color: "#5f6368", fontSize: 14 }}>
+                Manage your classrooms, courses, and learning content.
+              </Text>
+            </div>
+
+            <Row gutter={[16, 16]} style={{ marginTop: 28 }}>
+              {[
+                { label: "Classrooms", value: classrooms.length, color: "#1a73e8", section: "classrooms" },
+                { label: "Courses", value: courses.length, color: "#34a853", section: "courses" },
+                { label: "Teachers", value: users.filter((u) => u.role === "teacher").length, color: "#8430ce", section: "courses" },
+                { label: "Lessons", value: lessons.length, color: "#e8710a", section: "lessons" },
+              ].map((stat) => (
+                <Col xs={12} sm={6} key={stat.label}>
+                  <Card
+                    className="stat-card"
+                    style={{ borderTop: `4px solid ${stat.color}` }}
+                    onClick={() => setActiveSection(stat.section)}
+                  >
+                    <div className="stat-value" style={{ color: stat.color }}>{stat.value}</div>
+                    <div className="stat-label">{stat.label}</div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+
+            <div style={{ marginTop: 36, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Title level={5} style={{ margin: 0, color: "#202124" }}>Your Classrooms</Title>
+              <Button type="link" onClick={() => setActiveSection("classrooms")} style={{ padding: 0, color: "#1a73e8", fontWeight: 500 }}>
+                View all
+              </Button>
+            </div>
+
+            {classrooms.length === 0 ? (
+              <Card className="admin-card" style={{ textAlign: "center", padding: "40px 24px" }}>
+                <TeamOutlined style={{ fontSize: 48, color: "#dadce0", marginBottom: 16, display: "block" }} />
+                <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>No classrooms yet</Text>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setActiveSection("classrooms"); handleCreateClick("classrooms"); }}>
+                  Create Classroom
+                </Button>
+              </Card>
+            ) : (
+              <Row gutter={[16, 16]}>
+                {classrooms.slice(0, 6).map((record, index) => (
+                  <Col key={record.id} xs={24} sm={12} lg={8}>
+                    <Card className="classroom-drill-card" styles={{ body: { padding: 0 } }}>
+                      <div
+                        className="classroom-card-banner"
+                        style={{ background: getCardColor(index) }}
+                        onClick={() => { setActiveSection("classrooms"); handleSelectClassroom(record); }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setActiveSection("classrooms");
+                            handleSelectClassroom(record);
+                          }
+                        }}
+                      >
+                        <div>
+                          <div className="classroom-card-title">{record.name || "Classroom"}</div>
+                          <div className="classroom-card-meta">
+                            {gradeOptions.find((g) => g.value === record.gradeId)?.label || ""}
+                            {gradeOptions.find((g) => g.value === record.gradeId)?.label && levelOptions.find((l) => l.value === record.levelId)?.label ? " • " : ""}
+                            {levelOptions.find((l) => l.value === record.levelId)?.label || ""}
+                          </div>
+                        </div>
+                        <Avatar className="classroom-card-avatar">
+                          {getTeacherName(record.teacherId).charAt(0).toUpperCase()}
+                        </Avatar>
+                      </div>
+                      <div className="classroom-card-footer">
+                        <span className="classroom-card-teacher-name">{getTeacherName(record.teacherId)}</span>
+                      </div>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )}
+          </div>
+        );
+
       case "grades":
         return (
           <Card className="admin-card">
@@ -1135,75 +1424,224 @@ const AdminDashboard = () => {
               count={classrooms.length}
               hint="Courses are inherited from the classroom level."
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleCreateClick("classrooms")}>
-              Add Classroom
-            </Button>
 
-            <Divider className="section-divider">
-              <Text type="secondary" style={{ fontSize: 12 }}>Assign Module to Classroom</Text>
-            </Divider>
-            <Button icon={<PlusOutlined />} onClick={openClassroomModuleModal}>
-              Assign Module
-            </Button>
+            {!selectedClassroom && (
+              <>
+                <Row gutter={[16, 16]}>
+                  {classrooms.map((record, index) => {
+                    const bannerColor = getCardColor(index);
+                    return (
+                      <Col key={record.id} xs={24} sm={12} lg={8}>
+                        <Card className="classroom-drill-card" styles={{ body: { padding: 0 } }}>
+                          <div
+                            className="classroom-card-banner"
+                            style={{ background: bannerColor }}
+                            onClick={() => handleSelectClassroom(record)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                handleSelectClassroom(record);
+                              }
+                            }}
+                          >
+                            <div>
+                              <div className="classroom-card-title">{record.name || "Classroom"}</div>
+                              <div className="classroom-card-meta">
+                                {gradeOptions.find((g) => g.value === record.gradeId)?.label || "No grade"}
+                                {" • "}
+                                {levelOptions.find((l) => l.value === record.levelId)?.label || "No level"}
+                              </div>
+                            </div>
+                            <Avatar className="classroom-card-avatar">
+                              {getTeacherName(record.teacherId).charAt(0).toUpperCase()}
+                            </Avatar>
+                          </div>
+                          <div className="classroom-card-footer">
+                            <span className="classroom-card-teacher-name">
+                              {getTeacherName(record.teacherId)}
+                            </span>
+                            <div className="classroom-card-footer-actions">
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<EditOutlined />}
+                                onClick={(e) => { e.stopPropagation(); handleClassroomEdit(record); }}
+                              />
+                              <Popconfirm title="Delete this classroom?" onConfirm={() => handleClassroomDelete(record.id)}>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </Popconfirm>
+                            </div>
+                          </div>
+                        </Card>
+                      </Col>
+                    );
+                  })}
+                  <Col xs={24} sm={12} lg={8}>
+                    <Card
+                      className="classroom-drill-card classroom-add-card"
+                      onClick={() => handleCreateClick("classrooms")}
+                      styles={{ body: { minHeight: 196, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 0 } }}
+                    >
+                      <PlusOutlined style={{ fontSize: 32 }} />
+                      <div style={{ marginTop: 12, fontSize: 14, fontWeight: 600 }}>New Classroom</div>
+                    </Card>
+                  </Col>
+                </Row>
+                <Divider className="section-divider">
+                  <Text type="secondary" style={{ fontSize: 12 }}>Assign Module to Classroom</Text>
+                </Divider>
+                <Button icon={<PlusOutlined />} onClick={openClassroomModuleModal}>
+                  Assign Module
+                </Button>
+              </>
+            )}
 
-            <Divider className="section-divider" />
-            <Table
-              columns={classroomColumns}
-              dataSource={classrooms}
-              rowKey="id"
-              size="middle"
-              pagination={{ pageSize: 10, showTotal: (total) => `${total} records` }}
-              expandable={{
-                expandedRowRender: (record) =>
-                  classroomCourses[record.id] || classroomModules[record.id] ? (
-                    <div className="classroom-courses">
-                      {classroomCourses[record.id] && (
-                        <div>
-                          <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Courses</Text>
-                          <div style={{ marginTop: 6 }}>
-                            {classroomCourses[record.id].length === 0 ? (
-                              <Text type="secondary">No courses inherited.</Text>
-                            ) : (
-                              <Space wrap>
-                                {classroomCourses[record.id].map((course) => (
-                                  <Tag key={course.id}>{course.title}</Tag>
-                                ))}
-                              </Space>
-                            )}
-                          </div>
+            {selectedClassroom && !selectedCourse && (
+              <>
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <Button type="link" icon={<LeftOutlined />} onClick={handleBackToClassrooms} className="classroom-back-button">
+                    All Classrooms
+                  </Button>
+                  <Breadcrumb
+                    items={[
+                      { title: "Classrooms" },
+                      { title: selectedClassroom.name || "Classroom" },
+                    ]}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openCourseModalFromClassroom}>
+                      Add Course
+                    </Button>
+                  </div>
+                </Space>
+
+                <Divider className="section-divider" />
+
+                <Row gutter={[16, 16]}>
+                  {selectedClassroomCourses.map((record, index) => (
+                    <Col key={record.id} xs={24} sm={12} lg={8}>
+                      <Card
+                        className="classroom-drill-card"
+                        styles={{ body: { padding: 0 } }}
+                        hoverable
+                        onClick={() => handleSelectCourse(record)}
+                      >
+                        <div className="classroom-card-banner" style={{ background: getCardColor(index) }}>
+                          <div className="classroom-card-title">{record.title || "Course"}</div>
                         </div>
-                      )}
-                      {classroomModules[record.id] && (
-                        <div style={{ marginTop: 12 }}>
-                          <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Modules</Text>
-                          <div style={{ marginTop: 6 }}>
-                            {classroomModules[record.id].length === 0 ? (
-                              <Text type="secondary">No modules assigned.</Text>
-                            ) : (
-                              <Space wrap>
-                                {classroomModules[record.id].map((module) => (
-                                  <Tag
-                                    key={module.id}
-                                    closable
-                                    onClose={(event) => {
-                                      event.preventDefault();
-                                      handleClassroomModuleRemove(record.id, module.id);
-                                    }}
-                                  >
-                                    {module.title}
-                                  </Tag>
-                                ))}
-                              </Space>
-                            )}
-                          </div>
+                        <div className="classroom-card-footer">
+                          <span className="classroom-card-teacher-name">{getTeacherName(record.teacherId)}</span>
                         </div>
-                      )}
-                    </div>
-                  ) : null,
-                rowExpandable: (record) =>
-                  !!classroomCourses[record.id] || !!classroomModules[record.id],
-              }}
-            />
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+
+                {selectedClassroomCourses.length === 0 && (
+                  <Text type="secondary">No courses found for this classroom.</Text>
+                )}
+              </>
+            )}
+
+            {selectedCourse && !selectedModule && (
+              <>
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <Button type="link" icon={<LeftOutlined />} onClick={handleBackToClassroomView} className="classroom-back-button">
+                    Back to Classroom
+                  </Button>
+                  <Breadcrumb
+                    items={[
+                      { title: "Classrooms" },
+                      { title: selectedClassroom?.name || "Classroom" },
+                      { title: selectedCourse.title || "Course" },
+                    ]}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <Button icon={<PlusOutlined />} onClick={openLessonModalFromCourse}>
+                      Add Lesson
+                    </Button>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openModuleModalFromCourse}>
+                      Add Module
+                    </Button>
+                  </div>
+                </Space>
+
+                <Divider className="section-divider" />
+
+                {selectedCourseModules.length > 0 && (
+                  <>
+                    <Text strong style={{ fontSize: 15 }}>Modules</Text>
+                    <Row gutter={[16, 16]} style={{ marginTop: 12 }}>
+                      {selectedCourseModules.map((record, index) => (
+                        <Col key={record.id} xs={24} sm={12} lg={8}>
+                          <Card
+                            className="classroom-drill-card"
+                            styles={{ body: { padding: 0 } }}
+                            hoverable
+                            onClick={() => handleSelectModule(record)}
+                          >
+                            <div className="classroom-card-banner" style={{ background: getCardColor(index) }}>
+                              <div className="classroom-card-title">{record.title || "Module"}</div>
+                              <div className="classroom-card-meta">Order: {record.order ?? 0}</div>
+                            </div>
+                            <div className="classroom-card-footer">
+                              <span className="classroom-card-teacher-name">{record.description || "No description"}</span>
+                            </div>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </>
+                )}
+
+                {selectedCourseLessons.length > 0 && (
+                  <>
+                    {selectedCourseModules.length > 0 && <Divider />}
+                    <Text strong style={{ fontSize: 15, display: "block", marginBottom: 12 }}>Direct Lessons</Text>
+                    <LessonPdfViewer lessons={selectedCourseLessons} />
+                  </>
+                )}
+
+                {selectedCourseModules.length === 0 && selectedCourseLessons.length === 0 && (
+                  <Text type="secondary">No content yet. Add a module to group lessons, or add a lesson directly.</Text>
+                )}
+              </>
+            )}
+
+            {selectedModule && (
+              <>
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <Button type="link" icon={<LeftOutlined />} onClick={handleBackToCourseView} className="classroom-back-button">
+                    Back to Course
+                  </Button>
+                  <Breadcrumb
+                    items={[
+                      { title: "Classrooms" },
+                      { title: selectedClassroom?.name || "Classroom" },
+                      { title: selectedCourse?.title || "Course" },
+                      { title: selectedModule.title || "Module" },
+                    ]}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openLessonModalFromModule}>
+                      Add Lesson
+                    </Button>
+                  </div>
+                </Space>
+
+                <Divider className="section-divider" />
+
+                <LessonPdfViewer lessons={selectedModuleLessons} />
+              </>
+            )}
           </Card>
         );
 
@@ -1228,6 +1666,49 @@ const AdminDashboard = () => {
         >
           {renderEntityModalForm()}
         </Modal>
+        <Modal
+          title="Save Code"
+          open={codeModalOpen}
+          onCancel={() => setCodeModalOpen(false)}
+          onOk={saveCodeToLesson}
+          okText="Save Code"
+          width={900}
+          destroyOnClose
+        >
+          <div className="code-pdf-modal-grid">
+            <div className="code-panel">
+              <Text strong style={{ display: "block", marginBottom: 8 }}>
+                JavaScript Editor
+              </Text>
+              <div className="code-editor-shell">
+                <Editor
+                  value={codeContent}
+                  onValueChange={setCodeContent}
+                  highlight={highlightCode}
+                  padding={14}
+                  textareaId="lesson-code-editor"
+                  style={{
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                    fontSize: 13,
+                    minHeight: 320,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="code-panel">
+              <Text strong style={{ display: "block", marginBottom: 8 }}>
+                Live Preview
+              </Text>
+              <div ref={codePreviewRef} className="code-preview-shell">
+                <pre className="code-preview-block language-javascript">
+                  <code dangerouslySetInnerHTML={{ __html: highlightCode(codeContent) }} />
+                </pre>
+              </div>
+            </div>
+          </div>
+        </Modal>
+
         <Modal
           title="Assign Module to Classroom"
           open={classroomModuleModalOpen}

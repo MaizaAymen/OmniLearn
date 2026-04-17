@@ -11,8 +11,14 @@ const Lesson = sequelize.define(
     },
     moduleId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: { model: "modules", key: "id" },
+      onDelete: "CASCADE",
+    },
+    courseId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: "courses", key: "id" },
       onDelete: "CASCADE",
     },
     title: {

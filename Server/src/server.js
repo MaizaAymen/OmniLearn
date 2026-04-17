@@ -51,6 +51,7 @@ app.get("/", (req, res) => {
     await models.Speciality.sync();
     await models.Level.sync();
     await sequelize.sync({ alter: true });
+    await sequelize.query('ALTER TABLE learn.lessons ALTER COLUMN "moduleId" DROP NOT NULL;').catch(() => {});
     setupSessionHub(server);
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

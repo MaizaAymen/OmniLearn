@@ -49,6 +49,10 @@ Course.belongsTo(Level, { foreignKey: "levelId", as: "level" });
 Module.hasMany(Lesson, { foreignKey: "moduleId", as: "lessons" });
 Lesson.belongsTo(Module, { foreignKey: "moduleId", as: "module" });
 
+// ─── Course ↔ Lesson direct (1:N, optional — lessons without a module) ────────
+Course.hasMany(Lesson, { foreignKey: "courseId", as: "directLessons" });
+Lesson.belongsTo(Course, { foreignKey: "courseId", as: "course" });
+
 // ─── Class (Classroom) ↔ Grade/Speciality/Level ───────────────────────────────
 Grade.hasMany(Class, { foreignKey: "gradeId", as: "classrooms" });
 Class.belongsTo(Grade, { foreignKey: "gradeId", as: "grade" });
