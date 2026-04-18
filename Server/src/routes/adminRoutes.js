@@ -925,6 +925,29 @@ router.delete("/classrooms/:id/modules/:moduleId", async (req, res) => {
   }
 });
 
+// Generate a unique 6-char alphanumeric invite code
+const generateInviteCode = async () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code;
+  let exists = true;
+  while (exists) {
+    code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    exists = !!(await Class.findOne({ where: { inviteCode: code } }));
+  }
+  return code;
+};
+
+// Get classroom by invite code (public)
+router.get("/classrooms/join/:code", async (req, res) => {
+  try {
+    const classroom = await Class.findOne({ where: { inviteCode: req.params.code } });
+    if (!classroom) return res.status(404).json({ error: "Invalid invite code" });
+    res.json({ id: classroom.id, name: classroom.name, academicYear: classroom.academicYear });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to find classroom" });
+  }
+});
+
 // Create classroom
 router.post("/classrooms", async (req, res) => {
   try {
@@ -933,6 +956,7 @@ router.post("/classrooms", async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: "name is required" });
     }
+    const inviteCode = await generateInviteCode();
     const classroom = await Class.create({
       name,
       description,
@@ -942,6 +966,7 @@ router.post("/classrooms", async (req, res) => {
       levelId,
       academicYear,
       isActive: isActive !== false,
+      inviteCode,
     });
     res.status(201).json(classroom);
   } catch (error) {
@@ -1024,6 +1049,21 @@ router.get("/students/available", async (req, res) => {
   } catch (error) {
     console.error("Error fetching available students:", error);
     res.status(500).json({ error: "Failed to fetch available students" });
+  }
+});
+
+// Get students enrolled in a classroom
+router.get("/classrooms/:id/students", async (req, res) => {
+  try {
+    const enrollments = await Enrollment.findAll({
+      where: { classId: req.params.id },
+      include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email"] }],
+    });
+    const students = enrollments.map((e) => e.student).filter(Boolean);
+    res.json(students);
+  } catch (error) {
+    console.error("Error fetching classroom students:", error);
+    res.status(500).json({ error: "Failed to fetch classroom students" });
   }
 });
 

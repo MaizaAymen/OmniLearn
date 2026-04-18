@@ -22,6 +22,7 @@ import {
   Tag,
   Modal,
   ConfigProvider,
+  Drawer,
 } from "antd";
 import {
   PlusOutlined,
@@ -33,6 +34,8 @@ import {
   UploadOutlined,
   LeftOutlined,
   TeamOutlined,
+  CopyOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 import Editor from "react-simple-code-editor";
 import Prism from "prismjs";
@@ -76,6 +79,10 @@ import {
   fetchClassroomModules,
   addClassroomModule,
   removeClassroomModule,
+  fetchAvailableStudents,
+  assignStudentsToClassroom,
+  fetchClassroomStudents,
+  removeStudentFromClassroom,
 } from "./api";
 
 const { Title, Text } = Typography;
@@ -130,6 +137,13 @@ const AdminDashboard = () => {
   const [courseFromClassroom, setCourseFromClassroom] = useState(false);
   const [entityModal, setEntityModal] = useState({ open: false, section: null });
   const [classroomModuleModalOpen, setClassroomModuleModalOpen] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [createdClassroom, setCreatedClassroom] = useState(null);
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [selectedStudentsToInvite, setSelectedStudentsToInvite] = useState([]);
+  const [studentsDrawerOpen, setStudentsDrawerOpen] = useState(false);
+  const [studentsToAdd, setStudentsToAdd] = useState([]);
+  const [drawerAvailableStudents, setDrawerAvailableStudents] = useState([]);
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [codeContent, setCodeContent] = useState("// Paste JavaScript code here\nfunction hello(name) {\n  return `Hello, ${name}`;\n}\n\nconsole.log(hello('OmniLearn'));\n");
   const [classroomCourses, setClassroomCourses] = useState({});
@@ -139,6 +153,7 @@ const AdminDashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedModule, setSelectedModule] = useState(null);
   const [selectedClassroomCourses, setSelectedClassroomCourses] = useState([]);
+  const [selectedClassroomStudents, setSelectedClassroomStudents] = useState([]);
   const [selectedCourseModules, setSelectedCourseModules] = useState([]);
   const [selectedModuleLessons, setSelectedModuleLessons] = useState([]);
   const [selectedCourseLessons, setSelectedCourseLessons] = useState([]);
@@ -619,14 +634,69 @@ const AdminDashboard = () => {
       if (editingId) {
         await updateClassroom(editingId, values);
         message.success("Classroom updated");
+        resetForm(classroomForm, true);
+        loadAll();
       } else {
-        await createClassroom(values);
+        const newClassroom = await createClassroom(values);
         message.success("Classroom created");
+        resetForm(classroomForm, true);
+        loadAll();
+        const students = await fetchAvailableStudents(newClassroom.id);
+        setAvailableStudents(students || []);
+        setSelectedStudentsToInvite([]);
+        setCreatedClassroom(newClassroom);
+        setInviteModalOpen(true);
       }
-      resetForm(classroomForm, true);
-      loadAll();
     } catch (err) {
       message.error(err.message || "Operation failed");
+    }
+  };
+
+  const handleInviteStudents = async () => {
+    if (selectedStudentsToInvite.length === 0) {
+      setInviteModalOpen(false);
+      return;
+    }
+    try {
+      await assignStudentsToClassroom(createdClassroom.id, selectedStudentsToInvite);
+      message.success(`${selectedStudentsToInvite.length} student(s) invited`);
+    } catch (err) {
+      message.error(err.message || "Failed to invite students");
+    }
+    setInviteModalOpen(false);
+  };
+
+  const openStudentsDrawer = async () => {
+    const available = await fetchAvailableStudents(selectedClassroom?.id);
+    setDrawerAvailableStudents(available || []);
+    setStudentsToAdd([]);
+    setStudentsDrawerOpen(true);
+  };
+
+  const handleAddStudents = async () => {
+    if (studentsToAdd.length === 0) return;
+    try {
+      await assignStudentsToClassroom(selectedClassroom.id, studentsToAdd);
+      const updated = await fetchClassroomStudents(selectedClassroom.id);
+      setSelectedClassroomStudents(updated || []);
+      const available = await fetchAvailableStudents(selectedClassroom.id);
+      setDrawerAvailableStudents(available || []);
+      setStudentsToAdd([]);
+      message.success(`${studentsToAdd.length} student(s) added`);
+    } catch (err) {
+      message.error(err.message || "Failed to add students");
+    }
+  };
+
+  const handleRemoveStudent = async (studentId) => {
+    try {
+      await removeStudentFromClassroom(selectedClassroom.id, studentId);
+      setSelectedClassroomStudents((prev) => prev.filter((s) => s.id !== studentId));
+      const available = await fetchAvailableStudents(selectedClassroom.id);
+      setDrawerAvailableStudents(available || []);
+      message.success("Student removed");
+    } catch (err) {
+      message.error(err.message || "Failed to remove student");
     }
   };
 
@@ -681,15 +751,19 @@ const AdminDashboard = () => {
 
   const handleSelectClassroom = async (record) => {
     try {
-      const coursesData = await fetchClassroomCourses(record.id);
+      const [coursesData, studentsData] = await Promise.all([
+        fetchClassroomCourses(record.id),
+        fetchClassroomStudents(record.id),
+      ]);
       setSelectedClassroom(record);
       setSelectedCourse(null);
       setSelectedModule(null);
       setSelectedClassroomCourses(coursesData || []);
+      setSelectedClassroomStudents(studentsData || []);
       setSelectedCourseModules([]);
       setSelectedModuleLessons([]);
     } catch (err) {
-      message.error(err.message || "Failed to load classroom courses");
+      message.error(err.message || "Failed to load classroom");
     }
   };
 
@@ -1495,12 +1569,7 @@ const AdminDashboard = () => {
                     </Card>
                   </Col>
                 </Row>
-                <Divider className="section-divider">
-                  <Text type="secondary" style={{ fontSize: 12 }}>Assign Module to Classroom</Text>
-                </Divider>
-                <Button icon={<PlusOutlined />} onClick={openClassroomModuleModal}>
-                  Assign Module
-                </Button>
+             
               </>
             )}
 
@@ -1516,7 +1585,10 @@ const AdminDashboard = () => {
                       { title: selectedClassroom.name || "Classroom" },
                     ]}
                   />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <Button icon={<TeamOutlined />} onClick={openStudentsDrawer}>
+                      Students ({selectedClassroomStudents.length})
+                    </Button>
                     <Button type="primary" icon={<PlusOutlined />} onClick={openCourseModalFromClassroom}>
                       Add Course
                     </Button>
@@ -1731,6 +1803,158 @@ const AdminDashboard = () => {
             </Form.Item>
           </Form>
         </Modal>
+
+        {/* Classroom Invite Modal */}
+        <Modal
+          title="Classroom Created"
+          open={inviteModalOpen}
+          onCancel={() => setInviteModalOpen(false)}
+          onOk={handleInviteStudents}
+          okText={selectedStudentsToInvite.length > 0 ? "Invite & Close" : "Done"}
+          width={480}
+          destroyOnClose
+        >
+          {createdClassroom && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ textAlign: "center", background: "#f8f9fa", borderRadius: 8, padding: "20px 16px" }}>
+                <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>INVITE CODE</Text>
+                <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: 8, color: "#1a73e8", fontFamily: "monospace" }}>
+                  {createdClassroom.inviteCode}
+                </div>
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdClassroom.inviteCode);
+                    message.success("Code copied!");
+                  }}
+                >
+                  Copy Code
+                </Button>
+              </div>
+
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>JOIN LINK</Text>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/join/${createdClassroom.inviteCode}`}
+                    prefix={<LinkOutlined style={{ color: "#5f6368" }} />}
+                  />
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/join/${createdClassroom.inviteCode}`);
+                      message.success("Link copied!");
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>INVITE STUDENTS DIRECTLY (optional)</Text>
+                <Select
+                  mode="multiple"
+                  style={{ width: "100%", marginTop: 6 }}
+                  placeholder="Select students to add now"
+                  value={selectedStudentsToInvite}
+                  onChange={setSelectedStudentsToInvite}
+                  options={availableStudents.map((s) => ({
+                    value: s.id,
+                    label: `${s.firstname} ${s.lastname} (${s.email})`,
+                  }))}
+                />
+              </div>
+            </div>
+          )}
+        </Modal>
+
+        {/* Students Sidebar Drawer */}
+        <Drawer
+          title={`Students — ${selectedClassroom?.name || ""}`}
+          placement="right"
+          styles={{ wrapper: { width: 360 } }}
+          open={studentsDrawerOpen}
+          onClose={() => setStudentsDrawerOpen(false)}
+        >
+          {/* Add students */}
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ display: "block", marginBottom: 8 }}>Add Students</Text>
+            <Select
+              mode="multiple"
+              style={{ width: "100%", marginBottom: 8 }}
+              placeholder="Search and select students…"
+              value={studentsToAdd}
+              onChange={setStudentsToAdd}
+              options={drawerAvailableStudents.map((s) => ({
+                value: s.id,
+                label: `${s.firstname} ${s.lastname} (${s.email})`,
+              }))}
+            />
+            <Button
+              type="primary"
+              block
+              disabled={studentsToAdd.length === 0}
+              onClick={handleAddStudents}
+            >
+              Add Selected
+            </Button>
+          </div>
+
+          <Divider />
+
+          {/* Enrolled list */}
+          <Text strong style={{ display: "block", marginBottom: 12 }}>
+            Enrolled ({selectedClassroomStudents.length})
+          </Text>
+
+          {selectedClassroomStudents.length === 0 ? (
+            <Text type="secondary">No students enrolled yet.</Text>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedClassroomStudents.map((student) => (
+                <div
+                  key={student.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    border: "1px solid #e8eaed",
+                    borderRadius: 8,
+                    background: "#f8f9fa",
+                  }}
+                >
+                  <Avatar style={{ background: "#1a73e8", flexShrink: 0 }} size={36}>
+                    {(student.firstname?.[0] || "?").toUpperCase()}
+                  </Avatar>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "#202124", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {student.firstname} {student.lastname}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#5f6368", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {student.email}
+                    </div>
+                  </div>
+                  <Popconfirm
+                    title="Remove this student?"
+                    onConfirm={() => handleRemoveStudent(student.id)}
+                    okText="Remove"
+                    cancelText="Cancel"
+                  >
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      size="small"
+                    />
+                  </Popconfirm>
+                </div>
+              ))}
+            </div>
+          )}
+        </Drawer>
       </AdminLayout>
     </ConfigProvider>
   );

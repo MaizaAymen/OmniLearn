@@ -6,6 +6,7 @@ import {
   ClockCircleOutlined,
   RightOutlined,
   SearchOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 
 const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/uml`;
@@ -118,6 +119,17 @@ export default function Problem() {
             Practice designing class diagrams with AI-generated challenges.
             Pick a topic and sharpen your object-oriented design skills.
           </p>
+          <button
+            type="button"
+            onClick={() => navigate('/uml')}
+            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200"
+            style={{ backgroundColor: '#3A10E5', color: '#FFFFFF' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2D0CB8')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#3A10E5')}
+          >
+            <EditOutlined />
+            Free Draw
+          </button>
         </div>
       </div>
 

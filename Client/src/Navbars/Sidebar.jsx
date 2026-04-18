@@ -10,6 +10,7 @@ import {
   ReadOutlined,
   SettingOutlined,
   TeamOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import { Button, Layout, Menu, theme } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -82,6 +83,11 @@ const Sidebar = ({ children }) => {
         icon: <LoginOutlined />,
         label: 'Auth',
       },
+      {
+        key: '/profile',
+        icon: <UserOutlined />,
+        label: 'Profile',
+      },
     ],
     []
   );
@@ -97,6 +103,7 @@ const Sidebar = ({ children }) => {
     if (location.pathname.startsWith('/users')) return '/users';
     if (location.pathname.startsWith('/admin')) return '/admin';
     if (location.pathname.startsWith('/auth')) return '/auth';
+    if (location.pathname.startsWith('/profile')) return '/profile';
     return '/';
   }, [location.pathname]);
 

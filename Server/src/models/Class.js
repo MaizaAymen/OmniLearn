@@ -49,6 +49,11 @@ const Class = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    inviteCode: {
+      type: DataTypes.STRING(8),
+      allowNull: true,
+      unique: true,
+    },
   },
   {
     tableName: "classes",

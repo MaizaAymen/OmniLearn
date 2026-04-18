@@ -16,6 +16,7 @@ import UMLEditor from "./Uml/UMLEditor";
 import UmlProblems from "./Uml/Problem";
 import VideoCall from "./components/VideoCall";
 import MeetingRoom from "./components/MeetingRoom";
+import Profile from "./components/Profile";
 
 function App() {
   const location = useLocation();
@@ -36,8 +37,7 @@ function App() {
       <Route path="/uml" element={<UMLEditor />} />
       <Route path="/uml/problems" element={<UmlProblems />} />
       <Route path="/uml/problems/:id" element={<UMLEditor />} />
-
-
+      <Route path="/profile" element={<Profile />} />
     </Routes>
   );
 

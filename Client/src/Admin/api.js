@@ -467,6 +467,13 @@ export const fetchAvailableStudents = async (classroomId = null) => {
   return handleResponse(response);
 };
 
+export const fetchClassroomStudents = async (classroomId) => {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/students`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const assignStudentsToClassroom = async (classroomId, studentIds) => {
   const response = await fetch(`${API_BASE}/classrooms/${classroomId}/students`, {
     method: "POST",

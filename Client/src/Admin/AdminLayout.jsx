@@ -20,9 +20,9 @@ const sections = [
   { key: "grades", label: "Grades", icon: <TrophyOutlined /> },
   { key: "specialities", label: "Specialities", icon: <ClusterOutlined /> },
   { key: "levels", label: "Levels", icon: <AppstoreOutlined /> },
-  { key: "courses", label: "Courses", icon: <BookOutlined /> },
-  { key: "modules", label: "Modules", icon: <FileTextOutlined /> },
-  { key: "lessons", label: "Lessons", icon: <ReadOutlined /> },
+  // // { key: "courses", label: "Courses", icon: <BookOutlined /> },
+  // // { key: "modules", label: "Modules", icon: <FileTextOutlined /> },
+  // // { key: "lessons", label: "Lessons", icon: <ReadOutlined /> },
   { key: "classrooms", label: "Classrooms", icon: <TeamOutlined /> },
 ];
 

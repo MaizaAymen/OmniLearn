@@ -26,6 +26,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "@xyflow/react": "^12.10.1",
     "antd": "^6.3.4",
+    "antd-img-crop": "^4.30.0",
     "axios": "^1.13.5",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
