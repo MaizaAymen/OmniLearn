@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { User } = require("../models");
+const { User, Class, Enrollment, Grade, Speciality, Level } = require("../models");
 
 
 router.get("/getAllUsers", async (req, res) => {
@@ -102,6 +102,42 @@ router.get("/profile/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
+router.get("/users/:id/classrooms", async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const include = [
+      { model: Grade, as: "grade", attributes: ["id", "name"] },
+      { model: Speciality, as: "speciality", attributes: ["id", "name"] },
+      { model: Level, as: "level", attributes: ["id", "name"] },
+      { model: User, as: "teacher", attributes: ["id", "firstname", "lastname", "email"] },
+    ];
+
+    let classrooms = [];
+    if (user.role === "teacher") {
+      classrooms = await Class.findAll({
+        where: { teacherId: user.id },
+        include,
+        order: [["createdAt", "DESC"]],
+      });
+    } else if (user.role === "student") {
+      const enrollments = await Enrollment.findAll({
+        where: { studentId: user.id },
+        include: [{ model: Class, as: "class", include }],
+      });
+      classrooms = enrollments.map((e) => e.class).filter(Boolean);
+    } else {
+      classrooms = await Class.findAll({ include, order: [["createdAt", "DESC"]] });
+    }
+
+    res.json(classrooms);
+  } catch (err) {
+    console.error("Error fetching user classrooms:", err);
+    res.status(500).json({ error: "Failed to fetch classrooms" });
   }
 });
 

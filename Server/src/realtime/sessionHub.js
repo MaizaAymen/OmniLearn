@@ -201,6 +201,7 @@ function createSession({
     participants:    {},
     codeByLanguage:  { [language]: starterCode || "" },
     drawStrokes:     [],
+    tldrawStore:     {},
     createdAt:       Date.now(),
   };
 
@@ -299,6 +300,7 @@ function buildSessionPayload(session) {
     defaultRole:    session.defaultRole,
     codeByLanguage: session.codeByLanguage,
     drawStrokes:    session.drawStrokes,
+    tldrawStore:    session.tldrawStore,
   };
 }
 
@@ -708,6 +710,22 @@ function setupSessionHub(httpServer) {
       if (!session || !hasPermission(session, socket.id, "canEdit")) return;
       session.drawStrokes = [];
       io.to(getSessionRoom(problemId, sessionId)).emit("session:draw:cleared");
+    });
+
+    // ── tldraw collaborative whiteboard ───────────────────────────────────
+    socket.on("session:tldraw:change", (payload) => {
+      const { problemId, sessionId, changes } = payload || {};
+      const session = findSession(problemId, sessionId);
+      if (!session || !changes) return;
+      if (!hasPermission(session, socket.id, "canEdit")) {
+        socket.emit("session:permission:error", { message: "You do not have edit access" });
+        return;
+      }
+      const { added, updated, removed } = changes;
+      if (added)   for (const r of Object.values(added))         session.tldrawStore[r.id] = r;
+      if (updated) for (const [, next] of Object.values(updated)) session.tldrawStore[next.id] = next;
+      if (removed) for (const r of Object.values(removed))        delete session.tldrawStore[r.id];
+      socket.to(getSessionRoom(problemId, sessionId)).emit("session:tldraw:change", { changes });
     });
 
     // ── Disconnect ────────────────────────────────────────────────────────

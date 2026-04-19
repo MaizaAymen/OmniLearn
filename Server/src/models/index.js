@@ -28,6 +28,7 @@ const Speciality = require("./Speciality");
 const Level = require("./Level");
 const Lesson = require("./Lesson");
 const UmlDiagram = require("./UmlDiagram");
+const StudentProblemSet = require("./StudentProblemSet");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -162,6 +163,10 @@ ChatMessage.belongsTo(Course, { foreignKey: "courseId", as: "course" });
 User.hasMany(Notification, { foreignKey: "userId", as: "notifications" });
 Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// ─── User ↔ StudentProblemSets (1:N) ─────────────────────────────────────────
+User.hasMany(StudentProblemSet, { foreignKey: "studentId", as: "problemSets" });
+StudentProblemSet.belongsTo(User, { foreignKey: "studentId", as: "student" });
+
 // ─── User ↔ CodeSubmissions (1:N) ────────────────────────────────────────────
 User.hasMany(CodeSubmission, { foreignKey: "userId", as: "codeSubmissions" });
 CodeSubmission.belongsTo(User, { foreignKey: "userId", as: "user" });
@@ -193,6 +198,7 @@ module.exports = {
   ChatMessage,
   Notification,
   CodeSubmission,
+  StudentProblemSet,
   Grade,
   Speciality,
   Level,

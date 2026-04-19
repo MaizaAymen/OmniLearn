@@ -10,13 +10,18 @@ import {
   CopyIcon,
   CheckIcon,
 } from "lucide-react";
-import { Tldraw } from "tldraw";
+import { Tldraw, createTLStore } from "tldraw";
 import "tldraw/tldraw.css";
+
 function ProblemDescription({
   problem,
   currentProblemId,
   onProblemChange,
   allProblems,
+  socket,
+  sessionId,
+  problemId,
+  tldrawInitialStore,
 }) {
   const [activeTab, setActiveTab] = useState("description");
   const [copiedIdx, setCopiedIdx] = useState(null);
@@ -24,6 +29,55 @@ function ProblemDescription({
   const roadmapCanvasRef = useRef(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 500 });
   const [roadmapZoom, setRoadmapZoom] = useState(1);
+
+  // ── Collaborative tldraw store (recreated when session changes) ──────────
+  const tldrawStore = useMemo(() => createTLStore(), [sessionId]);
+  const isApplyingRemoteRef = useRef(false);
+
+  // Load initial snapshot from server when joining a session
+  useEffect(() => {
+    if (!tldrawInitialStore || Object.keys(tldrawInitialStore).length === 0) return;
+    isApplyingRemoteRef.current = true;
+    tldrawStore.mergeRemoteChanges(() => {
+      tldrawStore.put(Object.values(tldrawInitialStore));
+    });
+    isApplyingRemoteRef.current = false;
+  }, [tldrawStore, tldrawInitialStore]);
+
+  // Socket sync: broadcast local changes + apply remote changes
+  useEffect(() => {
+    if (!socket || !sessionId) return;
+
+    const unsubscribe = tldrawStore.listen(
+      (entry) => {
+        if (isApplyingRemoteRef.current || !entry.changes) return;
+        socket.emit("session:tldraw:change", {
+          problemId,
+          sessionId,
+          changes: entry.changes,
+        });
+      },
+      { source: "user", scope: "document" }
+    );
+
+    const onRemoteChange = ({ changes }) => {
+      if (!changes) return;
+      isApplyingRemoteRef.current = true;
+      tldrawStore.mergeRemoteChanges(() => {
+        const { added, updated, removed } = changes;
+        if (added)   tldrawStore.put(Object.values(added));
+        if (updated) tldrawStore.put(Object.values(updated).map(([, next]) => next));
+        if (removed) tldrawStore.remove(Object.values(removed).map((r) => r.id));
+      });
+      isApplyingRemoteRef.current = false;
+    };
+
+    socket.on("session:tldraw:change", onRemoteChange);
+    return () => {
+      unsubscribe();
+      socket.off("session:tldraw:change", onRemoteChange);
+    };
+  }, [socket, sessionId, problemId, tldrawStore]);
 
   const roadmapNodes = useMemo(() => {
     if (!problem?.roadmap || !Array.isArray(problem.roadmap.nodes)) return [];
@@ -505,7 +559,7 @@ function ProblemDescription({
           }`}
         >
           <div className="h-full w-full rounded-lg border border-base-300 overflow-hidden bg-base-100">
-            <Tldraw />
+            <Tldraw store={tldrawStore} />
           </div>
         </div>
       </div>

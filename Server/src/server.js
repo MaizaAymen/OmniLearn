@@ -13,6 +13,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const UmlRoutes = require("./ai/UmlRoute");
 const AiRoutes = require("./ai/Ai");
 const pdfRoutes = require("./routes/pdfRoutes");
+const submissionRoutes = require("./routes/submissionRoutes");
 const { setupSessionHub } = require("./realtime/sessionHub");
 // Import models/index.js to register all models and associations
 const models = require("./models");
@@ -34,6 +35,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/ai", AiRoutes);
 app.use("/api/pdf", pdfRoutes);
 app.use("/api/uml", UmlRoutes);
+app.use("/api/submissions", submissionRoutes);
 
 
 app.get("/", (req, res) => {

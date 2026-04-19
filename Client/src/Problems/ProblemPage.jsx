@@ -9,10 +9,10 @@ import CodeEditorPanel from "../Codeeditor/Codeeditor";
 import { executeCode } from "../Codeeditor/Api";
 import { StreamVideoProvider } from "../ScreenShare/StreamVideoProvider";
 import { ScreenRecorder } from "../ScreenShare/ScreenRecorder";
-import SessionWhiteboard from "./SessionWhiteboard";
 
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
+import Cookies from "js-cookie";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -48,12 +48,11 @@ function ProblemPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false); //correcting state
-  const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result | board
+  const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result
   const [showDiff, setShowDiff] = useState(false);
   const [originalCode, setOriginalCode] = useState("");
   const socketRef = useRef(null);
   const attemptedJoinFromLinkRef = useRef(null);
-  const whiteboardRef = useRef(null);
 
   // Realtime sessions (per-problem)
   const [displayName, setDisplayName] = useState("Guest");
@@ -90,7 +89,7 @@ function ProblemPage() {
   const [sessionParticipants, setSessionParticipants] = useState([]);
   const [sessionParticipantDetails, setSessionParticipantDetails] = useState([]);
   const [sessionCodeByLanguage, setSessionCodeByLanguage] = useState({});
-  const [sharedStrokes, setSharedStrokes] = useState([]);
+  const [tldrawInitialStore, setTldrawInitialStore] = useState({});
   const [waitingRoomUsers, setWaitingRoomUsers] = useState([]);
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -194,20 +193,6 @@ function ProblemPage() {
       if (language === selectedLanguageRef.current) setCode(code || "");
     });
 
-    socket.on("session:draw:added", ({ stroke }) => {
-      if (!stroke) return;
-      // 1. Update persistent state so strokes survive tab switches / remounts
-      setSharedStrokes((prev) => [...prev, stroke]);
-      // 2. If the whiteboard is currently mounted, draw immediately (no flicker)
-      whiteboardRef.current?.addRemoteStroke(stroke);
-    });
-
-    socket.on("session:draw:cleared", () => {
-      // Setting sharedStrokes to [] triggers the strokes-sync useEffect in
-      // SessionWhiteboard, which clears the canvas and resets allStrokesRef
-      setSharedStrokes([]);
-    });
-
     // Waiting room events
     socket.on("session:waiting:placed", ({ sessionName: sName }) => {
       setIsInWaitingRoom(true);
@@ -220,7 +205,7 @@ function ProblemPage() {
       setCurrentUserRole(userRole || "editor");
       setCurrentUserPermission(userPermission || "editable");
       setSessionCodeByLanguage(joined.codeByLanguage || {});
-      setSharedStrokes(joined.drawStrokes || []);
+      setTldrawInitialStore(joined.tldrawStore || {});
       const codeForLang = joined.codeByLanguage?.[selectedLanguageRef.current];
       if (codeForLang !== undefined) setCode(codeForLang || "");
       toast.success("Approved! You have joined the session.");
@@ -268,7 +253,7 @@ function ProblemPage() {
     setCurrentUserPermission("editable");
     setSessionParticipants([]);
     setSessionCodeByLanguage({});
-    setSharedStrokes([]);
+    setTldrawInitialStore({});
     setParticipantHistory([]);
     prevParticipantsRef.current = [];
   }, [currentProblemId]);
@@ -458,7 +443,7 @@ function ProblemPage() {
         setCurrentUserRole(response.userRole || "host");
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
-        setSharedStrokes(joined.drawStrokes || []);
+        setTldrawInitialStore(joined.tldrawStore || {});
 
         // Reset form
         setSessionName("");
@@ -502,7 +487,7 @@ function ProblemPage() {
         setCurrentUserRole(response.userRole || "editor");
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
-        setSharedStrokes(joined.drawStrokes || []);
+        setTldrawInitialStore(joined.tldrawStore || {});
         setSessionJoinId("");
         setSessionJoinPassword("");
         setSearchParams((prev) => {
@@ -529,7 +514,7 @@ function ProblemPage() {
     setSessionParticipants([]);
     setSessionParticipantDetails([]);
     setSessionCodeByLanguage({});
-    setSharedStrokes([]);
+    setTldrawInitialStore({});
     setParticipantHistory([]);
     setWaitingRoomUsers([]);
     setIsInWaitingRoom(false);
@@ -575,30 +560,6 @@ function ProblemPage() {
     attemptedJoinFromLinkRef.current = null;
   }, [currentProblemId]);
 
-  const handleAddStroke = (stroke) => {
-    // 1. Persist locally so the stroke survives tab switches / remounts
-    setSharedStrokes((prev) => [...prev, stroke]);
-    // 2. Broadcast to the server
-    if (!isInSession || !socketRef.current) return;
-    socketRef.current.emit("session:draw:add", {
-      problemId: currentProblemId,
-      sessionId: activeSession.id,
-      stroke,
-    });
-  };
-
-  const handleClearBoard = () => {
-    // setSharedStrokes([]) → triggers strokes-sync useEffect in SessionWhiteboard
-    // → clears the canvas and resets its allStrokesRef
-    setSharedStrokes([]);
-
-    if (!isInSession || !socketRef.current) return;
-    socketRef.current.emit("session:draw:clear", {
-      problemId: currentProblemId,
-      sessionId: activeSession.id,
-    });
-  };
-
   const handleRunCode = async () => {
     setIsRunning(true);
     setActiveRightTab("result");
@@ -630,21 +591,37 @@ function ProblemPage() {
       const result = await executeCode(selectedLanguage, code);
       setOutput(result);
 
+      let isCorrect = false;
       if (result.success) {
         const expected = currentProblem.expectedOutput?.[selectedLanguage];
-        const actual = result.output?.trim();
-        if (expected && actual === expected.trim()) {
+        const normalize = (s) => s?.trim().replace(/\r\n/g, "\n").replace(/ +\n/g, "\n") ?? "";
+        const actual = normalize(result.output);
+        if (!expected || actual === normalize(expected)) {
+          isCorrect = true;
           toast.success("All test cases passed! 🎉");
-          confetti({
-            particleCount: 150,
-            spread: 80,
-            origin: { y: 0.6 },
-          });
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         } else {
           toast.error("Output doesn't match expected result");
         }
       } else {
         toast.error("Submission failed");
+      }
+
+      const storedUser = (() => { try { return JSON.parse(Cookies.get("user") || "{}"); } catch { return {}; } })();
+      if (storedUser?.id) {
+        fetch("http://localhost:5000/api/submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: storedUser.id,
+            problemId: currentProblemId,
+            userCode: code,
+            language: selectedLanguage,
+            status: result.success ? (isCorrect ? "passed" : "failed") : "error",
+            score: isCorrect ? 100 : 0,
+            isCorrect,
+          }),
+        }).catch(() => {});
       }
     } catch (err) {
       setOutput({ success: false, output: "", error: err.message });
@@ -1066,6 +1043,10 @@ function ProblemPage() {
             currentProblemId={currentProblemId}
             onProblemChange={handleProblemChange}
             allProblems={Object.values(allProblemsById)}
+            socket={socketRef.current}
+            sessionId={activeSession?.id}
+            problemId={currentProblemId}
+            tldrawInitialStore={tldrawInitialStore}
           />
         </div>
 
@@ -1156,16 +1137,6 @@ function ProblemPage() {
                   />
                 )}
               </button>
-              <button
-                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
-                  activeRightTab === "board"
-                    ? "border-primary text-primary"
-                    : "border-transparent text-base-content/50 hover:text-base-content/80"
-                }`}
-                onClick={() => setActiveRightTab("board")}
-              >
-                Board
-              </button>
             </div>
 
             {/* Tab content */}
@@ -1195,16 +1166,8 @@ function ProblemPage() {
                     </div>
                   ))}
                 </div>
-              ) : activeRightTab === "result" ? (
-                <OutputPanel output={output} />
               ) : (
-                <SessionWhiteboard
-                  ref={whiteboardRef}
-                  enabled={isInSession}
-                  strokes={sharedStrokes}
-                  onAddStroke={handleAddStroke}
-                  onClear={handleClearBoard}
-                />
+                <OutputPanel output={output} />
               )}
             </div>
           </div>
