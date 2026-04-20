@@ -29,6 +29,7 @@ const Level = require("./Level");
 const Lesson = require("./Lesson");
 const UmlDiagram = require("./UmlDiagram");
 const StudentProblemSet = require("./StudentProblemSet");
+const ClassAssignment = require("./ClassAssignment");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -167,6 +168,10 @@ Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(StudentProblemSet, { foreignKey: "studentId", as: "problemSets" });
 StudentProblemSet.belongsTo(User, { foreignKey: "studentId", as: "student" });
 
+// ─── Module ↔ ClassAssignments (1:N) ─────────────────────────────────────────
+Module.hasMany(ClassAssignment, { foreignKey: "moduleId", as: "assignments" });
+ClassAssignment.belongsTo(Module, { foreignKey: "moduleId", as: "module" });
+
 // ─── User ↔ CodeSubmissions (1:N) ────────────────────────────────────────────
 User.hasMany(CodeSubmission, { foreignKey: "userId", as: "codeSubmissions" });
 CodeSubmission.belongsTo(User, { foreignKey: "userId", as: "user" });
@@ -204,5 +209,6 @@ module.exports = {
   Level,
   Lesson,
   UmlDiagram,
+  ClassAssignment,
 };
 

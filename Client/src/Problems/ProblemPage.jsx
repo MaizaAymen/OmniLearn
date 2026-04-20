@@ -594,7 +594,14 @@ function ProblemPage() {
       let isCorrect = false;
       if (result.success) {
         const expected = currentProblem.expectedOutput?.[selectedLanguage];
-        const normalize = (s) => s?.trim().replace(/\r\n/g, "\n").replace(/ +\n/g, "\n") ?? "";
+        const normalize = (s) =>
+          (s ?? "")
+            .replace(/\r\n/g, "\n")
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .join("\n")
+            .toLowerCase();
         const actual = normalize(result.output);
         if (!expected || actual === normalize(expected)) {
           isCorrect = true;
@@ -639,8 +646,9 @@ function ProblemPage() {
 
     setIsCorrecting(true);
     try {
+      const expected = currentProblem?.expectedOutput?.[selectedLanguage];
       const problemContext = currentProblem
-        ? `${currentProblem.title}: ${currentProblem.description?.text || ""}`
+        ? `${currentProblem.title}: ${currentProblem.description?.text || ""}${expected ? `\n\nThe corrected code MUST produce this exact output when run:\n${expected}` : ""}`
         : "General coding problem";
 
       const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {

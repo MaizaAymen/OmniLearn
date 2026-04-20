@@ -6,7 +6,7 @@ const {slugify} = require("../utils/slugify");
 
 
 const groq = new Groq({
-  apiKey: "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",
+  apiKey: "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",
 });
 
 async function generateRoadmap(topic) {
@@ -406,6 +406,8 @@ IMPORTANT RULES:
 2. Fix bugs, syntax errors, logic errors, and improve the code
 3. Keep the same overall structure and approach
 4. For each change, provide the line number and what was changed
+5. ALWAYS preserve ALL test case invocations, print/console.log statements, and any code that produces output at the bottom of the file - never remove them
+6. The corrected code MUST still execute and print the same output format as the original intended
 
 Required JSON schema:
 {
@@ -446,6 +448,7 @@ Return the corrected code with detailed changes in JSON format.`
     ],
     temperature: 0.3,
     max_tokens: 4096,
+    response_format: { type: "json_object" },
   });
 
   let text = completion.choices[0].message.content;
@@ -453,7 +456,17 @@ Return the corrected code with detailed changes in JSON format.`
   const match = text.match(/\{[\s\S]*\}/);
   if (match) text = match[0];
 
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    const codeMatch = text.match(/```[a-z]*\n([\s\S]*?)```/i);
+    const correctedCode = codeMatch ? codeMatch[1].trim() : code;
+    return {
+      correctedCode,
+      changes: [],
+      summary: "Code reviewed (auto-recovered from parse error)",
+    };
+  }
 }
 
 router.post("/ai/correct-code", async (req, res) => {

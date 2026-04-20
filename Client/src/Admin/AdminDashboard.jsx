@@ -23,6 +23,7 @@ import {
   Modal,
   ConfigProvider,
   Drawer,
+  Tabs,
 } from "antd";
 import {
   PlusOutlined,
@@ -42,6 +43,7 @@ import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
 import "prismjs/themes/prism-tomorrow.css";
 import LessonPdfViewer from "./LessonPdfViewer";
+import ModuleAssignmentsTab from "./ModuleAssignmentsTab";
 import AdminLayout from "./AdminLayout";
 import "./AdminDashboard.css";
 import {
@@ -1702,16 +1704,34 @@ const AdminDashboard = () => {
                       { title: selectedModule.title || "Module" },
                     ]}
                   />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={openLessonModalFromModule}>
-                      Add Lesson
-                    </Button>
-                  </div>
                 </Space>
 
                 <Divider className="section-divider" />
 
-                <LessonPdfViewer lessons={selectedModuleLessons} />
+                <Tabs
+                  defaultActiveKey="lessons"
+                  items={[
+                    {
+                      key: "lessons",
+                      label: "Lessons",
+                      children: (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                            <Button type="primary" icon={<PlusOutlined />} onClick={openLessonModalFromModule}>
+                              Add Lesson
+                            </Button>
+                          </div>
+                          <LessonPdfViewer lessons={selectedModuleLessons} />
+                        </>
+                      ),
+                    },
+                    {
+                      key: "assignments",
+                      label: "Assignments",
+                      children: <ModuleAssignmentsTab moduleId={selectedModule.id} />,
+                    },
+                  ]}
+                />
               </>
             )}
           </Card>

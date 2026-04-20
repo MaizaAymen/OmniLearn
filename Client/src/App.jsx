@@ -17,6 +17,9 @@ import UmlProblems from "./Uml/Problem";
 import VideoCall from "./components/VideoCall";
 import MeetingRoom from "./components/MeetingRoom";
 import Profile from "./components/Profile";
+import ClassAssignmentsPage from "./Classroom/ClassAssignmentsPage";
+import MyClassrooms from "./Classroom/MyClassrooms";
+import ClassroomView from "./Classroom/ClassroomView";
 
 function App() {
   const location = useLocation();
@@ -38,6 +41,9 @@ function App() {
       <Route path="/uml/problems" element={<UmlProblems />} />
       <Route path="/uml/problems/:id" element={<UMLEditor />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/assignments" element={<ClassAssignmentsPage />} />
+      <Route path="/my-classrooms" element={<MyClassrooms />} />
+      <Route path="/my-classrooms/:classId" element={<ClassroomView />} />
     </Routes>
   );
 

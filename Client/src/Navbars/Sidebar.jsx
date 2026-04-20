@@ -49,6 +49,11 @@ const Sidebar = ({ children }) => {
         label: 'Classroom PDFs',
       },
       {
+        key: '/my-classrooms',
+        icon: <ReadOutlined />,
+        label: 'My Classrooms',
+      },
+      {
         key: '/pdf-assistant',
         icon: <ReadOutlined />,
         label: 'PDF Assistant',
@@ -96,6 +101,7 @@ const Sidebar = ({ children }) => {
     if (location.pathname.startsWith('/problems')) return '/problems';
     if (location.pathname.startsWith('/live-sessions')) return '/live-sessions';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
+    if (location.pathname.startsWith('/my-classrooms')) return '/my-classrooms';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
