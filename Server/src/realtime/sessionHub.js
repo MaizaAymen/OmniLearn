@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
+const { ExamSubmission } = require("../models");
 
 // ── Role permission matrix ─────────────────────────────────────────────────
 const ROLE_PERMISSIONS = {
@@ -12,6 +13,98 @@ const ROLE_PERMISSIONS = {
 const VALID_ROLES        = new Set(["host", "co-host", "editor", "viewer"]);
 const VALID_COLLAB_MODES = new Set(["free", "controlled", "turn-based"]);
 const VALID_VISIBILITIES = new Set(["public", "private", "unlisted"]);
+
+// ── Limits & defaults (one place to tweak) ────────────────────────────────
+const LIMITS = {
+  minParticipants: 1,
+  maxParticipants: 200,
+  minTurnSeconds:  5,
+};
+
+const DEFAULTS = {
+  sessionName:     "Untitled Session",
+  hostName:        "host",
+  maxParticipants: 10,
+  visibility:      "public",
+  defaultRole:     "editor",
+  collabMode:      "free",
+  turnDuration:    30,
+};
+
+// Clamp a number into [min, max]; if invalid, return fallback.
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+// Build the default exam block. `enabled: false` means this is a
+// normal session; when true, teacher calls exam:start to begin the timer.
+function defaultExam(raw = {}) {
+  return {
+    enabled:             Boolean(raw?.enabled),
+    durationMinutes:     clampNumber(raw?.durationMinutes, 1, 300, 30),
+    lockLanguage:        raw?.lockLanguage !== false,
+    autoSubmitOnTimeout: raw?.autoSubmitOnTimeout !== false,
+
+    // Runtime state (filled in when exam:start fires)
+    phase:     "waiting",   // "waiting" | "active" | "ended"
+    startedAt: null,
+    endsAt:    null,
+  };
+}
+
+// Build the default collab block. Used by createSession and by any
+// future migration that needs to fill in missing fields.
+function defaultCollab(raw = {}) {
+  return {
+    mode:                VALID_COLLAB_MODES.has(raw.mode) ? raw.mode : DEFAULTS.collabMode,
+    turnDuration:        clampNumber(raw.turnDuration, LIMITS.minTurnSeconds, 3600, DEFAULTS.turnDuration),
+    showLiveCursors:     raw.showLiveCursors  !== false,
+    showSelections:      raw.showSelections   !== false,
+    typingIndicators:    raw.typingIndicators !== false,
+    currentTurnSocketId: null,
+    turnStartedAt:       null,
+  };
+}
+
+// Take the raw client payload and produce a clean, validated config.
+// Pure function — no side effects, easy to unit-test.
+function normalizeCreateConfig(raw = {}) {
+  return {
+    // Identity
+    problemId:   raw.problemId,
+    name:        (raw.sessionName || DEFAULTS.sessionName).toString().slice(0, 100),
+    hostName:    normalizeName(raw.hostName || DEFAULTS.hostName),
+    language:    raw.language,
+    starterCode: raw.starterCode || "",
+
+    // Access & security
+    visibility:          VALID_VISIBILITIES.has(raw.visibility) ? raw.visibility : DEFAULTS.visibility,
+    passwordHash:        raw.password ? bcrypt.hashSync(String(raw.password), 8) : "",
+    allowAnonymous:      raw.allowAnonymous !== false,
+    whitelist:           parseNameList(raw.whitelist),
+    blacklist:           parseNameList(raw.blacklist),
+    requireJoinApproval: Boolean(raw.requireJoinApproval),
+
+    // Limits
+    maxParticipants: clampNumber(raw.maxParticipants, LIMITS.minParticipants, LIMITS.maxParticipants, DEFAULTS.maxParticipants),
+    autoLock:        Boolean(raw.autoLock),
+    allowOverflow:   Boolean(raw.allowOverflow),
+
+    // Roles
+    defaultRole: ["editor", "viewer"].includes(raw.defaultRole) ? raw.defaultRole : DEFAULTS.defaultRole,
+
+    // Collaboration
+    collab: defaultCollab(raw.collab),
+
+    // Classroom
+    teacherMode: Boolean(raw.teacherMode),
+
+    // Exam
+    exam: defaultExam(raw.exam),
+  };
+}
 
 // ── In-memory stores ──────────────────────────────────────────────────────
 // { [problemId]: { [sessionId]: session } }
@@ -146,63 +239,54 @@ function findSessionById(sessionId) {
 }
 
 // ── Session lifecycle ─────────────────────────────────────────────────────
-function createSession({
-  problemId, sessionName, hostName, language, starterCode,
-  maxParticipants, autoLock, allowOverflow,
-  password, visibility, allowAnonymous,
-  whitelist, blacklist, requireJoinApproval,
-  defaultRole, collab,
-}) {
-  if (!sessionsByProblem[problemId]) sessionsByProblem[problemId] = {};
+function createSession(rawConfig) {
+  const cfg = normalizeCreateConfig(rawConfig);
+  const { problemId, language, starterCode } = cfg;
 
-  const safeMax        = Math.max(1, Math.min(200, Number(maxParticipants) || 10));
-  const safeVisibility = VALID_VISIBILITIES.has(visibility) ? visibility : "public";
-  const safeDefault    = ["editor", "viewer"].includes(defaultRole) ? defaultRole : "editor";
-  const safeMode       = VALID_COLLAB_MODES.has(collab?.mode) ? collab.mode : "free";
-  const passwordHash   = password ? bcrypt.hashSync(String(password), 8) : "";
+  if (!sessionsByProblem[problemId]) sessionsByProblem[problemId] = {};
 
   const sessionId = generateUniqueSessionId();
 
   sessionsByProblem[problemId][sessionId] = {
     id:        sessionId,
     problemId,
-    name:      sessionName || "Untitled Session",
-    hostName:  normalizeName(hostName || "host"),
+    name:      cfg.name,
+    hostName:  cfg.hostName,
 
-    // B. Access & Security
-    visibility:         safeVisibility,
-    passwordHash,
-    allowAnonymous:     allowAnonymous !== false,
-    whitelist:          parseNameList(whitelist),
-    blacklist:          parseNameList(blacklist),
-    requireJoinApproval: Boolean(requireJoinApproval),
-    waitingRoom:        {},   // { [socketId]: { socketId, name, requestedAt } }
+    // Access & security
+    visibility:          cfg.visibility,
+    passwordHash:        cfg.passwordHash,
+    allowAnonymous:      cfg.allowAnonymous,
+    whitelist:           cfg.whitelist,
+    blacklist:           cfg.blacklist,
+    requireJoinApproval: cfg.requireJoinApproval,
+    waitingRoom:         {},
 
-    // C. Limits
-    maxParticipants: safeMax,
-    autoLock:        Boolean(autoLock),
+    // Limits
+    maxParticipants: cfg.maxParticipants,
+    autoLock:        cfg.autoLock,
+    allowOverflow:   cfg.allowOverflow,
     locked:          false,
-    allowOverflow:   Boolean(allowOverflow),
 
-    // D. Roles
-    defaultRole: safeDefault,
+    // Roles
+    defaultRole: cfg.defaultRole,
 
-    // E. Collaboration
-    collab: {
-      mode:              safeMode,
-      turnDuration:      Math.max(5, Number(collab?.turnDuration) || 30),
-      showLiveCursors:   collab?.showLiveCursors !== false,
-      showSelections:    collab?.showSelections !== false,
-      typingIndicators:  collab?.typingIndicators !== false,
-      currentTurnSocketId: null,
-      turnStartedAt:     null,
-    },
+    // Collaboration
+    collab: cfg.collab,
 
-    participants:    {},
-    codeByLanguage:  { [language]: starterCode || "" },
-    drawStrokes:     [],
-    tldrawStore:     {},
-    createdAt:       Date.now(),
+    // Workspace
+    participants:   {},
+    codeByLanguage: { [language]: starterCode },
+    drawStrokes:    [],
+    tldrawStore:    {},
+    studentWork:    {},
+    teacherMode:    cfg.teacherMode,
+
+    // Exam
+    exam:         cfg.exam,
+    _examTimer:   null,   // setTimeout handle; not serialized to clients
+
+    createdAt:    Date.now(),
   };
 
   return sessionsByProblem[problemId][sessionId];
@@ -210,6 +294,8 @@ function createSession({
 
 function addParticipant(session, socketId, userName, role) {
   session.participants[socketId] = { name: userName, role };
+  if (!session.studentWork) session.studentWork = {};
+  if (!session.studentWork[socketId]) session.studentWork[socketId] = { code: "", tldrawStore: {} };
 
   // Auto-lock when full
   if (
@@ -236,6 +322,7 @@ function removeMembership(socketId) {
 
   if (session) {
     delete session.participants[socketId];
+    if (session.studentWork) delete session.studentWork[socketId];
 
     // Unlock if no longer at capacity
     if (session.locked && !session.allowOverflow) {
@@ -247,6 +334,11 @@ function removeMembership(socketId) {
     const entries = Object.entries(session.participants);
 
     if (entries.length === 0) {
+      // Cancel any pending exam timer so it doesn't fire on an orphan session
+      if (session._examTimer) {
+        clearTimeout(session._examTimer);
+        session._examTimer = null;
+      }
       delete sessionsByProblem[problemId][sessionId];
       if (Object.keys(sessionsByProblem[problemId]).length === 0) {
         delete sessionsByProblem[problemId];
@@ -301,7 +393,73 @@ function buildSessionPayload(session) {
     codeByLanguage: session.codeByLanguage,
     drawStrokes:    session.drawStrokes,
     tldrawStore:    session.tldrawStore,
+    teacherMode:    Boolean(session.teacherMode),
+    exam:           publicExam(session.exam),
   };
+}
+
+// Strip non-serializable fields before sending exam state to clients.
+function publicExam(exam) {
+  if (!exam) return null;
+  return {
+    enabled:         exam.enabled,
+    durationMinutes: exam.durationMinutes,
+    lockLanguage:    exam.lockLanguage,
+    phase:           exam.phase,
+    startedAt:       exam.startedAt,
+    endsAt:          exam.endsAt,
+  };
+}
+
+// ── Exam helpers ──────────────────────────────────────────────────────────
+
+// Save one row per student's current code and emit exam:ended.
+// Called by the timer or if the teacher ends the exam early.
+async function endExam(io, session, reason = "timed-out") {
+  if (!session?.exam || session.exam.phase === "ended") return;
+
+  session.exam.phase = "ended";
+  if (session._examTimer) {
+    clearTimeout(session._examTimer);
+    session._examTimer = null;
+  }
+
+  const startedAt = session.exam.startedAt || Date.now();
+  const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
+
+  // Snapshot each participant who has a studentWork buffer
+  const rows = [];
+  for (const [socketId, participant] of Object.entries(session.participants)) {
+    // Skip the host/co-host — they aren't sitting the exam
+    if (participant.role === "host" || participant.role === "co-host") continue;
+
+    const work = session.studentWork?.[socketId] || { code: "" };
+    rows.push({
+      sessionId:       session.id,
+      problemId:       session.problemId || null,
+      studentSocketId: socketId,
+      studentName:     participant.name,
+      userId:          participant.userId || null,
+      code:            work.code || "",
+      language:        Object.keys(session.codeByLanguage || {})[0] || null,
+      finalStatus:     reason,   // "timed-out" | "submitted" | "abandoned"
+      durationSeconds,
+    });
+  }
+
+  if (rows.length > 0) {
+    try {
+      await ExamSubmission.bulkCreate(rows);
+    } catch (err) {
+      console.error("ExamSubmission save failed:", err.message);
+    }
+  }
+
+  io.to(getSessionRoom(session.problemId, session.id)).emit("exam:ended", {
+    reason,
+    endedAt: Date.now(),
+    count:   rows.length,
+  });
 }
 
 // ── Socket.IO setup ───────────────────────────────────────────────────────
@@ -334,35 +492,23 @@ function setupSessionHub(httpServer) {
     });
 
     // ── Create session (auto-joins creator as host) ───────────────────────
-    socket.on("session:create", (payload, ack) => {
-      const {
-        problemId, sessionName, hostName, language, starterCode,
-        maxParticipants, autoLock, allowOverflow,
-        password, visibility, allowAnonymous,
-        whitelist, blacklist, requireJoinApproval,
-        defaultRole, collab,
-      } = payload || {};
-
-      if (!problemId || !language) {
+    socket.on("session:create", (payload = {}, ack) => {
+      if (!payload.problemId || !payload.language) {
         return ack?.({ ok: false, message: "Missing problemId or language" });
       }
 
-      const safeHostName = (hostName || "Host").trim() || "Host";
-      const session = createSession({
-        problemId, sessionName, hostName: safeHostName, language, starterCode,
-        maxParticipants, autoLock, allowOverflow,
-        password, visibility, allowAnonymous,
-        whitelist, blacklist, requireJoinApproval,
-        defaultRole, collab,
-      });
+      const session = createSession(payload);
+      const { problemId } = session;
 
       // Leave any previous session
       const old = removeMembership(socket.id);
       if (old?.problemId) socket.leave(getSessionRoom(old.problemId, old.sessionId));
       removeFromWaiting(socket.id);
 
-      // Join as host
-      addParticipant(session, socket.id, safeHostName, "host");
+      // Join as host. session.hostName is lowercase (for matching); the
+      // participant entry keeps the original casing for display.
+      const displayHostName = String(payload.hostName || "Host").trim() || "Host";
+      addParticipant(session, socket.id, displayHostName, "host");
       socket.join(getSessionRoom(problemId, session.id));
       socketToMembership.set(socket.id, { problemId, sessionId: session.id });
 
@@ -593,6 +739,90 @@ function setupSessionHub(httpServer) {
       ack?.({ ok: true, collab: session.collab });
     });
 
+    // ── Update post-creation session settings (host only) ─────────────────
+    socket.on("session:settings:update", (payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "No permission to change settings" });
+      }
+
+      const { name, teacherMode, locked, requireJoinApproval, maxParticipants, visibility } = payload || {};
+
+      if (typeof name === "string" && name.trim())   session.name = name.trim().slice(0, 100);
+      if (teacherMode !== undefined)                 session.teacherMode = Boolean(teacherMode);
+      if (locked !== undefined)                      session.locked = Boolean(locked);
+      if (requireJoinApproval !== undefined)         session.requireJoinApproval = Boolean(requireJoinApproval);
+      if (maxParticipants !== undefined)             session.maxParticipants = Math.max(1, Math.min(200, Number(maxParticipants) || session.maxParticipants));
+      if (visibility !== undefined && VALID_VISIBILITIES.has(visibility)) session.visibility = visibility;
+
+      const updated = {
+        name:                session.name,
+        teacherMode:         Boolean(session.teacherMode),
+        locked:              session.locked,
+        requireJoinApproval: session.requireJoinApproval,
+        maxParticipants:     session.maxParticipants,
+        visibility:          session.visibility,
+      };
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:settings:updated", updated);
+      broadcastSessionLists(io, mem.problemId);
+      ack?.({ ok: true, settings: updated });
+    });
+
+    // ── Exam: teacher starts the timer ────────────────────────────────────
+    socket.on("exam:start", (_payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "Only the host can start an exam" });
+      }
+      if (!session.exam?.enabled) {
+        return ack?.({ ok: false, message: "Exam mode is not enabled for this session" });
+      }
+      if (session.exam.phase !== "waiting") {
+        return ack?.({ ok: false, message: "Exam has already started or ended" });
+      }
+
+      const now = Date.now();
+      const durationMs = session.exam.durationMinutes * 60 * 1000;
+
+      session.exam.phase     = "active";
+      session.exam.startedAt = now;
+      session.exam.endsAt    = now + durationMs;
+
+      // Server-side timer — the only clock that matters
+      session._examTimer = setTimeout(() => {
+        endExam(io, session, "timed-out");
+      }, durationMs);
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("exam:state", {
+        exam: publicExam(session.exam),
+      });
+      ack?.({ ok: true, exam: publicExam(session.exam) });
+    });
+
+    // ── Exam: teacher ends early ──────────────────────────────────────────
+    socket.on("exam:end", async (_payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "Only the host can end the exam" });
+      }
+
+      await endExam(io, session, "submitted");
+      ack?.({ ok: true });
+    });
+
     // ── Advance turn ──────────────────────────────────────────────────────
     socket.on("session:turn:next", (_payload, ack) => {
       const mem = socketToMembership.get(socket.id);
@@ -664,6 +894,12 @@ function setupSessionHub(httpServer) {
       const session = findSession(problemId, sessionId);
       if (!session || !language) return;
 
+      // Exam has ended — reject further edits
+      if (session.exam?.phase === "ended") {
+        socket.emit("session:permission:error", { message: "Exam is over" });
+        return;
+      }
+
       if (!hasPermission(session, socket.id, "canEdit")) {
         socket.emit("session:permission:error", { message: "You do not have edit access" });
         return;
@@ -726,6 +962,72 @@ function setupSessionHub(httpServer) {
       if (updated) for (const [, next] of Object.values(updated)) session.tldrawStore[next.id] = next;
       if (removed) for (const r of Object.values(removed))        delete session.tldrawStore[r.id];
       socket.to(getSessionRoom(problemId, sessionId)).emit("session:tldraw:change", { changes });
+    });
+
+    // Helper: make sure a student has a per-desk work slot.
+    const ensureWork = (session, sid) => {
+      if (!session.studentWork) session.studentWork = {};
+      if (!session.studentWork[sid]) session.studentWork[sid] = { code: "", tldrawStore: {} };
+      if (!session.studentWork[sid].tldrawStore) session.studentWork[sid].tldrawStore = {};
+      return session.studentWork[sid];
+    };
+
+    // ── Student's private code (stored per-student, forwarded to teacher only)
+    socket.on("student:code", ({ code } = {}) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return;
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return;
+
+      // Exam ended — silently ignore further writes
+      if (session.exam?.phase === "ended") return;
+
+      const work = ensureWork(session, socket.id);
+      work.code = code || "";
+      const studentName = session.participants[socket.id]?.name;
+      for (const [sid, p] of Object.entries(session.participants)) {
+        if (p.role === "host" || p.role === "co-host") {
+          io.sockets.sockets.get(sid)?.emit("student:code", {
+            socketId: socket.id,
+            name: studentName,
+            code: code || "",
+          });
+        }
+      }
+    });
+
+    // ── Student's private tldraw (paint) changes, forwarded to teacher only
+    socket.on("student:tldraw:change", ({ changes } = {}) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem || !changes) return;
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return;
+      const work = ensureWork(session, socket.id);
+      const { added, updated, removed } = changes;
+      if (added)   for (const r of Object.values(added))           work.tldrawStore[r.id] = r;
+      if (updated) for (const [, next] of Object.values(updated))  work.tldrawStore[next.id] = next;
+      if (removed) for (const r of Object.values(removed))         delete work.tldrawStore[r.id];
+      for (const [sid, p] of Object.entries(session.participants)) {
+        if (p.role === "host" || p.role === "co-host") {
+          io.sockets.sockets.get(sid)?.emit("student:tldraw:change", {
+            socketId: socket.id,
+            changes,
+          });
+        }
+      }
+    });
+
+    // ── Teacher asks for a student's full snapshot (code + tldraw) ────────
+    socket.on("teacher:focus", ({ socketId: studentId } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false });
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false });
+      if (!hasPermission(session, socket.id, "canKick")) {
+        return ack?.({ ok: false, message: "Not a teacher" });
+      }
+      const work = session.studentWork?.[studentId] || { code: "", tldrawStore: {} };
+      ack?.({ ok: true, code: work.code, tldrawStore: work.tldrawStore || {} });
     });
 
     // ── Disconnect ────────────────────────────────────────────────────────

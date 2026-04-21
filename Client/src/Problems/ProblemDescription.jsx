@@ -22,6 +22,7 @@ function ProblemDescription({
   sessionId,
   problemId,
   tldrawInitialStore,
+  tldrawPrivate = false,
 }) {
   const [activeTab, setActiveTab] = useState("description");
   const [copiedIdx, setCopiedIdx] = useState(null);
@@ -44,14 +45,18 @@ function ProblemDescription({
     isApplyingRemoteRef.current = false;
   }, [tldrawStore, tldrawInitialStore]);
 
-  // Socket sync: broadcast local changes + apply remote changes
+  // Socket sync: broadcast local changes + apply remote changes.
+  // In private (teacher-mode) student view, emit to student:tldraw:change and
+  // don't apply any remote changes — the canvas is the student's own desk.
   useEffect(() => {
     if (!socket || !sessionId) return;
+
+    const emitEvent = tldrawPrivate ? "student:tldraw:change" : "session:tldraw:change";
 
     const unsubscribe = tldrawStore.listen(
       (entry) => {
         if (isApplyingRemoteRef.current || !entry.changes) return;
-        socket.emit("session:tldraw:change", {
+        socket.emit(emitEvent, {
           problemId,
           sessionId,
           changes: entry.changes,
@@ -59,6 +64,11 @@ function ProblemDescription({
       },
       { source: "user", scope: "document" }
     );
+
+    // Private desk: ignore any shared broadcasts entirely.
+    if (tldrawPrivate) {
+      return () => unsubscribe();
+    }
 
     const onRemoteChange = ({ changes }) => {
       if (!changes) return;
@@ -77,7 +87,7 @@ function ProblemDescription({
       unsubscribe();
       socket.off("session:tldraw:change", onRemoteChange);
     };
-  }, [socket, sessionId, problemId, tldrawStore]);
+  }, [socket, sessionId, problemId, tldrawStore, tldrawPrivate]);
 
   const roadmapNodes = useMemo(() => {
     if (!problem?.roadmap || !Array.isArray(problem.roadmap.nodes)) return [];

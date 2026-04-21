@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
+import { Tldraw, createTLStore } from "tldraw";
+import "tldraw/tldraw.css";
 
 import { PROBLEMS } from "./problems";
 import ProblemDescription from "./ProblemDescription";
@@ -65,6 +67,18 @@ function ProblemPage() {
   const [sessionWhitelist, setSessionWhitelist] = useState("");
   const [sessionBlacklist, setSessionBlacklist] = useState("");
   const [sessionRequireJoinApproval, setSessionRequireJoinApproval] = useState(false);
+  const [sessionTeacherMode, setSessionTeacherMode] = useState(false);
+
+  // Post-creation configuration modal
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    name: "",
+    teacherMode: false,
+    locked: false,
+    requireJoinApproval: false,
+    maxParticipants: 10,
+    visibility: "public",
+  });
   // Create modal – C. Limits
   const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
   const [sessionAutoLock, setSessionAutoLock] = useState(false);
@@ -79,6 +93,16 @@ function ProblemPage() {
   const [sessionTypingIndicators, setSessionTypingIndicators] = useState(true);
   // Create modal tab
   const [createModalTab, setCreateModalTab] = useState("basic");
+
+  // Create modal – F. Exam
+  const [sessionExamEnabled, setSessionExamEnabled] = useState(false);
+  const [sessionExamDuration, setSessionExamDuration] = useState(30);
+  const [sessionExamLockLang, setSessionExamLockLang] = useState(true);
+
+  // Live exam state while a session is active
+  const [exam, setExam] = useState(null);           // { enabled, phase, durationMinutes, startedAt, endsAt, lockLanguage }
+  const [examRemaining, setExamRemaining] = useState(0);
+  const [examResults, setExamResults] = useState(null); // array of ExamSubmission rows (teacher-only)
 
   const [sessionJoinId, setSessionJoinId] = useState("");
   const [sessionJoinPassword, setSessionJoinPassword] = useState("");
@@ -109,6 +133,17 @@ function ProblemPage() {
 
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
+
+  // Teacher-supervision state (teacher watches one student's private editor)
+  const [watchingStudent, setWatchingStudent] = useState(null); // { socketId, name }
+  const [watchingCode, setWatchingCode] = useState("");
+  const [watchTldrawStore, setWatchTldrawStore] = useState(null);
+  const watchingRef = useRef(null);
+  const watchTldrawStoreRef = useRef(null);
+
+  // Refs used by socket listeners to read latest values (they're registered once).
+  const teacherModeRef = useRef(false);
+  const currentUserRoleRef = useRef("editor");
 
   const isInSession = Boolean(activeSession?.id);
   const requestedSessionId = searchParams.get("session") || "";
@@ -189,6 +224,10 @@ function ProblemPage() {
 
     socket.on("session:code:updated", ({ language, code }) => {
       if (!language) return;
+      // Teacher-mode students have a private editor — ignore shared broadcasts.
+      const role = currentUserRoleRef.current;
+      const isTeacher = role === "host" || role === "co-host";
+      if (teacherModeRef.current && !isTeacher) return;
       setSessionCodeByLanguage((prev) => ({ ...prev, [language]: code || "" }));
       if (language === selectedLanguageRef.current) setCode(code || "");
     });
@@ -201,7 +240,16 @@ function ProblemPage() {
 
     socket.on("session:waiting:approved", ({ userRole, userPermission, session: joined }) => {
       setIsInWaitingRoom(false);
-      setActiveSession({ id: joined.id, name: joined.name });
+      setActiveSession({
+          id: joined.id,
+          name: joined.name,
+          teacherMode: Boolean(joined.teacherMode),
+          locked: Boolean(joined.locked),
+          requireJoinApproval: Boolean(joined.requireJoinApproval),
+          maxParticipants: joined.maxParticipants,
+          visibility: joined.visibility,
+        });
+      setExam(joined.exam || null);
       setCurrentUserRole(userRole || "editor");
       setCurrentUserPermission(userPermission || "editable");
       setSessionCodeByLanguage(joined.codeByLanguage || {});
@@ -232,12 +280,96 @@ function ProblemPage() {
       setActiveSession((prev) => prev ? { ...prev, collab } : prev);
     });
 
+    // Session-level settings updated by host (from the Configuration modal)
+    socket.on("session:settings:updated", (patch) => {
+      setActiveSession((prev) => prev ? { ...prev, ...patch } : prev);
+      toast("Session settings updated", { icon: "⚙" });
+    });
+
+    // Exam state (start/tick) and end.
+    socket.on("exam:state", ({ exam: e }) => {
+      setExam(e || null);
+    });
+    socket.on("exam:ended", ({ reason }) => {
+      setExam((prev) => (prev ? { ...prev, phase: "ended" } : prev));
+      toast(reason === "timed-out" ? "Exam time is up" : "Exam ended", { icon: "🛑" });
+    });
+
+    // Teacher receives the watched student's live code.
+    socket.on("student:code", ({ socketId, code }) => {
+      if (socketId === watchingRef.current) setWatchingCode(code || "");
+    });
+
+    // Teacher receives the watched student's live tldraw (paint) changes.
+    socket.on("student:tldraw:change", ({ socketId, changes }) => {
+      if (socketId !== watchingRef.current) return;
+      const store = watchTldrawStoreRef.current;
+      if (!store || !changes) return;
+      store.mergeRemoteChanges(() => {
+        const { added, updated, removed } = changes;
+        if (added)   store.put(Object.values(added));
+        if (updated) store.put(Object.values(updated).map(([, next]) => next));
+        if (removed) store.remove(Object.values(removed).map((r) => r.id));
+      });
+    });
+
     return () => {
       socket.emit("session:leave");
       socket.disconnect();
       socketRef.current = null;
     };
   }, []);
+
+  // Keep watchingRef in sync so the socket listeners above see the latest focus.
+  useEffect(() => {
+    watchingRef.current = watchingStudent?.socketId || null;
+  }, [watchingStudent]);
+
+  // Mirror teacherMode + current role into refs (socket listeners capture these once).
+  useEffect(() => { teacherModeRef.current = Boolean(activeSession?.teacherMode); }, [activeSession]);
+  useEffect(() => { currentUserRoleRef.current = currentUserRole; }, [currentUserRole]);
+  useEffect(() => { watchTldrawStoreRef.current = watchTldrawStore; }, [watchTldrawStore]);
+
+  const handleWatchStudent = (socketId, name) => {
+    const store = createTLStore();
+    setWatchingStudent({ socketId, name });
+    setWatchingCode("");
+    setWatchTldrawStore(store);
+    socketRef.current?.emit("teacher:focus", { socketId }, (res) => {
+      if (!res?.ok) return;
+      setWatchingCode(res.code || "");
+      const snap = res.tldrawStore || {};
+      const rows = Object.values(snap);
+      if (rows.length) store.mergeRemoteChanges(() => { store.put(rows); });
+    });
+  };
+
+  const closeWatch = () => {
+    setWatchingStudent(null);
+    setWatchingCode("");
+    setWatchTldrawStore(null);
+  };
+
+  const openConfig = () => {
+    if (!activeSession) return;
+    setConfigForm({
+      name: activeSession.name || "",
+      teacherMode: Boolean(activeSession.teacherMode),
+      locked: Boolean(activeSession.locked),
+      requireJoinApproval: Boolean(activeSession.requireJoinApproval),
+      maxParticipants: activeSession.maxParticipants ?? 10,
+      visibility: activeSession.visibility || "public",
+    });
+    setConfigOpen(true);
+  };
+
+  const saveConfig = () => {
+    socketRef.current?.emit("session:settings:update", configForm, (res) => {
+      if (!res?.ok) return toast.error(res?.message || "Could not save settings");
+      toast.success("Settings saved");
+      setConfigOpen(false);
+    });
+  };
 
   useEffect(() => {
     if (!socketRef.current || !currentProblemId) return;
@@ -250,6 +382,8 @@ function ProblemPage() {
     });
 
     setActiveSession(null);
+    setExam(null);
+    setExamResults(null);
     setCurrentUserPermission("editable");
     setSessionParticipants([]);
     setSessionCodeByLanguage({});
@@ -257,6 +391,53 @@ function ProblemPage() {
     setParticipantHistory([]);
     prevParticipantsRef.current = [];
   }, [currentProblemId]);
+
+  // Countdown ticker — derives remaining ms from server-provided endsAt.
+  useEffect(() => {
+    if (!exam?.endsAt || exam.phase !== "active") {
+      setExamRemaining(0);
+      return;
+    }
+    const tick = () => setExamRemaining(Math.max(0, exam.endsAt - Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [exam?.endsAt, exam?.phase]);
+
+  const formatMs = (ms) => {
+    const total = Math.floor(ms / 1000);
+    const m = String(Math.floor(total / 60)).padStart(2, "0");
+    const s = String(total % 60).padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  // Teacher clicks "Start Exam"
+  const handleStartExam = () => {
+    socketRef.current?.emit("exam:start", {}, (res) => {
+      if (!res?.ok) return toast.error(res?.message || "Could not start exam");
+      toast.success("Exam started");
+    });
+  };
+
+  // Teacher clicks "End Exam"
+  const handleEndExam = () => {
+    if (!confirm("End the exam now? All student code will be submitted.")) return;
+    socketRef.current?.emit("exam:end", {}, (res) => {
+      if (!res?.ok) return toast.error(res?.message || "Could not end exam");
+    });
+  };
+
+  // Teacher opens the results panel after the exam ends.
+  const handleLoadExamResults = async () => {
+    if (!activeSession?.id) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/exams/session/${activeSession.id}/submissions`);
+      const data = await res.json();
+      setExamResults(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast.error("Failed to load results");
+    }
+  };
 
   const formatTime = (totalSeconds) => {
     const m = Math.floor(totalSeconds / 60)
@@ -331,6 +512,10 @@ function ProblemPage() {
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
+    if (exam?.phase === "active" && exam.lockLanguage) {
+      toast.error("Language is locked during the exam");
+      return;
+    }
     setSelectedLanguage(newLang);
 
     if (isInSession && sessionCodeByLanguage[newLang] !== undefined) {
@@ -349,6 +534,15 @@ function ProblemPage() {
 
     if (!isInSession || !socketRef.current) return;
 
+    const isTeacher = currentUserRole === "host" || currentUserRole === "co-host";
+
+    // Teacher-mode + student → private desk only (no shared broadcast).
+    if (activeSession.teacherMode && !isTeacher) {
+      socketRef.current.emit("student:code", { code: safeCode });
+      return;
+    }
+
+    // Otherwise: shared collaborative editing (existing behavior).
     setSessionCodeByLanguage((prev) => ({
       ...prev,
       [selectedLanguage]: safeCode,
@@ -416,6 +610,7 @@ function ProblemPage() {
         whitelist:           sessionWhitelist,
         blacklist:           sessionBlacklist,
         requireJoinApproval: sessionRequireJoinApproval,
+        teacherMode:         sessionTeacherMode,
         // C. Limits
         maxParticipants: Number(sessionMaxParticipants) || 10,
         autoLock:        sessionAutoLock,
@@ -430,6 +625,12 @@ function ProblemPage() {
           showSelections:   sessionShowSelections,
           typingIndicators: sessionTypingIndicators,
         },
+        // F. Exam
+        exam: {
+          enabled:         sessionExamEnabled,
+          durationMinutes: Number(sessionExamDuration) || 30,
+          lockLanguage:    sessionExamLockLang,
+        },
       },
       (response) => {
         if (!response?.ok) {
@@ -439,7 +640,16 @@ function ProblemPage() {
 
         // Server auto-joins creator as host — hydrate session state
         const joined = response.session;
-        setActiveSession({ id: joined.id, name: joined.name });
+        setActiveSession({
+          id: joined.id,
+          name: joined.name,
+          teacherMode: Boolean(joined.teacherMode),
+          locked: Boolean(joined.locked),
+          requireJoinApproval: Boolean(joined.requireJoinApproval),
+          maxParticipants: joined.maxParticipants,
+          visibility: joined.visibility,
+        });
+        setExam(joined.exam || null);
         setCurrentUserRole(response.userRole || "host");
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
@@ -483,7 +693,16 @@ function ProblemPage() {
         }
 
         const joined = response.session;
-        setActiveSession({ id: joined.id, name: joined.name });
+        setActiveSession({
+          id: joined.id,
+          name: joined.name,
+          teacherMode: Boolean(joined.teacherMode),
+          locked: Boolean(joined.locked),
+          requireJoinApproval: Boolean(joined.requireJoinApproval),
+          maxParticipants: joined.maxParticipants,
+          visibility: joined.visibility,
+        });
+        setExam(joined.exam || null);
         setCurrentUserRole(response.userRole || "editor");
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
@@ -901,17 +1120,7 @@ function ProblemPage() {
         {/* COLLAB BAR */}
         <div className="px-3 py-1.5 border-b border-base-300 bg-base-100/80 flex items-center gap-2 flex-wrap min-h-[40px]">
           {/* Display name */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary select-none">
-              {displayName[0]?.toUpperCase()}
-            </div>
-            <input
-              className="input input-xs input-bordered w-24"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your name"
-            />
-          </div>
+          
 
           <div className="divider divider-horizontal mx-0 h-5 shrink-0" />
 
@@ -943,6 +1152,60 @@ function ProblemPage() {
                 Invite
               </button>
 
+              {/* ── EXAM CONTROLS ── */}
+              {exam?.enabled && (
+                <>
+                  {exam.phase === "waiting" && (
+                    (currentUserRole === "host" || currentUserRole === "co-host") ? (
+                      <button
+                        className="btn btn-xs btn-warning gap-1"
+                        onClick={handleStartExam}
+                        title={`Start ${exam.durationMinutes}-minute exam`}
+                      >
+                        <TimerIcon className="size-3" />
+                        Start Exam ({exam.durationMinutes}m)
+                      </button>
+                    ) : (
+                      <span className="badge badge-sm badge-warning gap-1">
+                        <TimerIcon className="size-3" />
+                        Exam pending
+                      </span>
+                    )
+                  )}
+
+                  {exam.phase === "active" && (
+                    <>
+                      <span className="badge badge-sm badge-error gap-1 font-mono">
+                        <TimerIcon className="size-3" />
+                        {formatMs(examRemaining)}
+                      </span>
+                      {(currentUserRole === "host" || currentUserRole === "co-host") && (
+                        <button
+                          className="btn btn-xs btn-outline btn-error gap-1"
+                          onClick={handleEndExam}
+                        >
+                          End Exam
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {exam.phase === "ended" && (
+                    <>
+                      <span className="badge badge-sm badge-ghost">Exam ended</span>
+                      {(currentUserRole === "host" || currentUserRole === "co-host") && (
+                        <button
+                          className="btn btn-xs btn-primary gap-1"
+                          onClick={handleLoadExamResults}
+                        >
+                          View Results
+                        </button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
               <button
                 className="btn btn-xs btn-outline btn-error gap-1"
                 onClick={handleLeaveSession}
@@ -961,34 +1224,6 @@ function ProblemPage() {
                 <PlusIcon className="size-3" />
                 New Session
               </button>
-
-              <div className="flex items-center gap-1 shrink-0">
-                <input
-                  className="input input-xs input-bordered w-36"
-                  value={sessionJoinId}
-                  onChange={(e) => setSessionJoinId(e.target.value)}
-                  placeholder="Session ID"
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handleJoinSession(sessionJoinId, sessionJoinPassword)
-                  }
-                />
-                <input
-                  className="input input-xs input-bordered w-24"
-                  value={sessionJoinPassword}
-                  onChange={(e) => setSessionJoinPassword(e.target.value)}
-                  placeholder="Password"
-                  type="password"
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handleJoinSession(sessionJoinId, sessionJoinPassword)
-                  }
-                />
-                <button
-                  className="btn btn-xs btn-secondary shrink-0"
-                  onClick={() => handleJoinSession(sessionJoinId, sessionJoinPassword)}
-                >
-                  Join
-                </button>
-              </div>
 
               {/* active sessions chips */}
               {availableSessions.length > 0 && (
@@ -1055,6 +1290,11 @@ function ProblemPage() {
             sessionId={activeSession?.id}
             problemId={currentProblemId}
             tldrawInitialStore={tldrawInitialStore}
+            tldrawPrivate={
+              Boolean(activeSession?.teacherMode) &&
+              currentUserRole !== "host" &&
+              currentUserRole !== "co-host"
+            }
           />
         </div>
 
@@ -1206,6 +1446,7 @@ function ProblemPage() {
                 { key: "limits", label: "Limits" },
                 { key: "roles",  label: "Roles" },
                 { key: "collab", label: "Collab" },
+                { key: "exam",   label: "Exam" },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -1325,6 +1566,15 @@ function ProblemPage() {
                       onChange={(e) => setSessionRequireJoinApproval(e.target.checked)}
                     />
                     <span className="text-xs">Waiting room — require host approval to join</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionTeacherMode}
+                      onChange={(e) => setSessionTeacherMode(e.target.checked)}
+                    />
+                    <span className="text-xs">Teacher mode — each student has a private editor</span>
                   </label>
                 </div>
               </div>
@@ -1461,6 +1711,54 @@ function ProblemPage() {
               </div>
             )}
 
+            {/* ── EXAM ── */}
+            {createModalTab === "exam" && (
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-sm checkbox-primary"
+                    checked={sessionExamEnabled}
+                    onChange={(e) => setSessionExamEnabled(e.target.checked)}
+                  />
+                  <span className="text-xs font-medium">Enable exam mode</span>
+                </label>
+
+                {sessionExamEnabled && (
+                  <>
+                    <div>
+                      <label className="label pb-1">
+                        <span className="label-text text-xs font-medium">Duration (minutes)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={300}
+                        className="input input-sm input-bordered w-full"
+                        value={sessionExamDuration}
+                        onChange={(e) => setSessionExamDuration(e.target.value)}
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm checkbox-primary"
+                        checked={sessionExamLockLang}
+                        onChange={(e) => setSessionExamLockLang(e.target.checked)}
+                      />
+                      <span className="text-xs">Lock language during exam</span>
+                    </label>
+
+                    <div className="bg-base-200 rounded-lg p-3 text-xs text-base-content/70">
+                      Students join the session first. When ready, click <b>Start Exam</b>.
+                      When the timer expires, each student's code is auto-saved.
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="modal-action mt-5">
               <button
                 className="btn btn-ghost btn-sm"
@@ -1478,6 +1776,55 @@ function ProblemPage() {
             </div>
           </div>
           <div className="modal-backdrop" onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }} />
+        </dialog>
+      )}
+
+      {/* ── EXAM RESULTS MODAL ── */}
+      {examResults && (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-full max-w-3xl">
+            <button
+              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+              onClick={() => setExamResults(null)}
+            >
+              <XIcon className="size-4" />
+            </button>
+            <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <TimerIcon className="size-5 text-primary" />
+              Exam Results — {activeSession?.name}
+            </h3>
+
+            {examResults.length === 0 ? (
+              <p className="text-sm text-base-content/60 py-4">No student submissions found for this session.</p>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                {examResults.map((row) => (
+                  <details key={row.id} className="collapse collapse-arrow bg-base-200">
+                    <summary className="collapse-title text-sm font-medium flex items-center gap-3">
+                      <span className="flex-1">{row.studentName}</span>
+                      <span className="badge badge-sm">{row.language || "—"}</span>
+                      <span className="badge badge-sm badge-ghost">
+                        {Math.floor((row.durationSeconds || 0) / 60)}m {(row.durationSeconds || 0) % 60}s
+                      </span>
+                      <span className={`badge badge-sm ${row.finalStatus === "submitted" ? "badge-success" : "badge-warning"}`}>
+                        {row.finalStatus}
+                      </span>
+                    </summary>
+                    <div className="collapse-content">
+                      <pre className="bg-base-300 rounded p-3 text-xs overflow-x-auto whitespace-pre-wrap">
+                        {row.code || "(empty)"}
+                      </pre>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+
+            <div className="modal-action mt-4">
+              <button className="btn btn-sm" onClick={() => setExamResults(null)}>Close</button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setExamResults(null)} />
         </dialog>
       )}
 
@@ -1513,7 +1860,19 @@ function ProblemPage() {
           <div className="px-4 py-2 bg-base-200 shrink-0 flex items-center gap-2 text-xs">
             <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
             <span className="font-medium truncate">{activeSession.name}</span>
-            <span className="ml-auto text-base-content/40 capitalize shrink-0">
+            {activeSession.teacherMode && (
+              <span className="badge badge-xs badge-primary shrink-0">teacher mode</span>
+            )}
+            {(currentUserRole === "host" || currentUserRole === "co-host") && (
+              <button
+                className="btn btn-ghost btn-xs ml-auto"
+                title="Session configuration"
+                onClick={openConfig}
+              >
+                ⚙ Configure
+              </button>
+            )}
+            <span className="text-base-content/40 capitalize shrink-0">
               {currentUserRole}
             </span>
           </div>
@@ -1605,6 +1964,15 @@ function ProblemPage() {
                           ) : (
                             <span className={`badge badge-xs ${roleBadge}`}>{p.role}</span>
                           )}
+                          {(currentUserRole === "host" || currentUserRole === "co-host") && p.role !== "host" && p.role !== "co-host" && (
+                            <button
+                              className="btn btn-ghost btn-xs px-1"
+                              title={`Watch ${p.name}'s desk`}
+                              onClick={() => handleWatchStudent(p.socketId, p.name)}
+                            >
+                              👁
+                            </button>
+                          )}
                           <span className="w-2 h-2 rounded-full bg-success shrink-0" title="Online" />
                         </div>
                       );
@@ -1646,6 +2014,123 @@ function ProblemPage() {
           )}
         </div>
       </div>
+
+      {/* Host: configure the live session after creation */}
+      {configOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setConfigOpen(false)}>
+          <div
+            className="bg-base-100 rounded-lg shadow-2xl w-full max-w-md p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center">
+              <h3 className="font-bold text-base">Session configuration</h3>
+              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setConfigOpen(false)}>✕</button>
+            </div>
+
+            <label className="block">
+              <span className="text-xs font-medium">Session name</span>
+              <input
+                type="text"
+                className="input input-sm input-bordered w-full mt-1"
+                value={configForm.name}
+                onChange={(e) => setConfigForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-medium">Visibility</span>
+              <select
+                className="select select-sm select-bordered w-full mt-1"
+                value={configForm.visibility}
+                onChange={(e) => setConfigForm((f) => ({ ...f, visibility: e.target.value }))}
+              >
+                <option value="public">public</option>
+                <option value="private">private</option>
+                <option value="unlisted">unlisted</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-medium">Max participants</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                className="input input-sm input-bordered w-full mt-1"
+                value={configForm.maxParticipants}
+                onChange={(e) => setConfigForm((f) => ({ ...f, maxParticipants: Number(e.target.value) }))}
+              />
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-primary"
+                checked={configForm.teacherMode}
+                onChange={(e) => setConfigForm((f) => ({ ...f, teacherMode: e.target.checked }))}
+              />
+              <span className="text-xs">Teacher mode — each student has a private editor</span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-primary"
+                checked={configForm.locked}
+                onChange={(e) => setConfigForm((f) => ({ ...f, locked: e.target.checked }))}
+              />
+              <span className="text-xs">Lock session — no new joiners</span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-primary"
+                checked={configForm.requireJoinApproval}
+                onChange={(e) => setConfigForm((f) => ({ ...f, requireJoinApproval: e.target.checked }))}
+              />
+              <span className="text-xs">Waiting room — require host approval to join</span>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="btn btn-sm btn-ghost" onClick={() => setConfigOpen(false)}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={saveConfig}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher: watch one student's private editor + paint (live) */}
+      {watchingStudent && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={closeWatch}>
+          <div
+            className="bg-base-100 rounded-lg shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-base-300">
+              <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse" />
+              <span className="text-sm">
+                Watching <strong>{watchingStudent.name}</strong> (live)
+              </span>
+              <button className="btn btn-ghost btn-xs ml-auto" onClick={closeWatch}>✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-3 flex-1 overflow-hidden">
+              <div className="flex flex-col border border-base-300 rounded overflow-hidden">
+                <div className="px-3 py-1.5 text-xs bg-base-200">Code</div>
+                <pre className="m-0 p-3 flex-1 overflow-auto text-xs bg-[#0b1021] text-slate-200 font-mono whitespace-pre-wrap">
+                  {watchingCode || "(empty)"}
+                </pre>
+              </div>
+              <div className="flex flex-col border border-base-300 rounded overflow-hidden">
+                <div className="px-3 py-1.5 text-xs bg-base-200">Paint (tldraw)</div>
+                <div className="flex-1 relative">
+                  {watchTldrawStore && <Tldraw store={watchTldrawStore} />}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </StreamVideoProvider>
   );
 }

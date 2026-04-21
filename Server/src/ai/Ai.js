@@ -6,7 +6,7 @@ const {slugify} = require("../utils/slugify");
 
 
 const groq = new Groq({
-  apiKey: "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",
+  apiKey: "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",
 });
 
 async function generateRoadmap(topic) {
@@ -407,7 +407,9 @@ IMPORTANT RULES:
 3. Keep the same overall structure and approach
 4. For each change, provide the line number and what was changed
 5. ALWAYS preserve ALL test case invocations, print/console.log statements, and any code that produces output at the bottom of the file - never remove them
-6. The corrected code MUST still execute and print the same output format as the original intended
+6. NEVER change the arguments/inputs passed to function calls in test invocations - keep them EXACTLY as written in the original code
+7. Only fix the function/algorithm logic itself - do NOT invent new test cases or modify existing ones
+8. The corrected code MUST still execute and print the same output format as the original intended
 
 Required JSON schema:
 {
