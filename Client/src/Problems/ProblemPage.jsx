@@ -35,6 +35,51 @@ import {
 
 import "./ProblemPage.css";
 
+// ── Session type picker ───────────────────────────────────────────────────────
+const SESSION_TYPES = [
+  {
+    key:   "study",
+    icon:  "📚",
+    label: "Study Group",
+    desc:  "Free collaboration, open to anyone",
+  },
+  {
+    key:   "classroom",
+    icon:  "🎓",
+    label: "Classroom",
+    desc:  "Teacher-led, students have private editors",
+  },
+  {
+    key:   "exam",
+    icon:  "⏱",
+    label: "Timed Exam",
+    desc:  "Private, timed, each student works alone",
+  },
+  {
+    key:   "pair",
+    icon:  "🤝",
+    label: "Pair Programming",
+    desc:  "Two people, turn-based editing",
+  },
+];
+
+// Which tabs are relevant for each session type.
+const TABS_BY_TYPE = {
+  study:     ["basic", "access", "collab", "exam"],
+  classroom: ["basic", "access", "limits", "roles", "exam"],
+  exam:      ["basic", "access", "limits", "roles", "exam"],
+  pair:      ["basic", "collab", "exam"],
+};
+
+const ALL_TABS = [
+  { key: "basic",  label: "Basic"  },
+  { key: "access", label: "Access" },
+  { key: "limits", label: "Limits" },
+  { key: "roles",  label: "Roles"  },
+  { key: "collab", label: "Collab" },
+  { key: "exam",   label: "Exam"   },
+];
+
 function ProblemPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -91,13 +136,29 @@ function ProblemPage() {
   const [sessionShowCursors, setSessionShowCursors] = useState(true);
   const [sessionShowSelections, setSessionShowSelections] = useState(true);
   const [sessionTypingIndicators, setSessionTypingIndicators] = useState(true);
-  // Create modal tab
+  // Create modal tab + type picker
+  const [sessionType, setSessionType]       = useState("");      // "" means nothing picked yet
   const [createModalTab, setCreateModalTab] = useState("basic");
 
   // Create modal – F. Exam
   const [sessionExamEnabled, setSessionExamEnabled] = useState(false);
   const [sessionExamDuration, setSessionExamDuration] = useState(30);
   const [sessionExamLockLang, setSessionExamLockLang] = useState(true);
+
+  // Create modal – #2 Playlist
+  const [sessionPlaylistIds, setSessionPlaylistIds]   = useState("");   // comma-separated
+  const [sessionPlaylistMode, setSessionPlaylistMode] = useState("free"); // "free" | "sequential"
+  // Create modal – #8 Identity
+  const [sessionIdentityMode, setSessionIdentityMode] = useState("real");
+  // Create modal – #1 Permission overrides (editor/viewer × perms).
+  // Undefined values fall back to defaults on the server.
+  const [sessionPermOverrides, setSessionPermOverrides] = useState({
+    editor: { canComment: true,  canEdit: true  },
+    viewer: { canComment: true,  canEdit: false },
+  });
+  // Create modal – #10 Post-session
+  const [sessionPostSave, setSessionPostSave]       = useState(false);
+  const [sessionPostPublish, setSessionPostPublish] = useState(false);
 
   // Live exam state while a session is active
   const [exam, setExam] = useState(null);           // { enabled, phase, durationMinutes, startedAt, endsAt, lockLanguage }
@@ -248,6 +309,9 @@ function ProblemPage() {
           requireJoinApproval: Boolean(joined.requireJoinApproval),
           maxParticipants: joined.maxParticipants,
           visibility: joined.visibility,
+          problemIds:          joined.problemIds || [],          // #2
+          currentProblemIndex: joined.currentProblemIndex ?? 0,  // #2
+          identityMode:        joined.identityMode || "real",    // #8
         });
       setExam(joined.exam || null);
       setCurrentUserRole(userRole || "editor");
@@ -284,6 +348,20 @@ function ProblemPage() {
     socket.on("session:settings:updated", (patch) => {
       setActiveSession((prev) => prev ? { ...prev, ...patch } : prev);
       toast("Session settings updated", { icon: "⚙" });
+    });
+
+    // #2 Playlist: host advanced to the next problem.
+    socket.on("session:problem:changed", ({ index, problemId }) => {
+      setActiveSession((prev) => prev ? { ...prev, currentProblemIndex: index, problemId } : prev);
+      if (problemId) navigate(`/problems/${problemId}`);
+      toast(`Now on problem ${index + 1}`, { icon: "📘" });
+    });
+
+    // #3 Mid-session mode transition: server broadcasts new collab/exam state.
+    socket.on("session:mode:transitioned", ({ type, collab, teacherMode, exam: e }) => {
+      setActiveSession((prev) => prev ? { ...prev, collab, teacherMode } : prev);
+      setExam(e || null);
+      toast(`Mode changed → ${type}`, { icon: "🔁" });
     });
 
     // Exam state (start/tick) and end.
@@ -348,6 +426,35 @@ function ProblemPage() {
     setWatchingStudent(null);
     setWatchingCode("");
     setWatchTldrawStore(null);
+  };
+
+  // Defaults for each session type — one place to change them.
+  const TYPE_DEFAULTS = {
+    study:     { visibility:"public",  allowAnonymous:true,  requireJoinApproval:false, teacherMode:false, maxParticipants:10,  defaultRole:"editor", collabMode:"free",       examEnabled:false, autoLock:false },
+    classroom: { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30,  defaultRole:"viewer", collabMode:"controlled", examEnabled:false, autoLock:false },
+    exam:      { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30,  defaultRole:"editor", collabMode:"free",       examEnabled:true,  autoLock:false },
+    pair:      { visibility:"private", allowAnonymous:false, requireJoinApproval:false, teacherMode:false, maxParticipants:2,   defaultRole:"editor", collabMode:"turn-based", examEnabled:false, autoLock:true  },
+  };
+
+  const applySessionType = (type) => {
+    const d = TYPE_DEFAULTS[type];
+    setSessionType(type);
+    setCreateModalTab("basic");
+    setSessionVisibility(d.visibility);
+    setSessionAllowAnonymous(d.allowAnonymous);
+    setSessionRequireJoinApproval(d.requireJoinApproval);
+    setSessionTeacherMode(d.teacherMode);
+    setSessionMaxParticipants(d.maxParticipants);
+    setSessionDefaultRole(d.defaultRole);
+    setSessionCollabMode(d.collabMode);
+    setSessionExamEnabled(d.examEnabled);
+    setSessionAutoLock(d.autoLock);
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
+    setCreateModalTab("basic");
+    setSessionType("");
   };
 
   const openConfig = () => {
@@ -426,6 +533,48 @@ function ProblemPage() {
       if (!res?.ok) return toast.error(res?.message || "Could not end exam");
     });
   };
+
+  // #3 Host switches session type live (study ↔ classroom ↔ exam ↔ pair).
+  const handleModeTransition = (type) => {
+    if (!type || !socketRef.current) return;
+    socketRef.current.emit("session:mode:transition", { type }, (res) => {
+      if (!res?.ok) return toast.error(res?.message || "Could not switch mode");
+      toast.success(`Switched to ${type} mode`);
+    });
+  };
+
+  // #2 Host advances to the next problem in the playlist.
+  const handleAdvanceProblem = () => {
+    socketRef.current?.emit("session:problem:advance", {}, (res) => {
+      if (!res?.ok) return toast.error(res?.message || "Could not advance");
+    });
+  };
+
+  // #9 Pure config linter — returns a list of human-readable warnings.
+  // Used as a banner in the create modal. Easy to extend: add one entry.
+  const lintConfig = () => {
+    const warnings = [];
+    if (sessionExamEnabled && sessionIdentityMode === "anonymous") {
+      warnings.push("Exam + anonymous names: you won't know whose submission is whose.");
+    }
+    if (sessionExamEnabled && sessionCollabMode !== "free") {
+      warnings.push("Exam mode works best with Free collab — students should type independently.");
+    }
+    if (sessionVisibility === "public" && sessionPassword) {
+      warnings.push("Public session with a password: consider Private instead.");
+    }
+    if (sessionAllowAnonymous && (sessionWhitelist || "").trim()) {
+      warnings.push("Whitelist set but anonymous users allowed — whitelist will be bypassed by guests.");
+    }
+    if (Number(sessionMaxParticipants) > 50 && !sessionRequireJoinApproval) {
+      warnings.push("Large session without waiting room — anyone can flood in.");
+    }
+    if (sessionExamEnabled && !sessionRequireJoinApproval) {
+      warnings.push("Exam without waiting room — late-arriving students may disrupt timing.");
+    }
+    return warnings;
+  };
+  const configWarnings = lintConfig();
 
   // Teacher opens the results panel after the exam ends.
   const handleLoadExamResults = async () => {
@@ -631,6 +780,20 @@ function ProblemPage() {
           durationMinutes: Number(sessionExamDuration) || 30,
           lockLanguage:    sessionExamLockLang,
         },
+        // #2 Playlist (empty string → server falls back to [problemId])
+        problemIds: sessionPlaylistIds
+          .split(",").map((s) => s.trim()).filter(Boolean),
+        playlistMode: sessionPlaylistMode,
+        // #8 Identity
+        identityMode: sessionIdentityMode,
+        // #1 Permission overrides (only editor + viewer)
+        permissionOverrides: sessionPermOverrides,
+        // #10 Post-session
+        postSession: {
+          saveSnapshots:    sessionPostSave,
+          publishSolution:  sessionPostPublish,
+          autoCloseOnEmpty: true,
+        },
       },
       (response) => {
         if (!response?.ok) {
@@ -648,6 +811,9 @@ function ProblemPage() {
           requireJoinApproval: Boolean(joined.requireJoinApproval),
           maxParticipants: joined.maxParticipants,
           visibility: joined.visibility,
+          problemIds:          joined.problemIds || [],          // #2
+          currentProblemIndex: joined.currentProblemIndex ?? 0,  // #2
+          identityMode:        joined.identityMode || "real",    // #8
         });
         setExam(joined.exam || null);
         setCurrentUserRole(response.userRole || "host");
@@ -660,8 +826,7 @@ function ProblemPage() {
         setSessionPassword("");
         setSessionWhitelist("");
         setSessionBlacklist("");
-        setCreateModalOpen(false);
-        setCreateModalTab("basic");
+        closeCreateModal();
 
         toast.success(`Session created & joined (ID: ${response.sessionId})`);
       }
@@ -701,6 +866,9 @@ function ProblemPage() {
           requireJoinApproval: Boolean(joined.requireJoinApproval),
           maxParticipants: joined.maxParticipants,
           visibility: joined.visibility,
+          problemIds:          joined.problemIds || [],          // #2
+          currentProblemIndex: joined.currentProblemIndex ?? 0,  // #2
+          identityMode:        joined.identityMode || "real",    // #8
         });
         setExam(joined.exam || null);
         setCurrentUserRole(response.userRole || "editor");
@@ -1152,6 +1320,35 @@ function ProblemPage() {
                 Invite
               </button>
 
+              {/* #3 Host-only mode switcher (live transition) */}
+              {(currentUserRole === "host" || currentUserRole === "co-host") && (
+                <select
+                  className="select select-xs select-bordered"
+                  value=""
+                  onChange={(e) => { if (e.target.value) handleModeTransition(e.target.value); e.target.value = ""; }}
+                  title="Switch session mode live"
+                >
+                  <option value="">Switch mode…</option>
+                  <option value="study">Study</option>
+                  <option value="classroom">Classroom</option>
+                  <option value="exam">Exam</option>
+                  <option value="pair">Pair</option>
+                </select>
+              )}
+
+              {/* #2 Playlist — advance to next problem (host only) */}
+              {(currentUserRole === "host" || currentUserRole === "co-host") &&
+                (activeSession?.problemIds?.length || 0) > 1 && (
+                <button
+                  className="btn btn-xs btn-ghost gap-1"
+                  onClick={handleAdvanceProblem}
+                  title="Next problem in playlist"
+                >
+                  <ChevronRightIcon className="size-3.5" />
+                  Next ({(activeSession.currentProblemIndex ?? 0) + 1}/{activeSession.problemIds.length})
+                </button>
+              )}
+
               {/* ── EXAM CONTROLS ── */}
               {exam?.enabled && (
                 <>
@@ -1429,7 +1626,7 @@ function ProblemPage() {
           <div className="modal-box w-full max-w-xl">
             <button
               className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-              onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }}
+              onClick={() => { closeCreateModal(); }}
             >
               <XIcon className="size-4" />
             </button>
@@ -1438,16 +1635,41 @@ function ProblemPage() {
               Create Live Session
             </h3>
 
-            {/* Tabs */}
+            {/* ── STEP 1: type picker ── */}
+            {!sessionType && (
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                {SESSION_TYPES.map(({ key, icon, label, desc }) => (
+                  <button
+                    key={key}
+                    className="flex flex-col items-start gap-1 p-3 rounded-xl border-2 border-base-300 hover:border-primary text-left transition-colors"
+                    onClick={() => applySessionType(key)}
+                  >
+                    <span className="text-2xl">{icon}</span>
+                    <span className="font-semibold text-sm">{label}</span>
+                    <span className="text-xs text-base-content/60">{desc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* ── STEP 2: badge + tabs + panels + action (all hidden until type is picked) ── */}
+            {sessionType && <>
+
+            {/* selected type badge + change link */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">{SESSION_TYPES.find(t => t.key === sessionType)?.icon}</span>
+              <span className="text-sm font-semibold">{SESSION_TYPES.find(t => t.key === sessionType)?.label}</span>
+              <button
+                className="btn btn-xs btn-ghost text-base-content/50 ml-auto"
+                onClick={() => setSessionType("")}
+              >
+                change
+              </button>
+            </div>
+
+            {/* only the tabs relevant to this type */}
             <div className="tabs tabs-boxed tabs-sm mb-4 flex-wrap gap-1">
-              {[
-                { key: "basic",  label: "Basic" },
-                { key: "access", label: "Access" },
-                { key: "limits", label: "Limits" },
-                { key: "roles",  label: "Roles" },
-                { key: "collab", label: "Collab" },
-                { key: "exam",   label: "Exam" },
-              ].map(({ key, label }) => (
+              {ALL_TABS.filter(t => TABS_BY_TYPE[sessionType].includes(t.key)).map(({ key, label }) => (
                 <button
                   key={key}
                   className={`tab tab-sm ${createModalTab === key ? "tab-active" : ""}`}
@@ -1482,6 +1704,31 @@ function ProblemPage() {
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Host"
                   />
+                </div>
+
+                {/* #2 Playlist */}
+                <div>
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">
+                      Problem playlist <span className="text-base-content/40 font-normal">(comma-separated IDs, empty = current only)</span>
+                    </span>
+                  </label>
+                  <input
+                    className="input input-sm input-bordered w-full"
+                    value={sessionPlaylistIds}
+                    onChange={(e) => setSessionPlaylistIds(e.target.value)}
+                    placeholder="two-sum, valid-parentheses, reverse-string"
+                  />
+                  <div className="mt-2">
+                    <select
+                      className="select select-sm select-bordered w-full"
+                      value={sessionPlaylistMode}
+                      onChange={(e) => setSessionPlaylistMode(e.target.value)}
+                    >
+                      <option value="free">Free — host picks next problem anytime</option>
+                      <option value="sequential">Sequential — fixed order, no skipping</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
@@ -1577,6 +1824,25 @@ function ProblemPage() {
                     <span className="text-xs">Teacher mode — each student has a private editor</span>
                   </label>
                 </div>
+
+                {/* #8 Identity mode */}
+                <div className="pt-2 border-t border-base-200">
+                  <label className="label pb-1">
+                    <span className="label-text text-xs font-medium">Identity mode for participants</span>
+                  </label>
+                  <select
+                    className="select select-sm select-bordered w-full"
+                    value={sessionIdentityMode}
+                    onChange={(e) => setSessionIdentityMode(e.target.value)}
+                  >
+                    <option value="real">Real names — everyone sees everyone</option>
+                    <option value="anonymous">Anonymous — students see "Student 1", "Student 2"…</option>
+                    <option value="pseudonymous">Pseudonymous — stable fake names per user</option>
+                  </select>
+                  <p className="text-[10px] text-base-content/50 mt-1">
+                    Hosts and co-hosts always see real names for grading.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -1635,12 +1901,35 @@ function ProblemPage() {
                     <option value="viewer">Viewer — read-only</option>
                   </select>
                 </div>
-                <div className="bg-base-200 rounded-lg p-3 text-xs space-y-1.5 text-base-content/70">
-                  <p className="font-semibold text-base-content mb-1">Role permissions summary</p>
-                  <p><span className="badge badge-xs badge-primary mr-1">host</span>Full control — edit, kick, mute, change permissions</p>
-                  <p><span className="badge badge-xs badge-secondary mr-1">co-host</span>Same as host except cannot be demoted</p>
-                  <p><span className="badge badge-xs badge-accent mr-1">editor</span>Edit &amp; comment only</p>
-                  <p><span className="badge badge-xs badge-ghost mr-1">viewer</span>Read &amp; comment only</p>
+                {/* #1 Permission matrix override for editor + viewer */}
+                <div className="bg-base-200 rounded-lg p-3 text-xs">
+                  <p className="font-semibold mb-2">Custom permissions</p>
+                  <div className="grid grid-cols-3 gap-2 items-center">
+                    <span></span>
+                    <span className="text-center font-medium">Can edit</span>
+                    <span className="text-center font-medium">Can comment</span>
+                    {["editor", "viewer"].flatMap((role) => [
+                      <span key={`${role}-label`} className="capitalize">{role}</span>,
+                      ...["canEdit", "canComment"].map((perm) => (
+                        <label key={`${role}-${perm}`} className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-xs"
+                            checked={Boolean(sessionPermOverrides[role]?.[perm])}
+                            onChange={(e) =>
+                              setSessionPermOverrides((prev) => ({
+                                ...prev,
+                                [role]: { ...prev[role], [perm]: e.target.checked },
+                              }))
+                            }
+                          />
+                        </label>
+                      )),
+                    ])}
+                  </div>
+                  <p className="text-[10px] text-base-content/50 mt-2">
+                    Host &amp; co-host keep full permissions — they can't be weakened here.
+                  </p>
                 </div>
               </div>
             )}
@@ -1756,13 +2045,46 @@ function ProblemPage() {
                     </div>
                   </>
                 )}
+
+                {/* #10 Post-session options */}
+                <div className="pt-3 border-t border-base-200">
+                  <p className="text-xs font-semibold mb-2">After session ends</p>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionPostSave}
+                      onChange={(e) => setSessionPostSave(e.target.checked)}
+                    />
+                    <span className="text-xs">Save each student's final code when session closes</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer mt-2">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionPostPublish}
+                      onChange={(e) => setSessionPostPublish(e.target.checked)}
+                    />
+                    <span className="text-xs">Publish host's solution as a resource when session closes</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* #9 Config linter warnings */}
+            {configWarnings.length > 0 && (
+              <div className="mt-4 rounded-lg bg-warning/10 border border-warning/40 p-3 space-y-1">
+                <p className="text-xs font-semibold text-warning">⚠ Configuration warnings</p>
+                <ul className="text-[11px] text-base-content/80 list-disc ml-4 space-y-0.5">
+                  {configWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
               </div>
             )}
 
             <div className="modal-action mt-5">
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }}
+                onClick={() => { closeCreateModal(); }}
               >
                 Cancel
               </button>
@@ -1774,8 +2096,10 @@ function ProblemPage() {
                 Create &amp; Join
               </button>
             </div>
+
+            </>}
           </div>
-          <div className="modal-backdrop" onClick={() => { setCreateModalOpen(false); setCreateModalTab("basic"); }} />
+          <div className="modal-backdrop" onClick={() => { closeCreateModal(); }} />
         </dialog>
       )}
 

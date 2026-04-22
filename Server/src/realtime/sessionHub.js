@@ -10,9 +10,12 @@ const ROLE_PERMISSIONS = {
   viewer:     { canEdit: false, canComment: true, canKick: false, canMute: false, canChangePermissions: false },
 };
 
-const VALID_ROLES        = new Set(["host", "co-host", "editor", "viewer"]);
-const VALID_COLLAB_MODES = new Set(["free", "controlled", "turn-based"]);
-const VALID_VISIBILITIES = new Set(["public", "private", "unlisted"]);
+const VALID_ROLES         = new Set(["host", "co-host", "editor", "viewer"]);
+const VALID_COLLAB_MODES  = new Set(["free", "controlled", "turn-based"]);
+const VALID_VISIBILITIES  = new Set(["public", "private", "unlisted"]);
+const VALID_IDENTITY      = new Set(["real", "anonymous", "pseudonymous"]);
+const VALID_SESSION_TYPES = new Set(["study", "classroom", "exam", "pair"]);
+const PERMISSION_KEYS     = ["canEdit", "canComment", "canKick", "canMute", "canChangePermissions"];
 
 // ── Limits & defaults (one place to tweak) ────────────────────────────────
 const LIMITS = {
@@ -36,6 +39,35 @@ function clampNumber(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
+}
+
+// ── #1 Permission matrix ──────────────────────────────────────────────────
+// Clients can override the default permission map per-role. Only editor and
+// viewer can be overridden (host/co-host stay privileged).
+function normalizePermissionOverrides(raw = {}) {
+  const out = {};
+  for (const role of ["editor", "viewer"]) {
+    const src = raw?.[role];
+    if (!src || typeof src !== "object") continue;
+    out[role] = {};
+    for (const key of PERMISSION_KEYS) {
+      if (src[key] !== undefined) out[role][key] = Boolean(src[key]);
+    }
+  }
+  return out;
+}
+
+// Effective permissions for a role: defaults merged with session overrides.
+function effectivePerms(session, role) {
+  return { ...(ROLE_PERMISSIONS[role] || {}), ...(session?.permissionOverrides?.[role] || {}) };
+}
+
+// ── #8 Identity modes ─────────────────────────────────────────────────────
+// Given a real name, produce what a non-teacher viewer should see.
+function maskedName(realName, identityMode, index) {
+  if (identityMode === "anonymous")    return `Student ${index + 1}`;
+  if (identityMode === "pseudonymous") return `User-${String(realName).slice(0, 2).toUpperCase()}${index + 1}`;
+  return realName;
 }
 
 // Build the default exam block. `enabled: false` means this is a
@@ -71,9 +103,18 @@ function defaultCollab(raw = {}) {
 // Take the raw client payload and produce a clean, validated config.
 // Pure function — no side effects, easy to unit-test.
 function normalizeCreateConfig(raw = {}) {
+  // #2 Playlist: array of problem IDs. If a single `problemId` is provided,
+  // fall back to a one-element playlist.
+  const rawIds = Array.isArray(raw.problemIds) && raw.problemIds.length
+    ? raw.problemIds
+    : (raw.problemId ? [raw.problemId] : []);
+  const problemIds = rawIds.map((s) => String(s)).filter(Boolean).slice(0, 50);
+
   return {
     // Identity
-    problemId:   raw.problemId,
+    problemId:   problemIds[0] || raw.problemId,
+    problemIds,
+    playlistMode: ["free", "sequential"].includes(raw.playlistMode) ? raw.playlistMode : "free",
     name:        (raw.sessionName || DEFAULTS.sessionName).toString().slice(0, 100),
     hostName:    normalizeName(raw.hostName || DEFAULTS.hostName),
     language:    raw.language,
@@ -86,14 +127,16 @@ function normalizeCreateConfig(raw = {}) {
     whitelist:           parseNameList(raw.whitelist),
     blacklist:           parseNameList(raw.blacklist),
     requireJoinApproval: Boolean(raw.requireJoinApproval),
+    identityMode:        VALID_IDENTITY.has(raw.identityMode) ? raw.identityMode : "real",  // #8
 
     // Limits
     maxParticipants: clampNumber(raw.maxParticipants, LIMITS.minParticipants, LIMITS.maxParticipants, DEFAULTS.maxParticipants),
     autoLock:        Boolean(raw.autoLock),
     allowOverflow:   Boolean(raw.allowOverflow),
 
-    // Roles
-    defaultRole: ["editor", "viewer"].includes(raw.defaultRole) ? raw.defaultRole : DEFAULTS.defaultRole,
+    // Roles + #1 permission overrides
+    defaultRole:         ["editor", "viewer"].includes(raw.defaultRole) ? raw.defaultRole : DEFAULTS.defaultRole,
+    permissionOverrides: normalizePermissionOverrides(raw.permissionOverrides),
 
     // Collaboration
     collab: defaultCollab(raw.collab),
@@ -103,6 +146,13 @@ function normalizeCreateConfig(raw = {}) {
 
     // Exam
     exam: defaultExam(raw.exam),
+
+    // #10 Post-session
+    postSession: {
+      saveSnapshots:    Boolean(raw.postSession?.saveSnapshots),
+      publishSolution:  Boolean(raw.postSession?.publishSolution),
+      autoCloseOnEmpty: raw.postSession?.autoCloseOnEmpty !== false,
+    },
   };
 }
 
@@ -151,15 +201,27 @@ function getSessionRoom(problemId, sessionId) {
 
 function hasPermission(session, socketId, action) {
   const p = session?.participants?.[socketId];
-  return p ? Boolean(ROLE_PERMISSIONS[p.role]?.[action]) : false;
+  return p ? Boolean(effectivePerms(session, p.role)[action]) : false;
 }
 
+// Real (unmasked) participant list — used for host/co-host viewers.
 function buildParticipantList(session) {
   return Object.entries(session.participants).map(([socketId, p]) => ({
     socketId,
     name: p.name,
     role: p.role,
-    permissions: ROLE_PERMISSIONS[p.role] || {},
+    permissions: effectivePerms(session, p.role),
+  }));
+}
+
+// #8 Same list but with names masked per `session.identityMode`.
+function buildMaskedParticipantList(session) {
+  const entries = Object.entries(session.participants);
+  return entries.map(([socketId, p], i) => ({
+    socketId,
+    name: maskedName(p.name, session.identityMode, i),
+    role: p.role,
+    permissions: effectivePerms(session, p.role),
   }));
 }
 
@@ -212,10 +274,24 @@ function broadcastSessionLists(io, problemId) {
 }
 
 function broadcastParticipants(io, session) {
-  io.to(getSessionRoom(session.problemId, session.id)).emit("session:participants", {
-    participants:       Object.values(session.participants).map((p) => p.name),
-    participantDetails: buildParticipantList(session),
-  });
+  // #8 Teachers (host/co-host) always see real names; everyone else may see
+  // masked names depending on `identityMode`. Fast path when mode is "real".
+  const realList = buildParticipantList(session);
+  if (session.identityMode === "real" || !session.identityMode) {
+    io.to(getSessionRoom(session.problemId, session.id)).emit("session:participants", {
+      participants:       realList.map((p) => p.name),
+      participantDetails: realList,
+    });
+    return;
+  }
+
+  const maskedList = buildMaskedParticipantList(session);
+  const realPayload   = { participants: realList.map((p) => p.name),   participantDetails: realList };
+  const maskedPayload = { participants: maskedList.map((p) => p.name), participantDetails: maskedList };
+  for (const [sid, p] of Object.entries(session.participants)) {
+    const payload = (p.role === "host" || p.role === "co-host") ? realPayload : maskedPayload;
+    io.sockets.sockets.get(sid)?.emit("session:participants", payload);
+  }
 }
 
 function broadcastWaitingRoom(io, session) {
@@ -253,6 +329,11 @@ function createSession(rawConfig) {
     name:      cfg.name,
     hostName:  cfg.hostName,
 
+    // #2 Playlist
+    problemIds:          cfg.problemIds,
+    playlistMode:        cfg.playlistMode,
+    currentProblemIndex: 0,
+
     // Access & security
     visibility:          cfg.visibility,
     passwordHash:        cfg.passwordHash,
@@ -260,6 +341,7 @@ function createSession(rawConfig) {
     whitelist:           cfg.whitelist,
     blacklist:           cfg.blacklist,
     requireJoinApproval: cfg.requireJoinApproval,
+    identityMode:        cfg.identityMode,    // #8
     waitingRoom:         {},
 
     // Limits
@@ -268,8 +350,12 @@ function createSession(rawConfig) {
     allowOverflow:   cfg.allowOverflow,
     locked:          false,
 
-    // Roles
-    defaultRole: cfg.defaultRole,
+    // Roles + #1 overrides
+    defaultRole:         cfg.defaultRole,
+    permissionOverrides: cfg.permissionOverrides,
+
+    // #10 Post-session
+    postSession: cfg.postSession,
 
     // Collaboration
     collab: cfg.collab,
@@ -339,6 +425,13 @@ function removeMembership(socketId) {
         clearTimeout(session._examTimer);
         session._examTimer = null;
       }
+      // #10 Post-session: save final snapshots if requested (and not already
+      // captured by endExam). Fire-and-forget — removeMembership is sync.
+      if (session.postSession?.saveSnapshots && !session._snapshotsSaved) {
+        flushFinalSnapshots(session).catch((err) =>
+          console.error("post-session snapshot save failed:", err.message)
+        );
+      }
       delete sessionsByProblem[problemId][sessionId];
       if (Object.keys(sessionsByProblem[problemId]).length === 0) {
         delete sessionsByProblem[problemId];
@@ -381,6 +474,9 @@ function buildSessionPayload(session) {
   return {
     id:             session.id,
     problemId:      session.problemId,
+    problemIds:         session.problemIds,            // #2
+    playlistMode:       session.playlistMode,          // #2
+    currentProblemIndex: session.currentProblemIndex,  // #2
     name:           session.name,
     hostName:       session.hostName,
     visibility:     session.visibility,
@@ -388,13 +484,16 @@ function buildSessionPayload(session) {
     locked:         session.locked,
     requireJoinApproval: session.requireJoinApproval,
     allowAnonymous: session.allowAnonymous,
+    identityMode:   session.identityMode,              // #8
     collab:         session.collab,
     defaultRole:    session.defaultRole,
+    permissionOverrides: session.permissionOverrides,  // #1
     codeByLanguage: session.codeByLanguage,
     drawStrokes:    session.drawStrokes,
     tldrawStore:    session.tldrawStore,
     teacherMode:    Boolean(session.teacherMode),
     exam:           publicExam(session.exam),
+    postSession:    session.postSession,               // #10
   };
 }
 
@@ -450,6 +549,7 @@ async function endExam(io, session, reason = "timed-out") {
   if (rows.length > 0) {
     try {
       await ExamSubmission.bulkCreate(rows);
+      session._snapshotsSaved = true;  // #10: don't double-save in post-session
     } catch (err) {
       console.error("ExamSubmission save failed:", err.message);
     }
@@ -460,6 +560,29 @@ async function endExam(io, session, reason = "timed-out") {
     endedAt: Date.now(),
     count:   rows.length,
   });
+}
+
+// #10 Post-session: at close time, snapshot every student's final buffer into
+// ExamSubmission (reusing the same audit table). Separate from endExam so
+// non-exam sessions can opt in too.
+async function flushFinalSnapshots(session) {
+  const rows = [];
+  for (const [socketId, participant] of Object.entries(session.participants || {})) {
+    if (participant.role === "host" || participant.role === "co-host") continue;
+    const work = session.studentWork?.[socketId] || { code: "" };
+    rows.push({
+      sessionId:       session.id,
+      problemId:       session.problemId || null,
+      studentSocketId: socketId,
+      studentName:     participant.name,
+      userId:          participant.userId || null,
+      code:            work.code || "",
+      language:        Object.keys(session.codeByLanguage || {})[0] || null,
+      finalStatus:     "abandoned",   // session just closed, not explicitly submitted
+      durationSeconds: Math.floor((Date.now() - (session.createdAt || Date.now())) / 1000),
+    });
+  }
+  if (rows.length > 0) await ExamSubmission.bulkCreate(rows);
 }
 
 // ── Socket.IO setup ───────────────────────────────────────────────────────
@@ -821,6 +944,89 @@ function setupSessionHub(httpServer) {
 
       await endExam(io, session, "submitted");
       ack?.({ ok: true });
+    });
+
+    // ── #2 Playlist: advance to the next problem (host-only) ──────────────
+    socket.on("session:problem:advance", ({ index } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "Only the host can change the problem" });
+      }
+
+      const ids = session.problemIds || [];
+      if (ids.length < 2) return ack?.({ ok: false, message: "No more problems in playlist" });
+
+      // "sequential" advances by 1; "free" jumps to a specific index.
+      let next;
+      if (session.playlistMode === "sequential") {
+        next = session.currentProblemIndex + 1;
+        if (next >= ids.length) return ack?.({ ok: false, message: "Playlist finished" });
+      } else {
+        next = Number.isInteger(index) ? index : session.currentProblemIndex + 1;
+        if (next < 0 || next >= ids.length) return ack?.({ ok: false, message: "Invalid playlist index" });
+      }
+
+      session.currentProblemIndex = next;
+      session.problemId           = ids[next];
+      session.codeByLanguage      = {};                  // fresh workspace
+      session.studentWork         = {};
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:problem:changed", {
+        index:     next,
+        problemId: ids[next],
+      });
+      ack?.({ ok: true, index: next, problemId: ids[next] });
+    });
+
+    // ── #3 Mid-session mode transition (host-only) ────────────────────────
+    // Re-applies server defaults for the given type without recreating the
+    // session, so collab mode / teacher mode / exam enablement can flip live.
+    socket.on("session:mode:transition", ({ type } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "Only the host can switch mode" });
+      }
+      if (!VALID_SESSION_TYPES.has(type)) {
+        return ack?.({ ok: false, message: "Unknown session type" });
+      }
+
+      const PRESETS = {
+        study:     { collabMode: "free",       teacherMode: false, examEnabled: false },
+        classroom: { collabMode: "controlled", teacherMode: true,  examEnabled: false },
+        exam:      { collabMode: "free",       teacherMode: true,  examEnabled: true  },
+        pair:      { collabMode: "turn-based", teacherMode: false, examEnabled: false },
+      };
+      const preset = PRESETS[type];
+
+      session.collab.mode     = preset.collabMode;
+      session.teacherMode     = preset.teacherMode;
+      if (!preset.examEnabled && session.exam) {
+        // Cancel any running exam when leaving exam mode.
+        if (session._examTimer) { clearTimeout(session._examTimer); session._examTimer = null; }
+        session.exam.enabled = false;
+        session.exam.phase   = "waiting";
+        session.exam.startedAt = null;
+        session.exam.endsAt    = null;
+      } else if (preset.examEnabled) {
+        session.exam = session.exam || defaultExam({ enabled: true });
+        session.exam.enabled = true;
+      }
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:mode:transitioned", {
+        type,
+        collab:      session.collab,
+        teacherMode: session.teacherMode,
+        exam:        publicExam(session.exam),
+      });
+      ack?.({ ok: true, type });
     });
 
     // ── Advance turn ──────────────────────────────────────────────────────
