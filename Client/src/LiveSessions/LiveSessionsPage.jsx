@@ -3,16 +3,32 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 import {
-  UsersIcon,
-  LockIcon,
-  UnlockIcon,
-  ZapIcon,
-  SearchIcon,
-  Link2Icon,
-  XIcon,
-  RadioIcon,
-  TrendingUpIcon,
-} from "lucide-react";
+  Button,
+  Card,
+  Col,
+  Empty,
+  Input,
+  Modal,
+  Progress,
+  Row,
+  Space,
+  Statistic,
+  Tag,
+  Typography,
+  Avatar,
+} from "antd";
+import {
+  LockOutlined,
+  SearchOutlined,
+  ThunderboltOutlined,
+  TeamOutlined,
+  UnlockOutlined,
+  LinkOutlined,
+  WifiOutlined,
+  GlobalOutlined,
+} from "@ant-design/icons";
+
+const { Title, Text } = Typography;
 
 function LiveSessionsPage() {
   const navigate = useNavigate();
@@ -21,7 +37,7 @@ function LiveSessionsPage() {
   const [joinSessionId, setJoinSessionId] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [passwordModal, setPasswordModal] = useState(null); // session object
+  const [passwordModal, setPasswordModal] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
 
   useEffect(() => {
@@ -30,31 +46,25 @@ function LiveSessionsPage() {
       setDisplayName(savedName);
       return;
     }
-    const randomSuffix = Math.floor(Math.random() * 1000);
-    setDisplayName(`Guest-${randomSuffix}`);
+    setDisplayName(`Guest-${Math.floor(Math.random() * 1000)}`);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("collabDisplayName", displayName);
-  }, [displayName]);
+
 
   useEffect(() => {
     const socket = io("http://localhost:5000", {
       transports: ["websocket", "polling"],
     });
-
     socket.emit("session:global:list:subscribe");
-
     socket.on("session:global:list", ({ sessions: nextSessions }) => {
       setSessions(nextSessions || []);
     });
-
     return () => socket.disconnect();
   }, []);
 
   const sessionById = useMemo(() => {
     const map = new Map();
-    sessions.forEach((session) => map.set(session.id, session));
+    sessions.forEach((s) => map.set(s.id, s));
     return map;
   }, [sessions]);
 
@@ -115,119 +125,199 @@ function LiveSessionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200 p-6 space-y-6">
-      {/* ── HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <RadioIcon className="size-6 text-primary animate-pulse" />
-            Live Sessions
-          </h1>
-          <p className="text-sm text-base-content/60 mt-0.5">
-            Join a real-time coding session or find one to collaborate on.
-          </p>
-        </div>
-
-        {/* display name */}
-        <div className="flex items-center gap-2">
-          <div className="avatar placeholder">
-            <div className="bg-primary/20 text-primary rounded-full w-8 h-8 text-xs font-bold flex items-center justify-center">
-              {displayName[0]?.toUpperCase()}
-            </div>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 4px" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <Space align="center" size={12}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 11,
+              background: "#f5f7fa",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <WifiOutlined style={{ fontSize: 20, color: "#111827" }} />
           </div>
-          <input
-            className="input input-sm input-bordered w-36"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your display name"
-          />
-        </div>
+          <div>
+            <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#111827" }}>
+              Live Sessions
+            </Title>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              Join a real-time coding session and collaborate with others.
+            </Text>
+          </div>
+        </Space>
+
+        
       </div>
 
-      {/* ── STATS ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="stat bg-base-100 rounded-xl shadow-sm border border-base-300 py-3 px-4">
-          <div className="stat-title text-xs">Active Sessions</div>
-          <div className="stat-value text-2xl text-primary">{sessions.length}</div>
-        </div>
-        <div className="stat bg-base-100 rounded-xl shadow-sm border border-base-300 py-3 px-4">
-          <div className="stat-title text-xs">Total Participants</div>
-          <div className="stat-value text-2xl text-secondary">{totalParticipants}</div>
-        </div>
-        <div className="stat bg-base-100 rounded-xl shadow-sm border border-base-300 py-3 px-4 col-span-2 sm:col-span-1">
-          <div className="stat-title text-xs">Public Sessions</div>
-          <div className="stat-value text-2xl text-success">
-            {sessions.filter((s) => s.visibility === "public").length}
-          </div>
-        </div>
-      </div>
-
-      {/* ── JOIN BY ID ── */}
-      <div className="card bg-base-100 border border-base-300 shadow-sm">
-        <div className="card-body py-4 gap-3">
-          <h2 className="font-semibold text-sm flex items-center gap-2">
-            <Link2Icon className="size-4 text-primary" />
-            Join by Session ID
-          </h2>
-          <div className="flex flex-wrap gap-2 items-center">
-            <input
-              className="input input-sm input-bordered flex-1 min-w-[160px]"
-              value={joinSessionId}
-              onChange={(e) => setJoinSessionId(e.target.value)}
-              placeholder="Session ID (e.g. S-AB12CD)"
-              onKeyDown={(e) => e.key === "Enter" && handleJoinById()}
-            />
-            <input
-              className="input input-sm input-bordered w-40"
-              value={joinPassword}
-              onChange={(e) => setJoinPassword(e.target.value)}
-              placeholder="Password (if required)"
-              type="password"
-              onKeyDown={(e) => e.key === "Enter" && handleJoinById()}
-            />
-            <button
-              className="btn btn-sm btn-primary gap-1.5"
-              onClick={handleJoinById}
+      {/* Stats */}
+      <Row gutter={16} style={{ marginBottom: 20 }}>
+        {[
+          {
+            title: "Active Sessions",
+            value: sessions.length,
+            icon: <WifiOutlined style={{ color: "#111827" }} />,
+          },
+          {
+            title: "Total Participants",
+            value: totalParticipants,
+            icon: <TeamOutlined style={{ color: "#111827" }} />,
+          },
+          {
+            title: "Public Sessions",
+            value: sessions.filter((s) => s.visibility === "public").length,
+            icon: <GlobalOutlined style={{ color: "#111827" }} />,
+          },
+        ].map((stat) => (
+          <Col xs={24} sm={8} key={stat.title} style={{ marginBottom: 12 }}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 12,
+                border: "1px solid #eef0f3",
+                background: "#fff",
+              }}
+              styles={{ body: { padding: "14px 18px" } }}
             >
-              <ZapIcon className="size-3.5" />
-              Join
-            </button>
-          </div>
-        </div>
-      </div>
+              <Space>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 9,
+                    background: "#f5f7fa",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {stat.icon}
+                </div>
+                <Statistic
+                  title={<span style={{ fontSize: 12, color: "#6b7280" }}>{stat.title}</span>}
+                  value={stat.value}
+                  valueStyle={{ fontSize: 22, fontWeight: 700, color: "#111827" }}
+                />
+              </Space>
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
-      {/* ── SESSION CARDS ── */}
+      {/* Join by ID */}
+      <Card
+        size="small"
+        style={{
+          borderRadius: 12,
+          border: "1px solid #eef0f3",
+          background: "#fff",
+          marginBottom: 20,
+        }}
+        styles={{ body: { padding: "16px 20px" } }}
+      >
+        <Space align="center" style={{ marginBottom: 12 }}>
+          <LinkOutlined style={{ color: "#6b7280" }} />
+          <Text strong style={{ fontSize: 13 }}>
+            Join by Session ID
+          </Text>
+        </Space>
+        <Space wrap size={8}>
+          <Input
+            size="small"
+            value={joinSessionId}
+            onChange={(e) => setJoinSessionId(e.target.value)}
+            placeholder="Session ID (e.g. S-AB12CD)"
+            onPressEnter={handleJoinById}
+            style={{ width: 220, borderRadius: 8 }}
+          />
+          <Input.Password
+            size="small"
+            value={joinPassword}
+            onChange={(e) => setJoinPassword(e.target.value)}
+            placeholder="Password (if required)"
+            onPressEnter={handleJoinById}
+            style={{ width: 190, borderRadius: 8 }}
+          />
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={handleJoinById}
+            style={{
+              background: "#111827",
+              borderColor: "#111827",
+              color: "#fff",
+              borderRadius: 8,
+            }}
+          >
+            Join
+          </Button>
+        </Space>
+      </Card>
+
+      {/* Search + Session Cards */}
       <div>
-        {/* search bar */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="relative flex-1 max-w-xs">
-            <SearchIcon className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40" />
-            <input
-              className="input input-sm input-bordered w-full pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sessions..."
-            />
-          </div>
-          <span className="text-xs text-base-content/50">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <Input
+            size="small"
+            prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search sessions..."
+            allowClear
+            style={{ maxWidth: 260, borderRadius: 8 }}
+          />
+          <Text type="secondary" style={{ fontSize: 12 }}>
             {filteredSessions.length} session{filteredSessions.length !== 1 ? "s" : ""}
-          </span>
+          </Text>
         </div>
 
         {filteredSessions.length === 0 ? (
-          <div className="card bg-base-100 border border-base-300 border-dashed">
-            <div className="card-body items-center text-center py-12 gap-3">
-              <RadioIcon className="size-10 text-base-content/20" />
-              <p className="font-semibold text-base-content/50">No active sessions</p>
-              <p className="text-xs text-base-content/40">
-                {searchQuery
-                  ? "Try a different search"
-                  : "Open a problem to create a session and invite others."}
-              </p>
-            </div>
-          </div>
+          <Card
+            style={{
+              borderRadius: 12,
+              border: "1px dashed #e5e7eb",
+              background: "#fafbfc",
+            }}
+          >
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <span style={{ color: "#9ca3af" }}>
+                  {searchQuery ? "No sessions match your search." : "No active sessions right now."}
+                </span>
+              }
+            />
+            {!searchQuery && (
+              <div style={{ textAlign: "center", marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Open any problem to start a session and invite others.
+                </Text>
+              </div>
+            )}
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Row gutter={[16, 16]}>
             {filteredSessions.map((session) => {
               const isFull = session.participantCount >= session.maxParticipants;
               const isPrivate = session.visibility === "private";
@@ -235,136 +325,176 @@ function LiveSessionsPage() {
                 100,
                 Math.round((session.participantCount / session.maxParticipants) * 100)
               );
+              const barColor =
+                fillPct >= 90 ? "#ef4444" : fillPct >= 60 ? "#f59e0b" : "#10b981";
 
               return (
-                <div
-                  key={session.id}
-                  className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="card-body gap-3 p-4">
-                    {/* top row */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm truncate">{session.name}</h3>
-                        <p className="text-xs text-base-content/50 truncate">
+                <Col xs={24} sm={12} lg={8} key={session.id}>
+                  <Card
+                    size="small"
+                    style={{
+                      borderRadius: 12,
+                      border: "1px solid #eef0f3",
+                      background: "#fff",
+                      height: "100%",
+                    }}
+                    styles={{ body: { padding: "16px" } }}
+                  >
+                    {/* Top row */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          strong
+                          style={{
+                            fontSize: 13,
+                            display: "block",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {session.name}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 11.5 }}>
                           Host: {session.hostName}
-                        </p>
+                        </Text>
                       </div>
-                      <span
-                        className={`badge badge-sm shrink-0 ${
-                          isPrivate ? "badge-warning" : "badge-success"
-                        }`}
+                      <Tag
+                        icon={isPrivate ? <LockOutlined /> : <UnlockOutlined />}
+                        style={{
+                          borderRadius: 6,
+                          fontSize: 11,
+                          padding: "1px 8px",
+                          background: isPrivate ? "#fffbeb" : "#ecfdf5",
+                          border: isPrivate ? "1px solid #fde68a" : "1px solid #a7f3d0",
+                          color: isPrivate ? "#b45309" : "#047857",
+                          flexShrink: 0,
+                        }}
                       >
-                        {isPrivate ? (
-                          <LockIcon className="size-3 mr-0.5" />
-                        ) : (
-                          <UnlockIcon className="size-3 mr-0.5" />
-                        )}
                         {session.visibility}
-                      </span>
+                      </Tag>
                     </div>
 
-                    {/* session id */}
-                    <div className="font-mono text-[10px] bg-base-200 rounded px-2 py-1 text-base-content/60 truncate">
+                    {/* Session ID */}
+                    <div
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: 10.5,
+                        background: "#f9fafb",
+                        border: "1px solid #eef0f3",
+                        borderRadius: 6,
+                        padding: "4px 10px",
+                        color: "#6b7280",
+                        marginBottom: 12,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {session.id}
                     </div>
 
-                    {/* participants bar */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs text-base-content/60">
-                        <span className="flex items-center gap-1">
-                          <UsersIcon className="size-3" />
-                          {session.participantCount} / {session.maxParticipants}
-                        </span>
-                        <span>{fillPct}% full</span>
+                    {/* Participants */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Space size={4}>
+                          <TeamOutlined style={{ fontSize: 12, color: "#6b7280" }} />
+                          <Text style={{ fontSize: 12, color: "#6b7280" }}>
+                            {session.participantCount} / {session.maxParticipants}
+                          </Text>
+                        </Space>
+                        <Text style={{ fontSize: 11.5, color: "#9ca3af" }}>{fillPct}% full</Text>
                       </div>
-                      <div className="w-full bg-base-200 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${
-                            fillPct >= 90
-                              ? "bg-error"
-                              : fillPct >= 60
-                              ? "bg-warning"
-                              : "bg-success"
-                          }`}
-                          style={{ width: `${fillPct}%` }}
-                        />
-                      </div>
+                      <Progress
+                        percent={fillPct}
+                        size="small"
+                        showInfo={false}
+                        strokeColor={barColor}
+                        trailColor="#f3f4f6"
+                      />
                     </div>
 
-                    {/* action */}
-                    <div className="card-actions justify-end mt-1">
+                    {/* Action */}
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
                       {isPrivate ? (
-                        <button
-                          className="btn btn-xs btn-outline gap-1"
-                          onClick={() => {
-                            setJoinSessionId(session.id);
-                            document
-                              .getElementById("join-by-id-section")
-                              ?.scrollIntoView({ behavior: "smooth" });
-                          }}
+                        <Button
+                          size="small"
+                          icon={<LockOutlined />}
+                          onClick={() => setJoinSessionId(session.id)}
+                          style={{ borderRadius: 8, fontSize: 12 }}
                         >
-                          <LockIcon className="size-3" />
                           Use Session ID
-                        </button>
+                        </Button>
                       ) : (
-                        <button
-                          className={`btn btn-xs ${isFull ? "btn-disabled" : "btn-primary"} gap-1`}
+                        <Button
+                          size="small"
+                          icon={<ThunderboltOutlined />}
                           disabled={isFull}
                           onClick={() => handleJoinCard(session)}
+                          style={{
+                            borderRadius: 8,
+                            fontSize: 12,
+                            background: isFull ? undefined : "#111827",
+                            borderColor: isFull ? undefined : "#111827",
+                            color: isFull ? undefined : "#fff",
+                          }}
                         >
-                          <ZapIcon className="size-3" />
                           {isFull ? "Full" : "Join"}
-                        </button>
+                        </Button>
                       )}
                     </div>
-                  </div>
-                </div>
+                  </Card>
+                </Col>
               );
             })}
-          </div>
+          </Row>
         )}
       </div>
 
-      {/* ── PASSWORD MODAL ── */}
-      {passwordModal && (
-        <dialog className="modal modal-open">
-          <div className="modal-box max-w-sm">
-            <button
-              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-              onClick={() => setPasswordModal(null)}
-            >
-              <XIcon className="size-4" />
-            </button>
-            <h3 className="font-bold text-base mb-1 flex items-center gap-2">
-              <LockIcon className="size-4 text-warning" />
-              Password Required
-            </h3>
-            <p className="text-xs text-base-content/60 mb-4">
-              <span className="font-semibold text-base-content">{passwordModal.name}</span> is
-              password-protected.
-            </p>
-            <input
-              className="input input-sm input-bordered w-full"
-              type="password"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              placeholder="Enter session password"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && handlePasswordModalJoin()}
-            />
-            <div className="modal-action">
-              <button className="btn btn-ghost btn-sm" onClick={() => setPasswordModal(null)}>
-                Cancel
-              </button>
-              <button className="btn btn-primary btn-sm" onClick={handlePasswordModalJoin}>
-                Join
-              </button>
-            </div>
-          </div>
-          <div className="modal-backdrop" onClick={() => setPasswordModal(null)} />
-        </dialog>
-      )}
+      {/* Password Modal */}
+      <Modal
+        open={!!passwordModal}
+        onCancel={() => setPasswordModal(null)}
+        onOk={handlePasswordModalJoin}
+        okText="Join"
+        cancelText="Cancel"
+        title={
+          <Space>
+            <LockOutlined style={{ color: "#b45309" }} />
+            Password Required
+          </Space>
+        }
+        okButtonProps={{
+          style: { background: "#111827", borderColor: "#111827" },
+        }}
+        width={360}
+      >
+        <Text type="secondary" style={{ fontSize: 13, display: "block", marginBottom: 12 }}>
+          <Text strong>{passwordModal?.name}</Text> is password-protected.
+        </Text>
+        <Input.Password
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          placeholder="Enter session password"
+          autoFocus
+          onPressEnter={handlePasswordModalJoin}
+          style={{ borderRadius: 8 }}
+        />
+      </Modal>
     </div>
   );
 }

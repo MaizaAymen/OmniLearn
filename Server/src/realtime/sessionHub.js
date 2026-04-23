@@ -1236,6 +1236,25 @@ function setupSessionHub(httpServer) {
       ack?.({ ok: true, code: work.code, tldrawStore: work.tldrawStore || {} });
     });
 
+    // ── Session chat (collab messages) ────────────────────────────────────
+    socket.on("session:chat:send", ({ text } = {}) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return;
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return;
+      const trimmed = String(text || "").slice(0, 500).trim();
+      if (!trimmed) return;
+      const sender = session.participants[socket.id];
+      if (!sender) return;
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:chat:message", {
+        id: `${socket.id}-${Date.now()}`,
+        socketId: socket.id,
+        name: sender.name,
+        text: trimmed,
+        time: Date.now(),
+      });
+    });
+
     // ── Disconnect ────────────────────────────────────────────────────────
     socket.on("disconnect", () => {
       removeFromWaiting(socket.id);

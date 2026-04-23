@@ -31,54 +31,98 @@ import {
   LockIcon,
   XIcon,
   Link2Icon,
+  MessageSquareIcon,
 } from "lucide-react";
 
 import "./ProblemPage.css";
 
-// ── Session type picker ───────────────────────────────────────────────────────
 const SESSION_TYPES = [
-  {
-    key:   "study",
-    icon:  "📚",
-    label: "Study Group",
-    desc:  "Free collaboration, open to anyone",
-  },
-  {
-    key:   "classroom",
-    icon:  "🎓",
-    label: "Classroom",
-    desc:  "Teacher-led, students have private editors",
-  },
-  {
-    key:   "exam",
-    icon:  "⏱",
-    label: "Timed Exam",
-    desc:  "Private, timed, each student works alone",
-  },
-  {
-    key:   "pair",
-    icon:  "🤝",
-    label: "Pair Programming",
-    desc:  "Two people, turn-based editing",
-  },
+  { key: "study",     icon: "📚", label: "Study Group",      desc: "Free collaboration, open to anyone" },
+  { key: "classroom", icon: "🎓", label: "Classroom",        desc: "Teacher-led, students have private editors" },
+  { key: "exam",      icon: "⏱",  label: "Timed Exam",       desc: "Private, timed, each student works alone" },
+  { key: "pair",      icon: "🤝", label: "Pair Programming", desc: "Two people, turn-based editing" },
 ];
 
-// Which tabs are relevant for each session type.
-const TABS_BY_TYPE = {
-  study:     ["basic", "access", "collab", "exam"],
-  classroom: ["basic", "access", "limits", "roles", "exam"],
-  exam:      ["basic", "access", "limits", "roles", "exam"],
-  pair:      ["basic", "collab", "exam"],
-};
+function TagAutocomplete({ label, note, tags, setTags, users, badgeClass = "" }) {
+  const [input, setInput] = useState("");
+  const [open, setOpen] = useState(false);
 
-const ALL_TABS = [
-  { key: "basic",  label: "Basic"  },
-  { key: "access", label: "Access" },
-  { key: "limits", label: "Limits" },
-  { key: "roles",  label: "Roles"  },
-  { key: "collab", label: "Collab" },
-  { key: "exam",   label: "Exam"   },
-];
+  const suggestions = input.trim()
+    ? users
+        .filter((u) => {
+          const full = `${u.firstname || ""} ${u.lastname || ""}`.trim().toLowerCase();
+          const q = input.toLowerCase();
+          return full.includes(q) || (u.email || "").toLowerCase().includes(q);
+        })
+        .slice(0, 6)
+    : [];
+
+  const addTag = (name) => {
+    const val = name.trim();
+    if (val) setTags((p) => (p.includes(val) ? p : [...p, val]));
+    setInput("");
+    setOpen(false);
+  };
+
+  return (
+    <div>
+      <label className="label pb-1">
+        <span className="label-text text-xs font-medium">
+          {label}{note && <span className="text-base-content/40 font-normal"> {note}</span>}
+        </span>
+      </label>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {tags.map((t) => (
+            <span key={t} className={`badge badge-sm gap-1 ${badgeClass}`}>
+              {t}
+              <button type="button" onClick={() => setTags((p) => p.filter((x) => x !== t))}>
+                <XIcon className="size-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <input
+          className="input input-sm input-bordered w-full"
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setOpen(true); }}
+          placeholder="Type a name…"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && input.trim()) { e.preventDefault(); addTag(input); }
+            if (e.key === "Escape") setOpen(false);
+          }}
+          onFocus={() => input.trim() && setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+        />
+        {open && suggestions.length > 0 && (
+          <div className="absolute z-50 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg mt-1 overflow-hidden">
+            {suggestions.map((u) => {
+              const name = `${u.firstname || ""} ${u.lastname || ""}`.trim();
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-base-200 flex items-center gap-2"
+                  onMouseDown={(e) => { e.preventDefault(); addTag(name); }}
+                >
+                  <div className="w-6 h-6 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {name[0]?.toUpperCase() || "?"}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{name}</div>
+                    <div className="text-base-content/50 truncate">{u.email}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ProblemPage() {
   const { id } = useParams();
@@ -101,71 +145,50 @@ function ProblemPage() {
   const socketRef = useRef(null);
   const attemptedJoinFromLinkRef = useRef(null);
 
-  // Realtime sessions (per-problem)
-  const [displayName, setDisplayName] = useState("Guest");
-  // Create modal – basic
-  const [sessionName, setSessionName] = useState("");
-  // Create modal – B. Access & Security
-  const [sessionVisibility, setSessionVisibility] = useState("public");
-  const [sessionPassword, setSessionPassword] = useState("");
-  const [sessionAllowAnonymous, setSessionAllowAnonymous] = useState(true);
-  const [sessionWhitelist, setSessionWhitelist] = useState("");
-  const [sessionBlacklist, setSessionBlacklist] = useState("");
-  const [sessionRequireJoinApproval, setSessionRequireJoinApproval] = useState(false);
-  const [sessionTeacherMode, setSessionTeacherMode] = useState(false);
+  // Read the authenticated user's name synchronously so it's available on the
+  // very first render — before any effects run. This prevents the auto-join
+  // sending "Guest" as the username due to a state-update race condition.
+  const [displayName, setDisplayName] = useState(() => {
+    try {
+      const u = JSON.parse(Cookies.get("user") || "{}");
+      const authName = [u.firstname, u.lastname].filter(Boolean).join(" ").trim() || u.email || "";
+      if (authName) return authName;
+    } catch { /* ignore */ }
+    const saved = localStorage.getItem("collabDisplayName");
+    if (saved) return saved;
+    return `Guest-${Math.floor(Math.random() * 1000)}`;
+  });
 
-  // Post-creation configuration modal
+  // ── Create-session form: only fields the user actually edits ──────────
+  const [sessionType, setSessionType] = useState("");   // "" = nothing picked yet
+  const [sessionName, setSessionName] = useState("");
+  const [sessionVisibility, setSessionVisibility] = useState("public");  // derived by changeAccessModel
+  const [sessionPassword, setSessionPassword] = useState("");
+  const [sessionWhitelist, setSessionWhitelist] = useState([]);
+  const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
+  const [sessionExamDuration, setSessionExamDuration] = useState(30);
+  const [sessionPlaylistIds, setSessionPlaylistIds] = useState([]);
+  const [accessModel, setAccessModel] = useState("anyone"); // "anyone" | "link" | "invited" | "classroom" | "password"
+
+  // ── Reference data for autocomplete + classroom roster ────────────────
+  const [allUsers, setAllUsers] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
+  const [selectedClassroomId, setSelectedClassroomId] = useState("");
+
+  // ── Post-creation edit-settings modal ─────────────────────────────────
   const [configOpen, setConfigOpen] = useState(false);
   const [configForm, setConfigForm] = useState({
     name: "",
-    teacherMode: false,
     locked: false,
-    requireJoinApproval: false,
     maxParticipants: 10,
-    visibility: "public",
+    accessModel: "anyone",
   });
-  // Create modal – C. Limits
-  const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
-  const [sessionAutoLock, setSessionAutoLock] = useState(false);
-  const [sessionAllowOverflow, setSessionAllowOverflow] = useState(false);
-  // Create modal – D. Roles
-  const [sessionDefaultRole, setSessionDefaultRole] = useState("editor");
-  // Create modal – E. Collaboration
-  const [sessionCollabMode, setSessionCollabMode] = useState("free");
-  const [sessionTurnDuration, setSessionTurnDuration] = useState(30);
-  const [sessionShowCursors, setSessionShowCursors] = useState(true);
-  const [sessionShowSelections, setSessionShowSelections] = useState(true);
-  const [sessionTypingIndicators, setSessionTypingIndicators] = useState(true);
-  // Create modal tab + type picker
-  const [sessionType, setSessionType]       = useState("");      // "" means nothing picked yet
-  const [createModalTab, setCreateModalTab] = useState("basic");
-
-  // Create modal – F. Exam
-  const [sessionExamEnabled, setSessionExamEnabled] = useState(false);
-  const [sessionExamDuration, setSessionExamDuration] = useState(30);
-  const [sessionExamLockLang, setSessionExamLockLang] = useState(true);
-
-  // Create modal – #2 Playlist
-  const [sessionPlaylistIds, setSessionPlaylistIds]   = useState("");   // comma-separated
-  const [sessionPlaylistMode, setSessionPlaylistMode] = useState("free"); // "free" | "sequential"
-  // Create modal – #8 Identity
-  const [sessionIdentityMode, setSessionIdentityMode] = useState("real");
-  // Create modal – #1 Permission overrides (editor/viewer × perms).
-  // Undefined values fall back to defaults on the server.
-  const [sessionPermOverrides, setSessionPermOverrides] = useState({
-    editor: { canComment: true,  canEdit: true  },
-    viewer: { canComment: true,  canEdit: false },
-  });
-  // Create modal – #10 Post-session
-  const [sessionPostSave, setSessionPostSave]       = useState(false);
-  const [sessionPostPublish, setSessionPostPublish] = useState(false);
 
   // Live exam state while a session is active
   const [exam, setExam] = useState(null);           // { enabled, phase, durationMinutes, startedAt, endsAt, lockLanguage }
   const [examRemaining, setExamRemaining] = useState(0);
   const [examResults, setExamResults] = useState(null); // array of ExamSubmission rows (teacher-only)
 
-  const [sessionJoinId, setSessionJoinId] = useState("");
   const [sessionJoinPassword, setSessionJoinPassword] = useState("");
   const [currentUserPermission, setCurrentUserPermission] = useState("editable");
   const [currentUserRole, setCurrentUserRole] = useState("editor");
@@ -180,6 +203,12 @@ function ProblemPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
   const [participantHistory, setParticipantHistory] = useState([]);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatUnread, setChatUnread] = useState(0);
+  const chatSidebarOpenRef = useRef(false);
+  const chatScrollRef = useRef(null);
   const selectedLanguageRef = useRef("javascript");
   const prevParticipantsRef = useRef([]);
 
@@ -190,7 +219,7 @@ function ProblemPage() {
   // Resizable state
   const [leftWidth, setLeftWidth] = useState(40);
   const [editorHeight, setEditorHeight] = useState(60);
-  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const isLeftCollapsed = false;
 
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
@@ -228,6 +257,24 @@ function ProblemPage() {
     selectedLanguageRef.current = selectedLanguage;
   }, [selectedLanguage]);
 
+  useEffect(() => {
+    chatSidebarOpenRef.current = chatSidebarOpen;
+    if (chatSidebarOpen) setChatUnread(0);
+  }, [chatSidebarOpen]);
+
+  useEffect(() => {
+    if (!chatSidebarOpen) return;
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMessages, chatSidebarOpen]);
+
+  const handleSendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !socketRef.current || !isInSession) return;
+    socketRef.current.emit("session:chat:send", { text });
+    setChatInput("");
+  };
+
   // Timer effect
   useEffect(() => {
     if (!timerRunning) return;
@@ -236,19 +283,22 @@ function ProblemPage() {
   }, [timerRunning]);
 
   useEffect(() => {
-    const savedName = localStorage.getItem("collabDisplayName");
-    if (savedName) {
-      setDisplayName(savedName);
-      return;
-    }
+    localStorage.setItem("collabDisplayName", displayName);
+  }, [displayName]);
 
-    const randomSuffix = Math.floor(Math.random() * 1000);
-    setDisplayName(`Guest-${randomSuffix}`);
+  useEffect(() => {
+    fetch("http://localhost:5000/api/getAllUsers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setAllUsers(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("collabDisplayName", displayName);
-  }, [displayName]);
+    fetch("http://localhost:5000/api/admin/classrooms")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setClassrooms(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const socket = io("http://localhost:5000", {
@@ -281,6 +331,11 @@ function ProblemPage() {
 
     socket.on("session:permission:error", ({ message }) => {
       toast.error(message || "You do not have permission to perform this action");
+    });
+
+    socket.on("session:chat:message", (msg) => {
+      setChatMessages((prev) => [...prev, msg].slice(-200));
+      if (!chatSidebarOpenRef.current) setChatUnread((n) => n + 1);
     });
 
     socket.on("session:code:updated", ({ language, code }) => {
@@ -436,46 +491,86 @@ function ProblemPage() {
     pair:      { visibility:"private", allowAnonymous:false, requireJoinApproval:false, teacherMode:false, maxParticipants:2,   defaultRole:"editor", collabMode:"turn-based", examEnabled:false, autoLock:true  },
   };
 
+  // Map the chosen session type to a sensible default access model.
+  const ACCESS_BY_TYPE = { study: "anyone", classroom: "classroom", exam: "classroom", pair: "link" };
+
+  // Changing the access-model dropdown derives the underlying visibility/whitelist/password fields.
+  const changeAccessModel = (model) => {
+    setAccessModel(model);
+    if (model === "anyone")    { setSessionVisibility("public");   setSessionWhitelist([]); setSessionPassword(""); }
+    if (model === "link")      { setSessionVisibility("unlisted"); setSessionWhitelist([]); setSessionPassword(""); }
+    if (model === "invited")   { setSessionVisibility("private");                           setSessionPassword(""); }
+    if (model === "classroom") { setSessionVisibility("private");                           setSessionPassword(""); }
+    if (model === "password")  { setSessionVisibility("private"); setSessionWhitelist([]);                          }
+  };
+
+  // Picking a classroom auto-fills the whitelist with its roster.
+  const pickClassroom = async (id) => {
+    setSelectedClassroomId(id);
+    if (!id) { setSessionWhitelist([]); return; }
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/classrooms/${id}/students`);
+      const students = res.ok ? await res.json() : [];
+      const names = (students || [])
+        .map((s) => `${s.firstname || ""} ${s.lastname || ""}`.trim())
+        .filter(Boolean);
+      setSessionWhitelist(names);
+    } catch { setSessionWhitelist([]); }
+  };
+
   const applySessionType = (type) => {
     const d = TYPE_DEFAULTS[type];
     setSessionType(type);
-    setCreateModalTab("basic");
-    setSessionVisibility(d.visibility);
-    setSessionAllowAnonymous(d.allowAnonymous);
-    setSessionRequireJoinApproval(d.requireJoinApproval);
-    setSessionTeacherMode(d.teacherMode);
     setSessionMaxParticipants(d.maxParticipants);
-    setSessionDefaultRole(d.defaultRole);
-    setSessionCollabMode(d.collabMode);
-    setSessionExamEnabled(d.examEnabled);
-    setSessionAutoLock(d.autoLock);
+    changeAccessModel(ACCESS_BY_TYPE[type] || "anyone");
   };
 
   const closeCreateModal = () => {
     setCreateModalOpen(false);
-    setCreateModalTab("basic");
     setSessionType("");
+    setSelectedClassroomId("");
+    setAccessModel("anyone");
+  };
+
+  // Derive "accessModel" from the live session's visibility + waiting-room flag.
+  const visibilityToAccess = (vis, needsApproval) => {
+    if (vis === "public") return "anyone";
+    if (vis === "unlisted") return "link";
+    return needsApproval ? "invited" : "link";
   };
 
   const openConfig = () => {
     if (!activeSession) return;
     setConfigForm({
       name: activeSession.name || "",
-      teacherMode: Boolean(activeSession.teacherMode),
       locked: Boolean(activeSession.locked),
-      requireJoinApproval: Boolean(activeSession.requireJoinApproval),
       maxParticipants: activeSession.maxParticipants ?? 10,
-      visibility: activeSession.visibility || "public",
+      accessModel: visibilityToAccess(activeSession.visibility, activeSession.requireJoinApproval),
     });
     setConfigOpen(true);
   };
 
   const saveConfig = () => {
-    socketRef.current?.emit("session:settings:update", configForm, (res) => {
-      if (!res?.ok) return toast.error(res?.message || "Could not save settings");
-      toast.success("Settings saved");
-      setConfigOpen(false);
-    });
+    // Map the simple accessModel back to the fields the server expects.
+    const { accessModel: model } = configForm;
+    const visibility = model === "anyone" ? "public" : model === "link" ? "unlisted" : "private";
+    const requireJoinApproval = model === "invited";
+
+    socketRef.current?.emit(
+      "session:settings:update",
+      {
+        name: configForm.name,
+        locked: configForm.locked,
+        maxParticipants: configForm.maxParticipants,
+        visibility,
+        requireJoinApproval,
+      },
+      (res) => {
+        if (!res?.ok) return toast.error(res?.message || "Could not save settings");
+        toast.success("Settings saved");
+        setConfigOpen(false);
+      }
+    );
   };
 
   useEffect(() => {
@@ -518,6 +613,22 @@ function ProblemPage() {
     return `${m}:${s}`;
   };
 
+  // Host flips the waiting room on or off during a live session.
+  const toggleWaitingRoom = () => {
+    const next = !activeSession?.requireJoinApproval;
+    socketRef.current?.emit("session:settings:update", { requireJoinApproval: next }, (res) => {
+      if (!res?.ok) toast.error("Could not update waiting room");
+      else toast(next ? "Waiting room ON — new joiners need approval" : "Waiting room OFF — anyone can join", { icon: next ? "🔒" : "🔓" });
+    });
+  };
+
+  // Host accepts every user currently in the waiting room at once.
+  const acceptAll = () => {
+    waitingRoomUsers.forEach((w) =>
+      socketRef.current?.emit("session:waiting:approve", { socketId: w.socketId })
+    );
+  };
+
   // Teacher clicks "Start Exam"
   const handleStartExam = () => {
     socketRef.current?.emit("exam:start", {}, (res) => {
@@ -549,32 +660,6 @@ function ProblemPage() {
       if (!res?.ok) return toast.error(res?.message || "Could not advance");
     });
   };
-
-  // #9 Pure config linter — returns a list of human-readable warnings.
-  // Used as a banner in the create modal. Easy to extend: add one entry.
-  const lintConfig = () => {
-    const warnings = [];
-    if (sessionExamEnabled && sessionIdentityMode === "anonymous") {
-      warnings.push("Exam + anonymous names: you won't know whose submission is whose.");
-    }
-    if (sessionExamEnabled && sessionCollabMode !== "free") {
-      warnings.push("Exam mode works best with Free collab — students should type independently.");
-    }
-    if (sessionVisibility === "public" && sessionPassword) {
-      warnings.push("Public session with a password: consider Private instead.");
-    }
-    if (sessionAllowAnonymous && (sessionWhitelist || "").trim()) {
-      warnings.push("Whitelist set but anonymous users allowed — whitelist will be bypassed by guests.");
-    }
-    if (Number(sessionMaxParticipants) > 50 && !sessionRequireJoinApproval) {
-      warnings.push("Large session without waiting room — anyone can flood in.");
-    }
-    if (sessionExamEnabled && !sessionRequireJoinApproval) {
-      warnings.push("Exam without waiting room — late-arriving students may disrupt timing.");
-    }
-    return warnings;
-  };
-  const configWarnings = lintConfig();
 
   // Teacher opens the results panel after the exam ends.
   const handleLoadExamResults = async () => {
@@ -744,6 +829,9 @@ function ProblemPage() {
   const handleCreateSession = () => {
     if (!socketRef.current || !currentProblemId) return;
 
+    // All the "hidden" knobs are derived from the session type at emit time.
+    const d = TYPE_DEFAULTS[sessionType] || TYPE_DEFAULTS.study;
+
     socketRef.current.emit(
       "session:create",
       {
@@ -752,48 +840,28 @@ function ProblemPage() {
         hostName:    displayName || "Host",
         language:    selectedLanguage,
         starterCode: code,
-        // B. Access & Security
+        // Access (user-facing)
         visibility:          sessionVisibility,
         password:            sessionPassword,
-        allowAnonymous:      sessionAllowAnonymous,
         whitelist:           sessionWhitelist,
-        blacklist:           sessionBlacklist,
-        requireJoinApproval: sessionRequireJoinApproval,
-        teacherMode:         sessionTeacherMode,
-        // C. Limits
+        // Access (type-driven defaults)
+        allowAnonymous:      d.allowAnonymous,
+        requireJoinApproval: d.requireJoinApproval,
+        teacherMode:         d.teacherMode,
+        // Limits
         maxParticipants: Number(sessionMaxParticipants) || 10,
-        autoLock:        sessionAutoLock,
-        allowOverflow:   sessionAllowOverflow,
-        // D. Roles
-        defaultRole: sessionDefaultRole,
-        // E. Collaboration
-        collab: {
-          mode:             sessionCollabMode,
-          turnDuration:     Number(sessionTurnDuration) || 30,
-          showLiveCursors:  sessionShowCursors,
-          showSelections:   sessionShowSelections,
-          typingIndicators: sessionTypingIndicators,
-        },
-        // F. Exam
-        exam: {
-          enabled:         sessionExamEnabled,
-          durationMinutes: Number(sessionExamDuration) || 30,
-          lockLanguage:    sessionExamLockLang,
-        },
-        // #2 Playlist (empty string → server falls back to [problemId])
-        problemIds: sessionPlaylistIds
-          .split(",").map((s) => s.trim()).filter(Boolean),
-        playlistMode: sessionPlaylistMode,
-        // #8 Identity
-        identityMode: sessionIdentityMode,
-        // #1 Permission overrides (only editor + viewer)
-        permissionOverrides: sessionPermOverrides,
-        // #10 Post-session
-        postSession: {
-          saveSnapshots:    sessionPostSave,
-          publishSolution:  sessionPostPublish,
-          autoCloseOnEmpty: true,
-        },
+        autoLock:        d.autoLock,
+        // Roles + collab (type-driven)
+        defaultRole: d.defaultRole,
+        collab: { mode: d.collabMode, turnDuration: 30, showLiveCursors: true, showSelections: true, typingIndicators: true },
+        // Exam
+        exam: { enabled: d.examEnabled, durationMinutes: Number(sessionExamDuration) || 30, lockLanguage: true },
+        // Playlist (empty → server falls back to [problemId])
+        problemIds: sessionPlaylistIds,
+        playlistMode: "free",
+        // Identity + post-session: sane constants
+        identityMode: "real",
+        postSession: { saveSnapshots: false, publishSolution: false, autoCloseOnEmpty: true },
       },
       (response) => {
         if (!response?.ok) {
@@ -811,9 +879,9 @@ function ProblemPage() {
           requireJoinApproval: Boolean(joined.requireJoinApproval),
           maxParticipants: joined.maxParticipants,
           visibility: joined.visibility,
-          problemIds:          joined.problemIds || [],          // #2
-          currentProblemIndex: joined.currentProblemIndex ?? 0,  // #2
-          identityMode:        joined.identityMode || "real",    // #8
+          problemIds:          joined.problemIds || [],
+          currentProblemIndex: joined.currentProblemIndex ?? 0,
+          identityMode:        joined.identityMode || "real",
         });
         setExam(joined.exam || null);
         setCurrentUserRole(response.userRole || "host");
@@ -824,8 +892,8 @@ function ProblemPage() {
         // Reset form
         setSessionName("");
         setSessionPassword("");
-        setSessionWhitelist("");
-        setSessionBlacklist("");
+        setSessionWhitelist([]);
+        setSessionPlaylistIds([]);
         closeCreateModal();
 
         toast.success(`Session created & joined (ID: ${response.sessionId})`);
@@ -850,12 +918,8 @@ function ProblemPage() {
           return;
         }
 
-        // Placed in waiting room
-        if (response.waiting) {
-          setSessionJoinId("");
-          setSessionJoinPassword("");
-          return;
-        }
+        // Placed in waiting room — nothing to reset, just wait for host approval
+        if (response.waiting) return;
 
         const joined = response.session;
         setActiveSession({
@@ -906,6 +970,10 @@ function ProblemPage() {
     setWaitingRoomUsers([]);
     setIsInWaitingRoom(false);
     setParticipantsSidebarOpen(false);
+    setChatSidebarOpen(false);
+    setChatMessages([]);
+    setChatInput("");
+    setChatUnread(0);
     prevParticipantsRef.current = [];
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -935,13 +1003,9 @@ function ProblemPage() {
   useEffect(() => {
     if (!requestedSessionId || !socketRef.current) return;
     if (attemptedJoinFromLinkRef.current === requestedSessionId) return;
-
-    const sessionExists = availableSessions.some((s) => s.id === requestedSessionId);
-    if (!sessionExists) return;
-
     attemptedJoinFromLinkRef.current = requestedSessionId;
     handleJoinSession(requestedSessionId, requestedJoinPassword);
-  }, [requestedSessionId, requestedJoinPassword, availableSessions]);
+  }, [requestedSessionId, requestedJoinPassword]);
 
   useEffect(() => {
     attemptedJoinFromLinkRef.current = null;
@@ -1303,12 +1367,49 @@ function ProblemPage() {
               </span>
 
               <button
-                className="btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-primary"
-                onClick={() => setParticipantsSidebarOpen((o) => !o)}
+                className="btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-primary relative"
+                onClick={() => {
+                  setParticipantsSidebarOpen((o) => !o);
+                  setChatSidebarOpen(false);
+                }}
                 title="View participants"
               >
                 <UsersIcon className="size-3.5" />
                 <span>{sessionParticipants.length}</span>
+                {waitingRoomUsers.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-warning text-warning-content text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                    {waitingRoomUsers.length}
+                  </span>
+                )}
+              </button>
+
+              {/* ── Waiting room toggle (host/co-host only) ── */}
+              {(currentUserRole === "host" || currentUserRole === "co-host") && (
+                <button
+                  className={`btn btn-xs gap-1 ${activeSession.requireJoinApproval ? "btn-warning" : "btn-ghost text-base-content/40"}`}
+                  onClick={toggleWaitingRoom}
+                  title={activeSession.requireJoinApproval ? "Waiting room ON — click to turn off" : "Waiting room OFF — click to turn on"}
+                >
+                  <LockIcon className="size-3" />
+                  {activeSession.requireJoinApproval ? "Waiting room ON" : "Waiting room OFF"}
+                </button>
+              )}
+
+              <button
+                className="btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-primary relative"
+                onClick={() => {
+                  setChatSidebarOpen((o) => !o);
+                  setParticipantsSidebarOpen(false);
+                }}
+                title="Open chat"
+              >
+                <MessageSquareIcon className="size-3.5" />
+                <span>Chat</span>
+                {chatUnread > 0 && !chatSidebarOpen && (
+                  <span className="absolute -top-1 -right-1 bg-error text-error-content text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                    {chatUnread > 9 ? "9+" : chatUnread}
+                  </span>
+                )}
               </button>
 
               <button
@@ -1667,419 +1768,158 @@ function ProblemPage() {
               </button>
             </div>
 
-            {/* only the tabs relevant to this type */}
-            <div className="tabs tabs-boxed tabs-sm mb-4 flex-wrap gap-1">
-              {ALL_TABS.filter(t => TABS_BY_TYPE[sessionType].includes(t.key)).map(({ key, label }) => (
-                <button
-                  key={key}
-                  className={`tab tab-sm ${createModalTab === key ? "tab-active" : ""}`}
-                  onClick={() => setCreateModalTab(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* ── BASIC ── */}
-            {createModalTab === "basic" && (
-              <div className="space-y-3">
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Session Name</span>
-                  </label>
-                  <input
-                    className="input input-sm input-bordered w-full"
-                    value={sessionName}
-                    onChange={(e) => setSessionName(e.target.value)}
-                    placeholder={`${currentProblem?.title || "Problem"} Session`}
-                  />
-                </div>
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Your Display Name</span>
-                  </label>
-                  <input
-                    className="input input-sm input-bordered w-full"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Host"
-                  />
-                </div>
-
-                {/* #2 Playlist */}
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">
-                      Problem playlist <span className="text-base-content/40 font-normal">(comma-separated IDs, empty = current only)</span>
-                    </span>
-                  </label>
-                  <input
-                    className="input input-sm input-bordered w-full"
-                    value={sessionPlaylistIds}
-                    onChange={(e) => setSessionPlaylistIds(e.target.value)}
-                    placeholder="two-sum, valid-parentheses, reverse-string"
-                  />
-                  <div className="mt-2">
-                    <select
-                      className="select select-sm select-bordered w-full"
-                      value={sessionPlaylistMode}
-                      onChange={(e) => setSessionPlaylistMode(e.target.value)}
-                    >
-                      <option value="free">Free — host picks next problem anytime</option>
-                      <option value="sequential">Sequential — fixed order, no skipping</option>
-                    </select>
-                  </div>
-                </div>
+            {/* ── Simple linear form: one question at a time, smart defaults from the session type ── */}
+            <div className="space-y-4">
+              {/* 1. Session name */}
+              <div>
+                <label className="label pb-1">
+                  <span className="label-text text-xs font-medium">Session name</span>
+                </label>
+                <input
+                  className="input input-sm input-bordered w-full"
+                  value={sessionName}
+                  onChange={(e) => setSessionName(e.target.value)}
+                  placeholder={`${currentProblem?.title || "Problem"} Session`}
+                />
               </div>
-            )}
 
-            {/* ── ACCESS & SECURITY ── */}
-            {createModalTab === "access" && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+              {/* 2. Access — one dropdown, drives visibility/whitelist/password */}
+              <div>
+                <label className="label pb-1">
+                  <span className="label-text text-xs font-medium">Who can join?</span>
+                </label>
+                <select
+                  className="select select-sm select-bordered w-full"
+                  value={accessModel}
+                  onChange={(e) => changeAccessModel(e.target.value)}
+                >
+                  <option value="anyone">Anyone (public)</option>
+                  <option value="link">Anyone with the link</option>
+                  <option value="invited">People I invite</option>
+                  <option value="classroom">My classroom</option>
+                  <option value="password">Password-protected</option>
+                </select>
+
+                {accessModel === "invited" && (
+                  <div className="mt-3">
+                    <TagAutocomplete
+                      label="Invite people"
+                      tags={sessionWhitelist}
+                      setTags={setSessionWhitelist}
+                      users={allUsers}
+                    />
+                  </div>
+                )}
+
+                {accessModel === "classroom" && (
+                  <div className="mt-3">
                     <label className="label pb-1">
-                      <span className="label-text text-xs font-medium">Visibility</span>
+                      <span className="label-text text-xs font-medium">Pick a classroom</span>
                     </label>
                     <select
                       className="select select-sm select-bordered w-full"
-                      value={sessionVisibility}
-                      onChange={(e) => setSessionVisibility(e.target.value)}
+                      value={selectedClassroomId}
+                      onChange={(e) => pickClassroom(e.target.value)}
                     >
-                      <option value="public">Public</option>
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
+                      <option value="">— Select classroom —</option>
+                      {classrooms.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
                     </select>
+                    {selectedClassroomId && (
+                      <p className="text-[11px] text-base-content/60 mt-1">
+                        {sessionWhitelist.length} student{sessionWhitelist.length === 1 ? "" : "s"} auto-invited
+                      </p>
+                    )}
                   </div>
-                  <div>
+                )}
+
+                {accessModel === "password" && (
+                  <div className="mt-3">
                     <label className="label pb-1">
-                      <span className="label-text text-xs font-medium">
-                        Password <span className="text-base-content/40 font-normal">(optional)</span>
-                      </span>
+                      <span className="label-text text-xs font-medium">Password</span>
                     </label>
                     <input
                       type="password"
                       className="input input-sm input-bordered w-full"
                       value={sessionPassword}
                       onChange={(e) => setSessionPassword(e.target.value)}
-                      placeholder="Leave empty for none"
+                      placeholder="Enter a password"
                     />
                   </div>
-                </div>
+                )}
+              </div>
 
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">
-                      Whitelist <span className="text-base-content/40 font-normal">(comma-separated, empty = anyone)</span>
-                    </span>
-                  </label>
-                  <input
-                    className="input input-sm input-bordered w-full"
-                    value={sessionWhitelist}
-                    onChange={(e) => setSessionWhitelist(e.target.value)}
-                    placeholder="alice, bob"
-                  />
-                </div>
-
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">
-                      Blacklist <span className="text-base-content/40 font-normal">(comma-separated)</span>
-                    </span>
-                  </label>
-                  <input
-                    className="input input-sm input-bordered w-full"
-                    value={sessionBlacklist}
-                    onChange={(e) => setSessionBlacklist(e.target.value)}
-                    placeholder="baduser"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2 pt-1">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionAllowAnonymous}
-                      onChange={(e) => setSessionAllowAnonymous(e.target.checked)}
-                    />
-                    <span className="text-xs">Allow anonymous users (Guest-…)</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionRequireJoinApproval}
-                      onChange={(e) => setSessionRequireJoinApproval(e.target.checked)}
-                    />
-                    <span className="text-xs">Waiting room — require host approval to join</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionTeacherMode}
-                      onChange={(e) => setSessionTeacherMode(e.target.checked)}
-                    />
-                    <span className="text-xs">Teacher mode — each student has a private editor</span>
-                  </label>
-                </div>
-
-                {/* #8 Identity mode */}
-                <div className="pt-2 border-t border-base-200">
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Identity mode for participants</span>
-                  </label>
-                  <select
-                    className="select select-sm select-bordered w-full"
-                    value={sessionIdentityMode}
-                    onChange={(e) => setSessionIdentityMode(e.target.value)}
-                  >
-                    <option value="real">Real names — everyone sees everyone</option>
-                    <option value="anonymous">Anonymous — students see "Student 1", "Student 2"…</option>
-                    <option value="pseudonymous">Pseudonymous — stable fake names per user</option>
-                  </select>
-                  <p className="text-[10px] text-base-content/50 mt-1">
-                    Hosts and co-hosts always see real names for grading.
-                  </p>
+              {/* 3. Problems */}
+              <div>
+                <label className="label pb-1">
+                  <span className="label-text text-xs font-medium">
+                    Problems <span className="text-base-content/40 font-normal">(empty = current only)</span>
+                  </span>
+                </label>
+                <div className="border border-base-300 rounded-lg max-h-36 overflow-y-auto bg-base-100">
+                  {problemIds.map((pid) => {
+                    const p = allProblemsById[pid];
+                    const checked = sessionPlaylistIds.includes(pid);
+                    return (
+                      <label key={pid} className="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-xs checkbox-primary"
+                          checked={checked}
+                          onChange={() =>
+                            setSessionPlaylistIds((prev) =>
+                              prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]
+                            )
+                          }
+                        />
+                        <span className="flex-1 truncate">{p?.title || pid}</span>
+                        {p?.difficulty && (
+                          <span className={`text-[10px] font-semibold ${p.difficulty === "Easy" ? "text-success" : p.difficulty === "Medium" ? "text-warning" : "text-error"}`}>
+                            {p.difficulty}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
-            )}
 
-            {/* ── LIMITS ── */}
-            {createModalTab === "limits" && (
-              <div className="space-y-3">
+              {/* 4. Max participants */}
+              <div>
+                <label className="label pb-1">
+                  <span className="label-text text-xs font-medium">Max participants</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  className="input input-sm input-bordered w-full"
+                  value={sessionMaxParticipants}
+                  onChange={(e) => setSessionMaxParticipants(e.target.value)}
+                />
+              </div>
+
+              {/* 5. Exam duration (only for exam type) */}
+              {sessionType === "exam" && (
                 <div>
                   <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Max Participants</span>
+                    <span className="label-text text-xs font-medium">Exam duration (minutes)</span>
                   </label>
                   <input
                     type="number"
                     min={1}
-                    max={200}
+                    max={300}
                     className="input input-sm input-bordered w-full"
-                    value={sessionMaxParticipants}
-                    onChange={(e) => setSessionMaxParticipants(e.target.value)}
+                    value={sessionExamDuration}
+                    onChange={(e) => setSessionExamDuration(e.target.value)}
                   />
-                </div>
-                <div className="flex flex-col gap-2 pt-1">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionAutoLock}
-                      onChange={(e) => setSessionAutoLock(e.target.checked)}
-                    />
-                    <span className="text-xs">Auto-lock session when full</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionAllowOverflow}
-                      onChange={(e) => setSessionAllowOverflow(e.target.checked)}
-                    />
-                    <span className="text-xs">Allow overflow (ignore limit after lock)</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* ── ROLES ── */}
-            {createModalTab === "roles" && (
-              <div className="space-y-3">
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Default role for new joiners</span>
-                  </label>
-                  <select
-                    className="select select-sm select-bordered w-full"
-                    value={sessionDefaultRole}
-                    onChange={(e) => setSessionDefaultRole(e.target.value)}
-                  >
-                    <option value="editor">Editor — can edit &amp; comment</option>
-                    <option value="viewer">Viewer — read-only</option>
-                  </select>
-                </div>
-                {/* #1 Permission matrix override for editor + viewer */}
-                <div className="bg-base-200 rounded-lg p-3 text-xs">
-                  <p className="font-semibold mb-2">Custom permissions</p>
-                  <div className="grid grid-cols-3 gap-2 items-center">
-                    <span></span>
-                    <span className="text-center font-medium">Can edit</span>
-                    <span className="text-center font-medium">Can comment</span>
-                    {["editor", "viewer"].flatMap((role) => [
-                      <span key={`${role}-label`} className="capitalize">{role}</span>,
-                      ...["canEdit", "canComment"].map((perm) => (
-                        <label key={`${role}-${perm}`} className="flex justify-center">
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-xs"
-                            checked={Boolean(sessionPermOverrides[role]?.[perm])}
-                            onChange={(e) =>
-                              setSessionPermOverrides((prev) => ({
-                                ...prev,
-                                [role]: { ...prev[role], [perm]: e.target.checked },
-                              }))
-                            }
-                          />
-                        </label>
-                      )),
-                    ])}
-                  </div>
-                  <p className="text-[10px] text-base-content/50 mt-2">
-                    Host &amp; co-host keep full permissions — they can't be weakened here.
+                  <p className="text-[11px] text-base-content/60 mt-1">
+                    Students join first — click “Start Exam” when ready. Timer auto-saves submissions.
                   </p>
                 </div>
-              </div>
-            )}
-
-            {/* ── COLLABORATION ── */}
-            {createModalTab === "collab" && (
-              <div className="space-y-3">
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Collaboration Mode</span>
-                  </label>
-                  <select
-                    className="select select-sm select-bordered w-full"
-                    value={sessionCollabMode}
-                    onChange={(e) => setSessionCollabMode(e.target.value)}
-                  >
-                    <option value="free">Free — anyone with edit role can type</option>
-                    <option value="controlled">Controlled — only host/co-host can edit</option>
-                    <option value="turn-based">Turn-based — one person edits at a time</option>
-                  </select>
-                </div>
-
-                {sessionCollabMode === "turn-based" && (
-                  <div>
-                    <label className="label pb-1">
-                      <span className="label-text text-xs font-medium">Turn Duration (seconds)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={5}
-                      max={300}
-                      className="input input-sm input-bordered w-full"
-                      value={sessionTurnDuration}
-                      onChange={(e) => setSessionTurnDuration(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-2 pt-1">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionShowCursors}
-                      onChange={(e) => setSessionShowCursors(e.target.checked)}
-                    />
-                    <span className="text-xs">Show live cursors</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionShowSelections}
-                      onChange={(e) => setSessionShowSelections(e.target.checked)}
-                    />
-                    <span className="text-xs">Show selections</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionTypingIndicators}
-                      onChange={(e) => setSessionTypingIndicators(e.target.checked)}
-                    />
-                    <span className="text-xs">Typing indicators</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* ── EXAM ── */}
-            {createModalTab === "exam" && (
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-sm checkbox-primary"
-                    checked={sessionExamEnabled}
-                    onChange={(e) => setSessionExamEnabled(e.target.checked)}
-                  />
-                  <span className="text-xs font-medium">Enable exam mode</span>
-                </label>
-
-                {sessionExamEnabled && (
-                  <>
-                    <div>
-                      <label className="label pb-1">
-                        <span className="label-text text-xs font-medium">Duration (minutes)</span>
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={300}
-                        className="input input-sm input-bordered w-full"
-                        value={sessionExamDuration}
-                        onChange={(e) => setSessionExamDuration(e.target.value)}
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-sm checkbox-primary"
-                        checked={sessionExamLockLang}
-                        onChange={(e) => setSessionExamLockLang(e.target.checked)}
-                      />
-                      <span className="text-xs">Lock language during exam</span>
-                    </label>
-
-                    <div className="bg-base-200 rounded-lg p-3 text-xs text-base-content/70">
-                      Students join the session first. When ready, click <b>Start Exam</b>.
-                      When the timer expires, each student's code is auto-saved.
-                    </div>
-                  </>
-                )}
-
-                {/* #10 Post-session options */}
-                <div className="pt-3 border-t border-base-200">
-                  <p className="text-xs font-semibold mb-2">After session ends</p>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionPostSave}
-                      onChange={(e) => setSessionPostSave(e.target.checked)}
-                    />
-                    <span className="text-xs">Save each student's final code when session closes</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer mt-2">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm checkbox-primary"
-                      checked={sessionPostPublish}
-                      onChange={(e) => setSessionPostPublish(e.target.checked)}
-                    />
-                    <span className="text-xs">Publish host's solution as a resource when session closes</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* #9 Config linter warnings */}
-            {configWarnings.length > 0 && (
-              <div className="mt-4 rounded-lg bg-warning/10 border border-warning/40 p-3 space-y-1">
-                <p className="text-xs font-semibold text-warning">⚠ Configuration warnings</p>
-                <ul className="text-[11px] text-base-content/80 list-disc ml-4 space-y-0.5">
-                  {configWarnings.map((w, i) => <li key={i}>{w}</li>)}
-                </ul>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="modal-action mt-5">
               <button
@@ -2204,42 +2044,64 @@ function ProblemPage() {
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* ── Waiting room (visible to host/co-host) ── */}
-          {waitingRoomUsers.length > 0 && (currentUserRole === "host" || currentUserRole === "co-host") && (
-            <div className="px-4 py-3 border-b border-warning/30 bg-warning/5">
-              <p className="text-[10px] font-semibold text-warning uppercase tracking-wider mb-2">
-                Waiting Room · {waitingRoomUsers.length}
-              </p>
-              <div className="space-y-2">
-                {waitingRoomUsers.map((w) => (
-                  <div key={w.socketId} className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center text-xs font-bold text-warning shrink-0">
-                      {w.name[0]?.toUpperCase()}
-                    </div>
-                    <span className="text-xs truncate flex-1">{w.name}</span>
-                    <button
-                      className="btn btn-success btn-xs px-2"
-                      onClick={() => socketRef.current?.emit("session:waiting:approve", { socketId: w.socketId })}
-                    >
-                      ✓
-                    </button>
-                    <button
-                      className="btn btn-error btn-xs px-2"
-                      onClick={() => socketRef.current?.emit("session:waiting:reject", { socketId: w.socketId })}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+          {/* ── Waiting room — host view ── */}
+          {(currentUserRole === "host" || currentUserRole === "co-host") && activeSession?.requireJoinApproval && (
+            <div className="border-b border-warning/30 bg-warning/5">
+              <div className="px-4 py-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-warning uppercase tracking-wider">
+                  Waiting room
+                  {waitingRoomUsers.length > 0 && (
+                    <span className="ml-1.5 bg-warning text-warning-content text-[9px] font-bold rounded-full px-1.5 py-0.5">
+                      {waitingRoomUsers.length}
+                    </span>
+                  )}
+                </span>
+                {waitingRoomUsers.length > 1 && (
+                  <button className="btn btn-xs btn-success gap-1" onClick={acceptAll}>
+                    Accept all
+                  </button>
+                )}
               </div>
+
+              {waitingRoomUsers.length === 0 ? (
+                <p className="px-4 pb-3 text-xs text-base-content/40 italic">No one waiting</p>
+              ) : (
+                <div className="px-4 pb-3 space-y-2">
+                  {waitingRoomUsers.map((w) => (
+                    <div key={w.socketId} className="flex items-center gap-2 bg-base-100 rounded-lg px-3 py-2">
+                      <div className="w-7 h-7 rounded-full bg-warning/20 flex items-center justify-center text-xs font-bold text-warning shrink-0">
+                        {w.name[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-xs font-medium truncate flex-1">{w.name}</span>
+                      <button
+                        className="btn btn-success btn-xs"
+                        onClick={() => socketRef.current?.emit("session:waiting:approve", { socketId: w.socketId })}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-xs text-error"
+                        onClick={() => socketRef.current?.emit("session:waiting:reject", { socketId: w.socketId, reason: "The host declined your request." })}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {/* ── Waiting room notice (for the waiting user) ── */}
           {isInWaitingRoom && (
-            <div className="px-4 py-3 bg-warning/10 border-b border-warning/20 text-xs text-warning flex items-center gap-2">
-              <span className="animate-spin text-base">⏳</span>
-              Waiting for host approval…
+            <div className="mx-4 my-3 rounded-lg bg-warning/10 border border-warning/30 px-4 py-3 flex items-start gap-3">
+              <LockIcon className="size-4 text-warning shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-warning">Waiting for approval</p>
+                <p className="text-[11px] text-base-content/60 mt-0.5">
+                  The host will let you in shortly. Hang tight.
+                </p>
+              </div>
             </div>
           )}
 
@@ -2339,6 +2201,103 @@ function ProblemPage() {
         </div>
       </div>
 
+      {/* ── CHAT SIDEBAR ── */}
+      {chatSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20"
+          onClick={() => setChatSidebarOpen(false)}
+        />
+      )}
+      <div
+        className={`fixed top-0 right-0 h-full w-80 bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+          chatSidebarOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-base-300 shrink-0">
+          <span className="font-semibold text-sm flex items-center gap-2">
+            <MessageSquareIcon className="size-4 text-primary" />
+            Session Chat
+          </span>
+          <button
+            className="btn btn-ghost btn-xs btn-circle"
+            onClick={() => setChatSidebarOpen(false)}
+          >
+            <XIcon className="size-4" />
+          </button>
+        </div>
+
+        {isInSession && (
+          <div className="px-4 py-2 bg-base-200 shrink-0 flex items-center gap-2 text-xs">
+            <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+            <span className="font-medium truncate">{activeSession.name}</span>
+            <span className="text-base-content/40 ml-auto shrink-0">
+              {sessionParticipants.length} online
+            </span>
+          </div>
+        )}
+
+        <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+          {!isInSession ? (
+            <p className="text-xs text-base-content/40 italic text-center mt-4">
+              Join a session to start chatting.
+            </p>
+          ) : chatMessages.length === 0 ? (
+            <p className="text-xs text-base-content/40 italic text-center mt-4">
+              No messages yet. Say hi 👋
+            </p>
+          ) : (
+            chatMessages.map((m) => {
+              const mine = m.socketId === socketRef.current?.id;
+              const time = new Date(m.time).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              return (
+                <div
+                  key={m.id}
+                  className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
+                >
+                  <div className="flex items-center gap-1.5 text-[10px] text-base-content/50 mb-0.5 px-1">
+                    <span className="font-semibold">{mine ? "You" : m.name}</span>
+                    <span>·</span>
+                    <span>{time}</span>
+                  </div>
+                  <div
+                    className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-xs break-words ${
+                      mine
+                        ? "bg-primary text-primary-content rounded-br-sm"
+                        : "bg-base-200 text-base-content rounded-bl-sm"
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t border-base-300 p-2 shrink-0 flex items-center gap-2">
+          <input
+            className="input input-sm input-bordered flex-1"
+            placeholder={isInSession ? "Type a message…" : "Join a session first"}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+            disabled={!isInSession}
+            maxLength={500}
+          />
+          <button
+            className="btn btn-primary btn-sm btn-square"
+            onClick={handleSendChat}
+            disabled={!isInSession || !chatInput.trim()}
+            title="Send"
+          >
+            <SendIcon className="size-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Host: configure the live session after creation */}
       {configOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setConfigOpen(false)}>
@@ -2347,7 +2306,7 @@ function ProblemPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center">
-              <h3 className="font-bold text-base">Session configuration</h3>
+              <h3 className="font-bold text-base">Session settings</h3>
               <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setConfigOpen(false)}>✕</button>
             </div>
 
@@ -2362,15 +2321,15 @@ function ProblemPage() {
             </label>
 
             <label className="block">
-              <span className="text-xs font-medium">Visibility</span>
+              <span className="text-xs font-medium">Who can join?</span>
               <select
                 className="select select-sm select-bordered w-full mt-1"
-                value={configForm.visibility}
-                onChange={(e) => setConfigForm((f) => ({ ...f, visibility: e.target.value }))}
+                value={configForm.accessModel}
+                onChange={(e) => setConfigForm((f) => ({ ...f, accessModel: e.target.value }))}
               >
-                <option value="public">public</option>
-                <option value="private">private</option>
-                <option value="unlisted">unlisted</option>
+                <option value="anyone">Anyone (public)</option>
+                <option value="link">Anyone with the link</option>
+                <option value="invited">Invite only (waiting room)</option>
               </select>
             </label>
 
@@ -2390,30 +2349,10 @@ function ProblemPage() {
               <input
                 type="checkbox"
                 className="checkbox checkbox-sm checkbox-primary"
-                checked={configForm.teacherMode}
-                onChange={(e) => setConfigForm((f) => ({ ...f, teacherMode: e.target.checked }))}
-              />
-              <span className="text-xs">Teacher mode — each student has a private editor</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm checkbox-primary"
                 checked={configForm.locked}
                 onChange={(e) => setConfigForm((f) => ({ ...f, locked: e.target.checked }))}
               />
               <span className="text-xs">Lock session — no new joiners</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm checkbox-primary"
-                checked={configForm.requireJoinApproval}
-                onChange={(e) => setConfigForm((f) => ({ ...f, requireJoinApproval: e.target.checked }))}
-              />
-              <span className="text-xs">Waiting room — require host approval to join</span>
             </label>
 
             <div className="flex justify-end gap-2 pt-2">
