@@ -122,6 +122,159 @@ const blackWhiteTheme = {
   },
 };
 
+// ── Problem Bank Section (standalone, used inside AdminDashboard) ─────────────
+const STATUS_COLOR = { published: "green", draft: "orange", review: "blue", archived: "default" };
+const DIFF_COLOR   = { Easy: "green", Medium: "orange", Hard: "red" };
+
+function ProblemBankSection() {
+  const AI_API = "http://localhost:5000/api/ai/ai";
+  const [problems, setProblems]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [statusFilter, setStatus]   = useState("all");
+  const [selected, setSelected]     = useState([]);
+  const [bulkLoading, setBulk]      = useState(false);
+
+  function load(status) {
+    setLoading(true);
+    const param = status === "all" ? "" : `?status=${status}`;
+    fetch(`${AI_API}/getallproblems${param}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setProblems(Array.isArray(d) ? d : []))
+      .catch(() => setProblems([]))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(statusFilter); }, [statusFilter]);
+
+  async function changeStatus(id, newStatus) {
+    try {
+      const res = await fetch(`${AI_API}/problems/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      message.success(`Problem ${newStatus}`);
+      setProblems(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
+    } catch {
+      message.error("Error updating status");
+    }
+  }
+
+  async function bulkArchive() {
+    if (!selected.length) return;
+    setBulk(true);
+    await Promise.all(selected.map(id => changeStatus(id, "archived")));
+    setSelected([]);
+    setBulk(false);
+  }
+
+  const columns = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      key: "title",
+      render: (t, r) => (
+        <Space direction="vertical" size={0}>
+          <span style={{ fontWeight: 600 }}>{t}</span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>{r.category}</span>
+          {r.forkedFrom && (
+            <Tag style={{ fontSize: 10 }}>forked from: {r.forkedFrom}</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: "Difficulty",
+      dataIndex: "difficulty",
+      key: "difficulty",
+      width: 90,
+      render: d => <Tag color={DIFF_COLOR[d]}>{d}</Tag>,
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      width: 100,
+      render: s => <Tag color={STATUS_COLOR[s] || "default"}>{s || "published"}</Tag>,
+    },
+    {
+      title: "Scope",
+      dataIndex: "scope",
+      key: "scope",
+      width: 80,
+      render: s => <Tag>{s || "global"}</Tag>,
+    },
+    {
+      title: "Tags",
+      dataIndex: "tags",
+      key: "tags",
+      render: tags => (tags || []).slice(0, 3).map(t => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 160,
+      render: (_, r) => (
+        <Space size={4}>
+          {(!r.status || r.status === "draft" || r.status === "review") && (
+            <Button size="small" type="primary" onClick={() => changeStatus(r.id, "published")}>Publish</Button>
+          )}
+          {r.status === "published" && (
+            <Button size="small" onClick={() => changeStatus(r.id, "archived")}>Archive</Button>
+          )}
+          {r.status === "archived" && (
+            <Button size="small" onClick={() => changeStatus(r.id, "published")}>Restore</Button>
+          )}
+          <Popconfirm title="Delete this problem?" onConfirm={async () => {
+            try {
+              const res = await fetch(`${AI_API}/deletepromblem/${r.id}`, { method: "DELETE" });
+              if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ""); }
+              message.success("Problem deleted");
+              setProblems(prev => prev.filter(p => p.id !== r.id));
+            } catch (err) { message.error(err.message || "Error deleting problem"); }
+          }}>
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <Card style={{ borderRadius: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+        <Space>
+          {["all", "published", "draft", "review", "archived"].map(s => (
+            <Button key={s} size="small" type={statusFilter === s ? "primary" : "default"} onClick={() => setStatus(s)} style={{ textTransform: "capitalize" }}>{s}</Button>
+          ))}
+        </Space>
+        <Space>
+          {selected.length > 0 && (
+            <Button danger size="small" loading={bulkLoading} onClick={bulkArchive}>
+              Archive {selected.length} selected
+            </Button>
+          )}
+          <span style={{ fontSize: 12, color: "#6b7280" }}>{problems.length} problems</span>
+        </Space>
+      </div>
+      <Table
+        loading={loading}
+        dataSource={problems}
+        columns={columns}
+        rowKey="id"
+        size="small"
+        rowSelection={{
+          selectedRowKeys: selected,
+          onChange: keys => setSelected(keys),
+          getCheckboxProps: r => ({ disabled: r.status === "published" }),
+        }}
+        pagination={{ pageSize: 15 }}
+      />
+    </Card>
+  );
+}
+
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
@@ -1736,6 +1889,9 @@ const AdminDashboard = () => {
             )}
           </Card>
         );
+
+      case "problems":
+        return <ProblemBankSection />;
 
       default:
         return null;

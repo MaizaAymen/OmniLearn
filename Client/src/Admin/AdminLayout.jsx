@@ -2,12 +2,10 @@ import React, { useState } from "react";
 import { Button, Layout, Menu, Typography } from "antd";
 import {
   AppstoreOutlined,
-  BookOutlined,
   ClusterOutlined,
-  FileTextOutlined,
+  CodeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  ReadOutlined,
   TeamOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
@@ -17,13 +15,11 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const sections = [
-  { key: "grades", label: "Grades", icon: <TrophyOutlined /> },
-  { key: "specialities", label: "Specialities", icon: <ClusterOutlined /> },
-  { key: "levels", label: "Levels", icon: <AppstoreOutlined /> },
-  // // { key: "courses", label: "Courses", icon: <BookOutlined /> },
-  // // { key: "modules", label: "Modules", icon: <FileTextOutlined /> },
-  // // { key: "lessons", label: "Lessons", icon: <ReadOutlined /> },
-  { key: "classrooms", label: "Classrooms", icon: <TeamOutlined /> },
+  { key: "grades",       label: "Grades",       icon: <TrophyOutlined /> },
+  { key: "specialities", label: "Specialities",  icon: <ClusterOutlined /> },
+  { key: "levels",       label: "Levels",        icon: <AppstoreOutlined /> },
+  { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined /> },
+  { key: "problems",     label: "Problem Bank",  icon: <CodeOutlined /> },
 ];
 
 const AdminLayout = ({ activeSection, onSectionChange, children }) => {
@@ -40,7 +36,6 @@ const AdminLayout = ({ activeSection, onSectionChange, children }) => {
         collapsed={collapsed}
         trigger={null}
       >
-        
         <Menu
           mode="inline"
           selectedKeys={[activeSection]}

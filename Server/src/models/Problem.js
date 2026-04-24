@@ -55,8 +55,48 @@ const Problem = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
+    status: {
+      type: DataTypes.ENUM('draft', 'review', 'published', 'archived'),
+      allowNull: false,
+      defaultValue: 'published',
+    },
+    scope: {
+      type: DataTypes.ENUM('global', 'module'),
+      allowNull: false,
+      defaultValue: 'global',
+    },
+    forkedFrom: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
+    tags: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    testCasesValidated: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    createdBy: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
+    moduleId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
   }, {
-    timestamps: true, // adds createdAt and updatedAt
+    timestamps: true,
   });
 
 module.exports = Problem;

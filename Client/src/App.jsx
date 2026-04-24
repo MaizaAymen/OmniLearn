@@ -20,6 +20,7 @@ import Profile from "./components/Profile";
 import ClassAssignmentsPage from "./Classroom/ClassAssignmentsPage";
 import MyClassrooms from "./Classroom/MyClassrooms";
 import ClassroomView from "./Classroom/ClassroomView";
+import ProblemCreatePage from "./Problems/ProblemCreatePage";
 
 function App() {
   const location = useLocation();
@@ -30,6 +31,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Codeeditor />} />
       <Route path="/problems" element={<ProblemsPage />} />
+      <Route path="/problems/create" element={<ProblemCreatePage />} />
       <Route path="/problems/:id" element={<ProblemPage />} />
       <Route path="/users" element={<User />} />
       <Route path="/pdf-assistant" element={<PdfAssistant />} />

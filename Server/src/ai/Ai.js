@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Groq = require("groq-sdk");
+const { Op } = require("sequelize");
 const Problem = require("../models/Problem");
 const {slugify} = require("../utils/slugify");
 
@@ -337,6 +338,11 @@ Rules:
     const problemsToInsert = problemsData.map((problem) => ({
       id: slugify(problem.title),
       ...problem,
+      status: 'draft',
+      scope: 'global',
+      tags: Array.isArray(problem.tags) ? problem.tags : [],
+      version: 1,
+      testCasesValidated: false,
       hints: Array.isArray(problem.hints) ? problem.hints : [],
       roadmap: normalizeRoadmap(problem.roadmap),
     }));
@@ -358,11 +364,314 @@ Rules:
 
 router.get("/ai/getallproblems", async (req, res) => {
   try {
-    const problems = await Problem.findAll();
+    const { status } = req.query;
+    let where = {};
+    if (status === 'all') {
+      where = {};
+    } else if (status) {
+      where.status = status;
+    } else {
+      // default: published + legacy rows with no status
+      where[Op.or] = [{ status: 'published' }, { status: null }];
+    }
+    const problems = await Problem.findAll({ where });
     res.json(problems);
-  } catch (error) { 
+  } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error fetching problems" });
+  }
+});
+
+// ─── Manual Problem Create ────────────────────────────────────────────────────
+router.post("/ai/problems", async (req, res) => {
+  try {
+    const { title, difficulty, category, description, examples, constraints, hints, starterCode, expectedOutput, tags, scope, createdBy } = req.body;
+    if (!title || !difficulty || !category) {
+      return res.status(400).json({ error: "title, difficulty, category are required" });
+    }
+    const id = slugify(title);
+    const problem = await Problem.create({
+      id, title, difficulty, category,
+      description: description || { text: '', notes: [] },
+      examples: examples || [],
+      constraints: constraints || [],
+      hints: hints || [],
+      starterCode: starterCode || { javascript: '', python: '', java: '' },
+      expectedOutput: expectedOutput || { javascript: '', python: '', java: '' },
+      roadmap: null,
+      status: 'published',
+      scope: scope || 'global',
+      tags: Array.isArray(tags) ? tags : [],
+      version: 1,
+      testCasesValidated: false,
+      createdBy: createdBy || null,
+      forkedFrom: null,
+    });
+    res.json(problem);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error creating problem" });
+  }
+});
+
+// ─── AI Generate Draft (not saved) — supports count 1/3/5 ───────────────────
+router.post("/ai/problems/generate-draft", async (req, res) => {
+  try {
+    const { topic, difficulty, count = 1 } = req.body;
+    if (!topic) return res.status(400).json({ error: "topic is required" });
+
+    const n = Math.min(Math.max(parseInt(count) || 1, 1), 5);
+    const isArray = n > 1;
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert coding problem designer and algorithms mentor. Generate ${isArray ? `${n} distinct, well-crafted coding problems` : 'ONE well-crafted coding problem'} — each complete with a full learning roadmap. Return ONLY valid JSON${isArray ? ' array' : ' object'}, no markdown, no extra text.
+
+CRITICAL JSON RULES:
+- Use double quotes for all strings
+- Escape newlines as \\n, quotes as \\", backslashes as \\\\
+- No trailing commas
+- No comments inside the JSON`
+        },
+        {
+          role: "user",
+          content: `Generate ${n}${difficulty ? ` ${difficulty}` : ''} coding problem${n > 1 ? 's' : ''} about "${topic}".
+
+Each problem must follow this EXACT schema:
+{
+  "title": "string",
+  "difficulty": "Easy" | "Medium" | "Hard",
+  "category": "string (include \\"${topic}\\" and optionally subcategories separated by \\" • \\", e.g. \\"Array • Hash Table\\")",
+  "description": {
+    "text": "string — a CLEAR, DETAILED problem statement (4 to 7 sentences). Explain the task, the inputs, the expected output, and any edge cases in plain language. Write like a good LeetCode/HackerRank problem. Do NOT dump code in here.",
+    "notes": ["optional extra clarifications, one per string"]
+  },
+  "examples": [
+    { "input": "string", "output": "string", "explanation": "why the output is what it is" }
+  ],
+  "constraints": ["string — e.g. 1 <= n <= 10^4"],
+  "hints": ["short actionable hint", "another hint"],
+  "starterCode": {
+    "javascript": "function skeleton with signature and a TODO comment",
+    "python": "def skeleton with signature and a TODO comment",
+    "java": "class skeleton with method signature and a TODO comment"
+  },
+  "expectedOutput": {
+    "javascript": "exact expected stdout for the example inputs",
+    "python": "exact expected stdout",
+    "java": "exact expected stdout"
+  },
+  "tags": ["topic", "data-structure", "algorithm"],
+  "roadmap": {
+    "title": "string (e.g. \\"Two Sum Roadmap\\")",
+    "difficulty": "easy" | "medium" | "hard",
+    "nodes": [
+      {
+        "id": "n1",
+        "title": "short node title",
+        "description": "clear 2-3 line beginner-friendly explanation",
+        "example": "short code example",
+        "hint": "nudge without giving away the full answer",
+        "type": "theory" | "practice" | "implementation" | "optimization",
+        "position": { "x": number, "y": number }
+      }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" }
+    ]
+  }
+}
+
+REQUIREMENTS:
+- Description MUST be a proper multi-sentence problem statement, like a real practice platform. Not a one-liner.
+- At least 2 examples per problem, each with an explanation.
+- 2 to 4 hints per problem.
+- starterCode signatures must match across all three languages.
+- expectedOutput must be the real output the examples produce.
+- Roadmap MUST be present and non-empty for every problem, ordered basic → advanced, ending with a "Final Solution" node. Include at least: 1 theory, 2 practice, 1 implementation, 1 optimization node. Edges must connect them in order. Positions should form a readable top-to-bottom graph.
+- ${isArray ? `Return a JSON array of ${n} objects.` : 'Return ONLY the JSON object.'}
+- No text outside the JSON.`
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: isArray ? 12000 : 5000,
+    });
+
+    let text = completion.choices[0].message.content;
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    let result;
+    if (isArray) {
+      const startIdx = text.indexOf("[");
+      const endIdx = text.lastIndexOf("]");
+      if (startIdx !== -1 && endIdx !== -1) text = text.slice(startIdx, endIdx + 1);
+      result = JSON.parse(text);
+    } else {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) text = match[0];
+      result = [JSON.parse(text)]; // always return array for consistency
+    }
+
+    // Normalize and backfill a roadmap if the model skipped it
+    result = await Promise.all(
+      result.map(async (p) => {
+        let roadmap = normalizeRoadmap(p.roadmap);
+        if (!roadmap || !Array.isArray(roadmap.nodes) || roadmap.nodes.length === 0) {
+          try {
+            roadmap = await generateProblemRoadmap(p);
+          } catch (err) {
+            console.error("Roadmap backfill failed:", err.message);
+            roadmap = null;
+          }
+        }
+        return { ...p, roadmap };
+      })
+    );
+
+    res.json(result); // NOT saved to DB
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error generating problem draft" });
+  }
+});
+
+// ─── Check Duplicate ──────────────────────────────────────────────────────────
+router.get("/ai/problems/check-duplicate", async (req, res) => {
+  try {
+    const { title } = req.query;
+    if (!title || !title.trim()) return res.json({ isDuplicate: false, matches: [] });
+
+    const slug = slugify(title.trim());
+    const exact = await Problem.findByPk(slug);
+
+    const firstWord = title.trim().split(" ")[0];
+    const similar = await Problem.findAll({
+      where: { title: { [Op.iLike]: `%${firstWord}%` } },
+      limit: 4,
+      attributes: ["id", "title", "difficulty", "status"],
+    });
+
+    res.json({ isDuplicate: !!exact, matches: similar });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error checking duplicate" });
+  }
+});
+
+// ─── Fork Problem ─────────────────────────────────────────────────────────────
+router.post("/ai/problems/:id/fork", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { moduleId, createdBy } = req.body;
+
+    const original = await Problem.findByPk(id);
+    if (!original) return res.status(404).json({ error: "Problem not found" });
+
+    const forkId = slugify(`${original.title}-copy-${Date.now()}`);
+    const forked = await Problem.create({
+      id: forkId,
+      title: `${original.title} (copy)`,
+      difficulty: original.difficulty,
+      category: original.category,
+      description: original.description,
+      examples: original.examples,
+      constraints: original.constraints,
+      hints: original.hints,
+      starterCode: original.starterCode,
+      expectedOutput: original.expectedOutput,
+      roadmap: original.roadmap,
+      status: "draft",
+      scope: moduleId ? "module" : "global",
+      forkedFrom: id,
+      tags: original.tags || [],
+      version: 1,
+      testCasesValidated: false,
+      createdBy: createdBy || null,
+      moduleId: moduleId || null,
+    });
+    res.json({ forkedProblem: forked, original });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error forking problem" });
+  }
+});
+
+// ─── Update Problem (partial) ────────────────────────────────────────────────
+router.patch("/ai/problems/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const problem = await Problem.findByPk(id);
+    if (!problem) return res.status(404).json({ error: "Problem not found" });
+
+    // Never let the caller change identity/lineage fields
+    const { id: _ignoreId, forkedFrom: _ignoreFork, createdAt: _cA, updatedAt: _uA, ...updatable } = req.body;
+
+    // Version bump on edit of an already-published problem
+    if (problem.status === "published") {
+      updatable.version = (problem.version || 1) + 1;
+    }
+
+    await problem.update(updatable);
+    res.json(problem);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error updating problem" });
+  }
+});
+
+// ─── Save AI Draft ────────────────────────────────────────────────────────────
+router.post("/ai/problems/save-draft", async (req, res) => {
+  try {
+    const { problem, createdBy } = req.body;
+    if (!problem?.title) return res.status(400).json({ error: "problem with title is required" });
+
+    const id = slugify(problem.title);
+    const created = await Problem.create({
+      id,
+      title: problem.title,
+      difficulty: problem.difficulty || 'Easy',
+      category: problem.category || 'General',
+      description: problem.description || { text: '', notes: [] },
+      examples: problem.examples || [],
+      constraints: problem.constraints || [],
+      hints: Array.isArray(problem.hints) ? problem.hints : [],
+      starterCode: problem.starterCode || { javascript: '', python: '', java: '' },
+      expectedOutput: problem.expectedOutput || { javascript: '', python: '', java: '' },
+      roadmap: normalizeRoadmap(problem.roadmap),
+      status: 'draft',
+      scope: 'global',
+      tags: Array.isArray(problem.tags) ? problem.tags : [],
+      version: 1,
+      testCasesValidated: false,
+      createdBy: createdBy || null,
+      forkedFrom: null,
+    });
+    res.json(created);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error saving draft" });
+  }
+});
+
+// ─── Update Problem Status ────────────────────────────────────────────────────
+router.patch("/ai/problems/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const valid = ['draft', 'review', 'published', 'archived'];
+    if (!valid.includes(status)) return res.status(400).json({ error: "Invalid status" });
+
+    const problem = await Problem.findByPk(id);
+    if (!problem) return res.status(404).json({ error: "Problem not found" });
+
+    await problem.update({ status });
+    res.json(problem);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error updating status" });
   }
 });
 router.post("/ai/getproblembyid", async (req, res) => {
@@ -383,8 +692,13 @@ router.post("/ai/getproblembyid", async (req, res) => {
 router.delete("/ai/deletepromblem/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedCount = await Problem.destroy({ where: { id } });
-    res.json({ message: "Problem deleted", deletedCount });
+    const problem = await Problem.findByPk(id);
+    if (!problem) return res.status(404).json({ error: "Problem not found" });
+    if (problem.status === 'published') {
+      return res.status(400).json({ error: "Cannot delete a published problem — archive it instead." });
+    }
+    await problem.destroy();
+    res.json({ message: "Problem deleted" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error deleting problem" });
