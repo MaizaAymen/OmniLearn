@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
+  BellOutlined,
   CodeOutlined,
   CompassOutlined,
   DeploymentUnitOutlined,
   LoginOutlined,
+  LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ProjectOutlined,
@@ -12,15 +14,115 @@ import {
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Button, Layout, Menu, theme } from 'antd';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Dropdown,
+  Layout,
+  Menu,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+  theme,
+} from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
+import Cookies from 'js-cookie';
 
 const { Header, Sider, Content } = Layout;
+const { Text } = Typography;
+
+const getStoredUser = () => {
+  try {
+    const u = Cookies.get('user');
+    return u ? JSON.parse(u) : null;
+  } catch { return null; }
+};
+
+const ROLE_COLOR = {
+  admin: 'red',
+  teacher: 'blue',
+  student: 'green',
+};
+
+// Which roles can see each sidebar key
+const ROLE_MENU = {
+  '/':              ['admin', 'teacher', 'student'],
+  '/problems':      ['admin', 'teacher', 'student'],
+  '/live-sessions': ['admin', 'teacher'],
+  '/classroom-pdf': ['admin', 'teacher', 'student'],
+  '/my-classrooms': ['admin', 'teacher', 'student'],
+  '/pdf-assistant': ['admin', 'teacher', 'student'],
+  '/roadmaps':      ['admin', 'teacher', 'student'],
+  '/problem-roadmap': ['admin', 'teacher', 'student'],
+  '/uml/problems':  ['admin', 'teacher', 'student'],
+  '/users':         ['admin'],
+  '/education':     ['admin', 'teacher'],
+  '/auth':          ['anon'],
+  '/profile':       ['admin', 'teacher', 'student'],
+};
 
 const Sidebar = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const storedUser = getStoredUser();
+  const role = storedUser?.role ?? null;
+  const fullName = storedUser
+    ? `${storedUser.firstname ?? ''} ${storedUser.lastname ?? ''}`.trim() || storedUser.email
+    : 'Guest';
+  const initials = storedUser
+    ? `${storedUser.firstname?.[0] ?? ''}${storedUser.lastname?.[0] ?? ''}`.toUpperCase() || (storedUser.email?.[0] ?? '?').toUpperCase()
+    : '?';
+  const avatarSrc = storedUser?.id
+    ? localStorage.getItem(`avatar_${storedUser.id}`)
+    : null;
+
+  const handleLogout = () => {
+    Cookies.remove('user');
+    Cookies.remove('token');
+    if (storedUser?.id) localStorage.removeItem(`avatar_${storedUser.id}`);
+    navigate('/auth');
+  };
+
+  const userMenuItems = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: 'My Profile',
+      onClick: () => navigate('/profile'),
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: 'Settings',
+      onClick: () => navigate('/profile'),
+    },
+    { type: 'divider' },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Logout',
+      danger: true,
+      onClick: handleLogout,
+    },
+  ];
+
+  const notificationMenuItems = [
+    {
+      key: 'empty',
+      label: (
+        <div style={{ padding: '12px 8px', textAlign: 'center', minWidth: 220 }}>
+          <BellOutlined style={{ fontSize: 22, color: '#bfbfbf' }} />
+          <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
+            You're all caught up
+          </div>
+        </div>
+      ),
+      disabled: true,
+    },
+  ];
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -28,11 +130,6 @@ const Sidebar = ({ children }) => {
 
   const items = useMemo(
     () => [
-      {
-        key: '/',
-        icon: <CodeOutlined />,
-        label: 'Code Editor',
-      },
       {
         key: '/problems',
         icon: <ProjectOutlined />,
@@ -58,16 +155,7 @@ const Sidebar = ({ children }) => {
         icon: <ReadOutlined />,
         label: 'PDF Assistant',
       },
-      {
-        key: '/roadmaps',
-        icon: <CompassOutlined />,
-        label: 'Roadmaps',
-      },
-      {
-        key: '/problem-roadmap',
-        icon: <CompassOutlined />,
-        label: 'Problem Roadmap',
-      },
+
       {
         key: '/uml/problems',
         icon: <ProjectOutlined />,
@@ -79,9 +167,9 @@ const Sidebar = ({ children }) => {
         label: 'Users',
       },
       {
-        key: '/admin',
+        key: '/education',
         icon: <SettingOutlined />,
-        label: 'Admin',
+        label: 'education',
       },
       {
         key: '/auth',
@@ -93,8 +181,12 @@ const Sidebar = ({ children }) => {
         icon: <UserOutlined />,
         label: 'Profile',
       },
-    ],
-    []
+    ].filter((it) => {
+      const allowed = ROLE_MENU[it.key] || [];
+      if (!role) return allowed.includes('anon');
+      return allowed.includes(role);
+    }),
+    [role]
   );
 
   const selectedKey = useMemo(() => {
@@ -126,7 +218,20 @@ const Sidebar = ({ children }) => {
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: 0, background: colorBgContainer }}>
+        <Header
+          style={{
+            padding: '0 24px 0 0',
+            background: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #f0f0f0',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+          }}
+        >
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -135,8 +240,111 @@ const Sidebar = ({ children }) => {
               fontSize: '16px',
               width: 64,
               height: 64,
+              color: '#595959',
             }}
           />
+
+          <Space size={12} align="center">
+            {role && (
+              <Tag
+                color={ROLE_COLOR[role] ?? 'default'}
+                style={{
+                  margin: 0,
+                  borderRadius: 999,
+                  padding: '2px 12px',
+                  fontWeight: 600,
+                  fontSize: 11,
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {role}
+              </Tag>
+            )}
+
+            <Dropdown
+              menu={{ items: notificationMenuItems }}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <Tooltip title="Notifications" placement="bottom">
+                <Button
+                  type="text"
+                  shape="circle"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#595959',
+                  }}
+                  icon={
+                    <Badge dot offset={[-2, 2]} color="#ff4d4f">
+                      <BellOutlined style={{ fontSize: 18 }} />
+                    </Badge>
+                  }
+                />
+              </Tooltip>
+            </Dropdown>
+
+            <Dropdown
+              menu={{ items: userMenuItems }}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  cursor: 'pointer',
+                  padding: '4px 10px 4px 4px',
+                  borderRadius: 999,
+                  border: '1px solid #f0f0f0',
+                  background: '#fafafa',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#fafafa')}
+              >
+                <Avatar
+                  size={32}
+                  src={avatarSrc || undefined}
+                  style={{
+                    backgroundColor: '#4f46e5',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    flexShrink: 0,
+                  }}
+                >
+                  {!avatarSrc && initials}
+                </Avatar>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    lineHeight: 1.15,
+                    maxWidth: 140,
+                  }}
+                >
+                  <Text
+                    strong
+                    ellipsis
+                    style={{ fontSize: 13, color: '#262626' }}
+                  >
+                    {fullName}
+                  </Text>
+                  <Text
+                    type="secondary"
+                    style={{ fontSize: 11, textTransform: 'capitalize' }}
+                  >
+                    {role || 'Guest'}
+                  </Text>
+                </div>
+              </div>
+            </Dropdown>
+          </Space>
         </Header>
         <Content
           style={{

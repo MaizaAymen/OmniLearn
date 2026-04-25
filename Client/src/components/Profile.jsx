@@ -253,9 +253,11 @@ export default function Profile() {
       if (!res.ok) throw new Error("Failed to update profile");
       const updated = await res.json();
       setUser(updated);
+      const roleChanged = updated.role !== storedUser.role;
       Cookies.set("user", JSON.stringify({ ...storedUser, ...updated }), { expires: 7 });
       message.success("Profile updated successfully");
       setEditing(false);
+      if (roleChanged) window.location.reload();
     } catch (err) {
       message.error(err.message || "Update failed");
     } finally {
@@ -658,13 +660,22 @@ export default function Profile() {
                     >
                       <Input prefix={<MailOutlined />} />
                     </Form.Item>
-                    <Form.Item label="Role" name="role">
-                      <Select>
-                        <Select.Option value="student">Student</Select.Option>
-                        <Select.Option value="teacher">Teacher</Select.Option>
-                        <Select.Option value="admin">Admin</Select.Option>
-                      </Select>
-                    </Form.Item>
+                    {storedUser.role === "admin" ? (
+                      <Form.Item label="Role" name="role">
+                        <Select>
+                          <Select.Option value="student">Student</Select.Option>
+                          <Select.Option value="teacher">Teacher</Select.Option>
+                          <Select.Option value="admin">Admin</Select.Option>
+                        </Select>
+                      </Form.Item>
+                    ) : (
+                      <Form.Item label="Role">
+                        <Tag color={roleColor[user.role]}>{user.role}</Tag>
+                        <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                          Only an administrator can change your role.
+                        </Text>
+                      </Form.Item>
+                    )}
                     <Button
                       type="primary"
                       icon={<SaveOutlined />}

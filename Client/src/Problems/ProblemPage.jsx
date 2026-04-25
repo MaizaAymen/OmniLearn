@@ -1098,35 +1098,64 @@ function ProblemPage() {
     setIsCorrecting(true);
     try {
       const expected = currentProblem?.expectedOutput?.[selectedLanguage];
+      const examplesText = Array.isArray(currentProblem?.examples) && currentProblem.examples.length
+        ? currentProblem.examples
+            .map((ex, idx) => `Example ${idx + 1}:\n  Input: ${ex.input}\n  Output: ${ex.output}${ex.explanation ? `\n  Explanation: ${ex.explanation}` : ""}`)
+            .join("\n\n")
+        : "";
       const problemContext = currentProblem
-        ? `${currentProblem.title}: ${currentProblem.description?.text || ""}${expected ? `\n\nThe corrected code MUST produce this exact output when run:\n${expected}` : ""}`
+        ? `${currentProblem.title}: ${currentProblem.description?.text || ""}${examplesText ? `\n\nExamples:\n${examplesText}` : ""}${expected ? `\n\nExpected output (the corrected code MUST produce exactly this when executed):\n${expected}` : ""}`
         : "General coding problem";
 
-      const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          code,
-          language: selectedLanguage,
-          problemContext,
-        }),
-      });
+      const normalize = (s) =>
+        (s ?? "")
+          .replace(/\r\n/g, "\n")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .join("\n")
+          .toLowerCase();
 
-      if (!response.ok) {
-        throw new Error(`Failed to correct code: ${response.status}`);
+      const requestCorrection = async (currentCode, actualOutput) => {
+        const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: currentCode,
+            language: selectedLanguage,
+            problemContext,
+            actualOutput,
+          }),
+        });
+        if (!response.ok) throw new Error(`Failed to correct code: ${response.status}`);
+        return response.json();
+      };
+
+      let correction = await requestCorrection(code, undefined);
+      let working = correction.correctedCode || code;
+      let lastSummary = correction.summary;
+
+      if (expected) {
+        const maxRetries = 2;
+        for (let i = 0; i <= maxRetries; i++) {
+          const run = await executeCode(selectedLanguage, working);
+          if (run.success && normalize(run.output) === normalize(expected)) break;
+          if (i === maxRetries) break;
+          const actual = run.success ? run.output : (run.error || "execution failed");
+          correction = await requestCorrection(working, actual);
+          if (!correction.correctedCode || correction.correctedCode === working) break;
+          working = correction.correctedCode;
+          lastSummary = correction.summary || lastSummary;
+        }
       }
 
-      const correction = await response.json();
-
-      if (correction.changes && correction.changes.length > 0) {
+      if (working !== code) {
         setOriginalCode(code);
-        setCode(correction.correctedCode);
+        setCode(working);
         setShowDiff(true);
-        toast.success(correction.summary || "Code corrected successfully!");
+        toast.success(lastSummary || "Code corrected successfully!");
       } else {
-        toast.success(correction.summary || "No issues found - code looks good!");
+        toast.success(lastSummary || "No issues found - code looks good!");
       }
     } catch (err) {
       toast.error(err.message || "Error correcting code");

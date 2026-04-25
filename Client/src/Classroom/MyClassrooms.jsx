@@ -14,6 +14,10 @@ import {
   Input,
   Badge,
   ConfigProvider,
+  Modal,
+  Button,
+  message,
+  Tooltip,
 } from "antd";
 import {
   ReadOutlined,
@@ -22,6 +26,9 @@ import {
   TeamOutlined,
   SearchOutlined,
   LockOutlined,
+  CopyOutlined,
+  PlusOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -65,18 +72,61 @@ export default function MyClassrooms() {
   const [classrooms, setClassrooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
 
-  useEffect(() => {
-    if (!user.id) {
-      setLoading(false);
-      return;
-    }
+  const isStudent = user.role === "student";
+
+  const fetchClassrooms = () => {
+    if (!user.id) { setLoading(false); return; }
     fetch(`${API}/users/${user.id}/classrooms`)
       .then((r) => r.json())
       .then((d) => setClassrooms(Array.isArray(d) ? d : []))
       .catch(() => setClassrooms([]))
       .finally(() => setLoading(false));
-  }, [user.id]);
+  };
+
+  useEffect(() => { fetchClassrooms(); }, [user.id]);
+
+  const handleJoin = async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setJoining(true);
+    try {
+      const res = await fetch(`${API}/join-classroom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteCode: code }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        message.success(`Joined "${data.classroom.name}" successfully!`);
+        setJoinModalOpen(false);
+        setJoinCode("");
+        setLoading(true);
+        fetchClassrooms();
+      } else {
+        message.error(data.error || "Failed to join classroom");
+      }
+    } catch {
+      message.error("Network error. Please try again.");
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const copyCode = (e, code) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(code);
+    message.success("Invite code copied!");
+  };
+
+  const copyLink = (e, code) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
+    message.success("Join link copied!");
+  };
 
   const teacherName = (t) =>
     t ? `${t.firstname || ""} ${t.lastname || ""}`.trim() || t.email : "—";
@@ -103,6 +153,7 @@ export default function MyClassrooms() {
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#111827", borderRadius: 12 } }}>
       <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -118,27 +169,43 @@ export default function MyClassrooms() {
               My Classrooms
             </Title>
             <Text type="secondary" style={{ fontSize: 14 }}>
-              Browse modules, lessons, and assignments from the classrooms you joined.
+              {isStudent
+                ? "Browse modules, lessons, and assignments from the classrooms you joined."
+                : "Manage your classrooms and share invite codes with students."}
             </Text>
           </div>
-          {classrooms.length > 0 && (
-            <Input
-              allowClear
-              size="large"
-              prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}
-              placeholder="Search classrooms, subjects, teachers…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={{
-                maxWidth: 360,
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-              }}
-            />
-          )}
+          <Space wrap size={12}>
+            {classrooms.length > 0 && (
+              <Input
+                allowClear
+                size="large"
+                prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}
+                placeholder="Search classrooms, subjects, teachers…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                style={{
+                  maxWidth: 320,
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                }}
+              />
+            )}
+            {isStudent && (
+              <Button
+                type="primary"
+                size="large"
+                icon={<PlusOutlined />}
+                onClick={() => setJoinModalOpen(true)}
+                style={{ background: "#111827", borderColor: "#111827" }}
+              >
+                Join Classroom
+              </Button>
+            )}
+          </Space>
         </div>
 
+        {/* Classroom list */}
         {classrooms.length === 0 ? (
           <Card
             style={{
@@ -152,14 +219,29 @@ export default function MyClassrooms() {
               description={
                 <Space direction="vertical" size={6}>
                   <Text strong style={{ fontSize: 15 }}>
-                    You haven't joined any classroom yet
+                    {isStudent
+                      ? "You haven't joined any classroom yet"
+                      : "No classrooms yet"}
                   </Text>
                   <Text type="secondary">
-                    Ask your teacher for an invite code to get started.
+                    {isStudent
+                      ? "Enter an invite code to get started."
+                      : "Create a classroom from the Education panel."}
                   </Text>
                 </Space>
               }
-            />
+            >
+              {isStudent && (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => setJoinModalOpen(true)}
+                  style={{ background: "#111827", borderColor: "#111827" }}
+                >
+                  Join Classroom
+                </Button>
+              )}
+            </Empty>
           </Card>
         ) : filtered.length === 0 ? (
           <Card style={{ borderRadius: 16, border: "1px solid #eef0f3" }}>
@@ -276,26 +358,117 @@ export default function MyClassrooms() {
                       </Space>
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingTop: 14,
-                        borderTop: "1px solid #f3f4f6",
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, color: "#9ca3af" }}>Read-only access</Text>
-                      <Text strong style={{ color: "#111827", fontSize: 13 }}>
-                        Open <ArrowRightOutlined style={{ fontSize: 11 }} />
-                      </Text>
-                    </div>
+                    {/* Card footer */}
+                    {!isStudent && c.inviteCode ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          paddingTop: 14,
+                          borderTop: "1px solid #f3f4f6",
+                        }}
+                      >
+                        <Space size={2}>
+                          <Tooltip title="Copy invite code">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<CopyOutlined style={{ fontSize: 11 }} />}
+                              onClick={(e) => copyCode(e, c.inviteCode)}
+                              style={{
+                                fontSize: 12,
+                                color: "#374151",
+                                fontFamily: "monospace",
+                                fontWeight: 600,
+                                letterSpacing: 1,
+                                padding: "0 6px",
+                                height: 24,
+                              }}
+                            >
+                              {c.inviteCode}
+                            </Button>
+                          </Tooltip>
+                          <Tooltip title="Copy join link">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<LinkOutlined />}
+                              onClick={(e) => copyLink(e, c.inviteCode)}
+                              style={{ color: "#9ca3af", padding: "0 4px", height: 24 }}
+                            />
+                          </Tooltip>
+                        </Space>
+                        <Text strong style={{ color: "#111827", fontSize: 13 }}>
+                          Open <ArrowRightOutlined style={{ fontSize: 11 }} />
+                        </Text>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          paddingTop: 14,
+                          borderTop: "1px solid #f3f4f6",
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: "#9ca3af" }}>Read-only access</Text>
+                        <Text strong style={{ color: "#111827", fontSize: 13 }}>
+                          Open <ArrowRightOutlined style={{ fontSize: 11 }} />
+                        </Text>
+                      </div>
+                    )}
                   </Card>
                 </Col>
               );
             })}
           </Row>
         )}
+
+        {/* Join modal (students only) */}
+        <Modal
+          open={joinModalOpen}
+          title="Join a Classroom"
+          onCancel={() => { setJoinModalOpen(false); setJoinCode(""); }}
+          footer={null}
+          centered
+          width={400}
+        >
+          <div style={{ padding: "8px 0 4px" }}>
+            <Text type="secondary" style={{ fontSize: 13, display: "block", marginBottom: 16 }}>
+              Ask your teacher for the 6-character invite code and enter it below.
+            </Text>
+            <Input
+              size="large"
+              placeholder="e.g. ABC123"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              onPressEnter={handleJoin}
+              maxLength={8}
+              style={{
+                fontFamily: "monospace",
+                fontWeight: 600,
+                letterSpacing: 3,
+                fontSize: 18,
+                textAlign: "center",
+                marginBottom: 16,
+              }}
+              autoFocus
+            />
+            <Button
+              type="primary"
+              size="large"
+              block
+              loading={joining}
+              disabled={!joinCode.trim()}
+              onClick={handleJoin}
+              style={{ background: "#111827", borderColor: "#111827" }}
+            >
+              Join Classroom
+            </Button>
+          </div>
+        </Modal>
       </div>
     </ConfigProvider>
   );

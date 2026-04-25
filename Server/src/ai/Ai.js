@@ -694,9 +694,6 @@ router.delete("/ai/deletepromblem/:id", async (req, res) => {
     const { id } = req.params;
     const problem = await Problem.findByPk(id);
     if (!problem) return res.status(404).json({ error: "Problem not found" });
-    if (problem.status === 'published') {
-      return res.status(400).json({ error: "Cannot delete a published problem — archive it instead." });
-    }
     await problem.destroy();
     res.json({ message: "Problem deleted" });
   } catch (error) {
@@ -707,7 +704,7 @@ router.delete("/ai/deletepromblem/:id", async (req, res) => {
 
 // ─── AI Code Correction ────────────────────────────────────────────────────
 
-async function correctCodeWithAI(code, language, problemContext) {
+async function correctCodeWithAI(code, language, problemContext, actualOutput) {
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [
@@ -721,9 +718,10 @@ IMPORTANT RULES:
 3. Keep the same overall structure and approach
 4. For each change, provide the line number and what was changed
 5. ALWAYS preserve ALL test case invocations, print/console.log statements, and any code that produces output at the bottom of the file - never remove them
-6. NEVER change the arguments/inputs passed to function calls in test invocations - keep them EXACTLY as written in the original code
-7. Only fix the function/algorithm logic itself - do NOT invent new test cases or modify existing ones
-8. The corrected code MUST still execute and print the same output format as the original intended
+6. PREFER to keep the arguments/inputs passed to function calls in test invocations EXACTLY as written. EXCEPTION: if those inputs are inconsistent with the problem's examples and cannot produce the expected output even with a correct algorithm, replace them with the inputs taken from the "Examples" section of the problem context so the resulting output matches the expected output. Do not invent random new inputs — only use inputs that come from the problem's own examples.
+7. Fix the function/algorithm logic. Do NOT invent extra test cases beyond what the problem's examples define.
+8. CRITICAL: If the problem context contains an "expected output" block, the corrected code, when executed, MUST produce stdout that — after trimming each line and ignoring blank lines and case — exactly matches that expected output. This is the success criterion. Adjust print/console.log formatting (separators, casing, spaces, decimals, ordering) to match the expected output exactly. Do not add extra prints, banners, or labels that are not in the expected output.
+9. If the user provides the "actual output" the code currently produces, treat the diff between actual and expected as the primary bug to fix — it tells you exactly what is wrong (algorithm logic, formatting, OR mismatched test inputs).
 
 Required JSON schema:
 {
@@ -758,7 +756,7 @@ Code to fix:
 \`\`\`${language}
 ${code}
 \`\`\`
-
+${actualOutput ? `\nActual output the code currently produces (this does NOT match the expected output — fix the code so it matches):\n${actualOutput}\n` : ""}
 Return the corrected code with detailed changes in JSON format.`
       }
     ],
@@ -787,7 +785,7 @@ Return the corrected code with detailed changes in JSON format.`
 
 router.post("/ai/correct-code", async (req, res) => {
   try {
-    const { code, language, problemContext } = req.body;
+    const { code, language, problemContext, actualOutput } = req.body;
 
     if (!code || !language) {
       return res.status(400).json({ error: "Code and language are required" });
@@ -796,7 +794,8 @@ router.post("/ai/correct-code", async (req, res) => {
     const correction = await correctCodeWithAI(
       code,
       language,
-      problemContext || "General coding problem"
+      problemContext || "General coding problem",
+      actualOutput
     );
 
     res.json(correction);

@@ -169,6 +169,20 @@ function ProblemBankSection() {
     setBulk(false);
   }
 
+  async function deleteProblem(id, title) {
+    try {
+      const res = await fetch(`${AI_API}/deletepromblem/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error deleting problem");
+      }
+      message.success(`"${title}" deleted`);
+      setProblems(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      message.error(err.message || "Error deleting problem");
+    }
+  }
+
   const columns = [
     {
       title: "Title",
@@ -214,7 +228,7 @@ function ProblemBankSection() {
     {
       title: "Actions",
       key: "actions",
-      width: 160,
+      width: 210,
       render: (_, r) => (
         <Space size={4}>
           {(!r.status || r.status === "draft" || r.status === "review") && (
@@ -226,14 +240,14 @@ function ProblemBankSection() {
           {r.status === "archived" && (
             <Button size="small" onClick={() => changeStatus(r.id, "published")}>Restore</Button>
           )}
-          <Popconfirm title="Delete this problem?" onConfirm={async () => {
-            try {
-              const res = await fetch(`${AI_API}/deletepromblem/${r.id}`, { method: "DELETE" });
-              if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ""); }
-              message.success("Problem deleted");
-              setProblems(prev => prev.filter(p => p.id !== r.id));
-            } catch (err) { message.error(err.message || "Error deleting problem"); }
-          }}>
+          <Popconfirm
+            title={`Delete "${r.title}"?`}
+            description="This cannot be undone."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            cancelText="Cancel"
+            onConfirm={() => deleteProblem(r.id, r.title)}
+          >
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -275,9 +289,22 @@ function ProblemBankSection() {
   );
 }
 
+const getCurrentUser = () => {
+  try {
+    const u = document.cookie.split("; ").find((c) => c.startsWith("user="));
+    if (!u) return null;
+    return JSON.parse(decodeURIComponent(u.split("=")[1])) || null;
+  } catch { return null; }
+};
+
+const getCurrentRole = () => getCurrentUser()?.role || null;
+
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState("overview");
+  const currentRole = getCurrentRole();
+  const [activeSection, setActiveSection] = useState(
+    currentRole === "teacher" ? "classrooms" : "overview"
+  );
 
   const [grades, setGrades] = useState([]);
   const [specialities, setSpecialities] = useState([]);
@@ -322,6 +349,8 @@ const AdminDashboard = () => {
   const [classroomForm] = Form.useForm();
   const [classroomModuleForm] = Form.useForm();
   const lessonType = Form.useWatch("type", lessonForm);
+  const classroomGradeId = Form.useWatch("gradeId", classroomForm);
+  const classroomSpecialityId = Form.useWatch("specialityId", classroomForm);
   const codePreviewRef = useRef(null);
 
   const gradeOptions = useMemo(
@@ -396,7 +425,6 @@ const AdminDashboard = () => {
         modulesData,
         lessonsData,
         classroomsData,
-        usersData,
       ] = await Promise.all([
         fetchGrades(),
         fetchSpecialities(),
@@ -405,7 +433,6 @@ const AdminDashboard = () => {
         fetchModules(),
         fetchLessons(),
         fetchClassrooms(),
-        fetchUsers(),
       ]);
       setGrades(gradesData);
       setSpecialities(specialitiesData);
@@ -414,7 +441,10 @@ const AdminDashboard = () => {
       setModules(modulesData);
       setLessons(lessonsData);
       setClassrooms(classroomsData);
-      setUsers(usersData);
+      if (currentRole === "admin") {
+        const usersData = await fetchUsers();
+        setUsers(usersData);
+      }
     } catch (err) {
       message.error(err.message || "Failed to load data");
     } finally {
@@ -620,6 +650,9 @@ const AdminDashboard = () => {
   // Courses Section
   const handleCourseSubmit = async (values) => {
     try {
+      if (currentRole === "teacher") {
+        values.teacherId = getCurrentUser()?.id;
+      }
       if (editingId) {
         await updateCourse(editingId, values);
         message.success("Course updated");
@@ -645,6 +678,8 @@ const AdminDashboard = () => {
       await deleteCourse(id);
       message.success("Course deleted");
       loadAll();
+      setSelectedClassroomCourses((prev) => prev.filter((c) => c.id !== id));
+      if (selectedCourse?.id === id) { setSelectedCourse(null); setSelectedCourseModules([]); setSelectedCourseLessons([]); }
     } catch (err) {
       message.error(err.message || "Delete failed");
     }
@@ -678,6 +713,8 @@ const AdminDashboard = () => {
       await deleteModule(id);
       message.success("Module deleted");
       loadAll();
+      setSelectedCourseModules((prev) => prev.filter((m) => m.id !== id));
+      if (selectedModule?.id === id) { setSelectedModule(null); setSelectedModuleLessons([]); }
     } catch (err) {
       message.error(err.message || "Delete failed");
     }
@@ -786,6 +823,9 @@ const AdminDashboard = () => {
   // Classrooms Section
   const handleClassroomSubmit = async (values) => {
     try {
+      if (currentRole === "teacher") {
+        values.teacherId = getCurrentUser()?.id;
+      }
       if (editingId) {
         await updateClassroom(editingId, values);
         message.success("Classroom updated");
@@ -1290,9 +1330,11 @@ const AdminDashboard = () => {
             <Form.Item name="title" label="Title" rules={[{ required: true }]}>
               <Input placeholder="Course title" />
             </Form.Item>
-            <Form.Item name="teacherId" label="Teacher" rules={[{ required: true }]}>
-              <Select placeholder="Select teacher" options={teacherOptions} />
-            </Form.Item>
+            {currentRole !== "teacher" && (
+              <Form.Item name="teacherId" label="Teacher" rules={[{ required: true }]}>
+                <Select placeholder="Select teacher" options={teacherOptions} />
+              </Form.Item>
+            )}
             <Form.Item name="description" label="Description">
               <Input placeholder="Optional" />
             </Form.Item>
@@ -1375,29 +1417,52 @@ const AdminDashboard = () => {
           </Form>
         );
 
-      case "classrooms":
+      case "classrooms": {
+        const filteredSpecialityOptions = classroomGradeId
+          ? specialities.filter((s) => s.gradeId === classroomGradeId).map((s) => ({ value: s.id, label: s.displayName || s.name }))
+          : specialityOptions;
+        const filteredLevelOptions = classroomSpecialityId
+          ? levels.filter((l) => l.specialityId === classroomSpecialityId).map((l) => ({ value: l.id, label: l.displayName || l.name }))
+          : levelOptions;
         return (
           <Form form={classroomForm} layout="vertical" onFinish={handleClassroomSubmit} className="admin-form">
             <Form.Item name="name" label="Name" rules={[{ required: true }]}>
               <Input placeholder="e.g. 3A" />
             </Form.Item>
             <Form.Item name="gradeId" label="Grade">
-              <Select placeholder="Grade" options={gradeOptions} allowClear />
+              <Select
+                placeholder="Select grade"
+                options={gradeOptions}
+                allowClear
+                onChange={() => classroomForm.setFieldsValue({ specialityId: undefined, levelId: undefined })}
+              />
             </Form.Item>
             <Form.Item name="specialityId" label="Speciality">
-              <Select placeholder="Speciality" options={specialityOptions} allowClear />
+              <Select
+                placeholder="Select speciality"
+                options={filteredSpecialityOptions}
+                allowClear
+                onChange={() => classroomForm.setFieldsValue({ levelId: undefined })}
+              />
             </Form.Item>
             <Form.Item name="levelId" label="Level">
-              <Select placeholder="Level" options={levelOptions} allowClear />
+              <Select
+                placeholder="Select level"
+                options={filteredLevelOptions}
+                allowClear
+              />
             </Form.Item>
             <Form.Item name="academicYear" label="Year">
               <Input placeholder="2024" />
             </Form.Item>
-            <Form.Item name="teacherId" label="Teacher">
-              <Select placeholder="Teacher" options={teacherOptions} allowClear />
-            </Form.Item>
+            {currentRole !== "teacher" && (
+              <Form.Item name="teacherId" label="Teacher">
+                <Select placeholder="Teacher" options={teacherOptions} allowClear />
+              </Form.Item>
+            )}
           </Form>
         );
+      }
 
       default:
         return null;
@@ -1766,6 +1831,12 @@ const AdminDashboard = () => {
                         </div>
                         <div className="classroom-card-footer">
                           <span className="classroom-card-teacher-name">{getTeacherName(record.teacherId)}</span>
+                          <div className="classroom-card-footer-actions">
+                            <Button type="text" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleCourseEdit(record); }} />
+                            <Popconfirm title="Delete this course?" onConfirm={(e) => { handleCourseDelete(record.id); }}>
+                              <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                            </Popconfirm>
+                          </div>
                         </div>
                       </Card>
                     </Col>
@@ -1821,6 +1892,12 @@ const AdminDashboard = () => {
                             </div>
                             <div className="classroom-card-footer">
                               <span className="classroom-card-teacher-name">{record.description || "No description"}</span>
+                              <div className="classroom-card-footer-actions">
+                                <Button type="text" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleModuleEdit(record); }} />
+                                <Popconfirm title="Delete this module?" onConfirm={() => handleModuleDelete(record.id)}>
+                                  <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                                </Popconfirm>
+                              </div>
                             </div>
                           </Card>
                         </Col>
@@ -1833,7 +1910,7 @@ const AdminDashboard = () => {
                   <>
                     {selectedCourseModules.length > 0 && <Divider />}
                     <Text strong style={{ fontSize: 15, display: "block", marginBottom: 12 }}>Direct Lessons</Text>
-                    <LessonPdfViewer lessons={selectedCourseLessons} />
+                    <LessonPdfViewer lessons={selectedCourseLessons} onDelete={handleLessonDelete} onEdit={handleLessonEdit} />
                   </>
                 )}
 
@@ -1874,7 +1951,7 @@ const AdminDashboard = () => {
                               Add Lesson
                             </Button>
                           </div>
-                          <LessonPdfViewer lessons={selectedModuleLessons} />
+                          <LessonPdfViewer lessons={selectedModuleLessons} onDelete={handleLessonDelete} onEdit={handleLessonEdit} />
                         </>
                       ),
                     },

@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { ClassAssignment, StudentProblemSet } = require("../models");
+const { authenticate, requireAdminOrTeacher } = require("../middleware/Authmiddleware");
+
+router.use(authenticate);
 
 // POST /api/assignments — teacher creates an assignment inside a module
-router.post("/", async (req, res) => {
+router.post("/", requireAdminOrTeacher, async (req, res) => {
   try {
     const { moduleId, title, problemIds, dueDate, maxAttempts } = req.body;
     if (!moduleId || !title || !problemIds?.length) {
@@ -63,7 +66,7 @@ router.get("/student/:studentId/module/:moduleId", async (req, res) => {
 });
 
 // GET /api/assignments/:id/stats — teacher: how many students solved each problem
-router.get("/:id/stats", async (req, res) => {
+router.get("/:id/stats", requireAdminOrTeacher, async (req, res) => {
   try {
     const assignment = await ClassAssignment.findByPk(req.params.id);
     if (!assignment) return res.status(404).json({ error: "Not found" });
@@ -85,7 +88,7 @@ router.get("/:id/stats", async (req, res) => {
 });
 
 // DELETE /api/assignments/:id
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdminOrTeacher, async (req, res) => {
   try {
     const a = await ClassAssignment.findByPk(req.params.id);
     if (!a) return res.status(404).json({ error: "Not found" });

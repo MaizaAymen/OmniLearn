@@ -3,7 +3,8 @@ import { Toaster } from "react-hot-toast";
 import ProblemPage from "./Problems/ProblemPage";
 import ProblemsPage from "./Problems/ProblemsPage";
 import Auth from "./Auth/Auth";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
+import Cookies from "js-cookie";
 import User from "./Dashbord/User";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import PdfAssistant from "./components/PdfAssistant";
@@ -20,7 +21,26 @@ import Profile from "./components/Profile";
 import ClassAssignmentsPage from "./Classroom/ClassAssignmentsPage";
 import MyClassrooms from "./Classroom/MyClassrooms";
 import ClassroomView from "./Classroom/ClassroomView";
+import JoinClassroom from "./Classroom/JoinClassroom";
 import ProblemCreatePage from "./Problems/ProblemCreatePage";
+
+const getRole = () => {
+  try {
+    const u = Cookies.get("user");
+    return u ? JSON.parse(u).role : null;
+  } catch { return null; }
+};
+
+const Guard = ({ allow, children }) => {
+  const role = getRole();
+  if (!role) return <Navigate to="/auth" replace />;
+  if (!allow.includes(role)) return <Navigate to="/" replace />;
+  return children;
+};
+
+const ALL = ["admin", "teacher", "student"];
+const STAFF = ["admin", "teacher"];
+const ADMIN = ["admin"];
 
 function App() {
   const location = useLocation();
@@ -29,23 +49,24 @@ function App() {
 
   const appRoutes = (
     <Routes>
-      <Route path="/" element={<Codeeditor />} />
-      <Route path="/problems" element={<ProblemsPage />} />
-      <Route path="/problems/create" element={<ProblemCreatePage />} />
-      <Route path="/problems/:id" element={<ProblemPage />} />
-      <Route path="/users" element={<User />} />
-      <Route path="/pdf-assistant" element={<PdfAssistant />} />
-      <Route path="/classroom-pdf" element={<ClassroomPdf />} />
-      <Route path="/live-sessions" element={<LiveSessionsPage />} />
-      <Route path="/video-call" element={<VideoCall />} />
-      <Route path="/admin" element={<AdminDashboard />} />
-      <Route path="/uml" element={<UMLEditor />} />
-      <Route path="/uml/problems" element={<UmlProblems />} />
-      <Route path="/uml/problems/:id" element={<UMLEditor />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/assignments" element={<ClassAssignmentsPage />} />
-      <Route path="/my-classrooms" element={<MyClassrooms />} />
-      <Route path="/my-classrooms/:classId" element={<ClassroomView />} />
+      <Route path="/" element={<Guard allow={ALL}><Codeeditor /></Guard>} />
+      <Route path="/problems" element={<Guard allow={ALL}><ProblemsPage /></Guard>} />
+      <Route path="/problems/create" element={<Guard allow={STAFF}><ProblemCreatePage /></Guard>} />
+      <Route path="/problems/:id" element={<Guard allow={ALL}><ProblemPage /></Guard>} />
+      <Route path="/users" element={<Guard allow={ADMIN}><User /></Guard>} />
+      <Route path="/pdf-assistant" element={<Guard allow={ALL}><PdfAssistant /></Guard>} />
+      <Route path="/classroom-pdf" element={<Guard allow={ALL}><ClassroomPdf /></Guard>} />
+      <Route path="/live-sessions" element={<Guard allow={STAFF}><LiveSessionsPage /></Guard>} />
+      <Route path="/video-call" element={<Guard allow={ALL}><VideoCall /></Guard>} />
+      <Route path="/education" element={<Guard allow={STAFF}><AdminDashboard /></Guard>} />
+      <Route path="/uml" element={<Guard allow={ALL}><UMLEditor /></Guard>} />
+      <Route path="/uml/problems" element={<Guard allow={ALL}><UmlProblems /></Guard>} />
+      <Route path="/uml/problems/:id" element={<Guard allow={ALL}><UMLEditor /></Guard>} />
+      <Route path="/profile" element={<Guard allow={ALL}><Profile /></Guard>} />
+      <Route path="/assignments" element={<Guard allow={ALL}><ClassAssignmentsPage /></Guard>} />
+      <Route path="/my-classrooms" element={<Guard allow={ALL}><MyClassrooms /></Guard>} />
+      <Route path="/my-classrooms/:classId" element={<Guard allow={ALL}><ClassroomView /></Guard>} />
+      <Route path="/join/:code" element={<Guard allow={ALL}><JoinClassroom /></Guard>} />
     </Routes>
   );
 

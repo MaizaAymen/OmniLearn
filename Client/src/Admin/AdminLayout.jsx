@@ -9,21 +9,28 @@ import {
   TeamOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
+import Cookies from "js-cookie";
 import "./AdminLayout.css";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-const sections = [
-  { key: "grades",       label: "Grades",       icon: <TrophyOutlined /> },
-  { key: "specialities", label: "Specialities",  icon: <ClusterOutlined /> },
-  { key: "levels",       label: "Levels",        icon: <AppstoreOutlined /> },
-  { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined /> },
-  { key: "problems",     label: "Problem Bank",  icon: <CodeOutlined /> },
+const allSections = [
+  { key: "grades",       label: "Grades",       icon: <TrophyOutlined />, roles: ["admin"] },
+  { key: "specialities", label: "Specialities",  icon: <ClusterOutlined />, roles: ["admin"] },
+  { key: "levels",       label: "Levels",        icon: <AppstoreOutlined />, roles: ["admin"] },
+  { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined />, roles: ["admin", "teacher"] },
+  { key: "problems",     label: "Problem Bank",  icon: <CodeOutlined />, roles: ["admin", "teacher"] },
 ];
+
+const getRole = () => {
+  try { return JSON.parse(Cookies.get("user") || "null")?.role || null; } catch { return null; }
+};
 
 const AdminLayout = ({ activeSection, onSectionChange, children }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const role = getRole();
+  const sections = allSections.filter((s) => !role || s.roles.includes(role));
 
   return (
     <Layout className="admin-shell">

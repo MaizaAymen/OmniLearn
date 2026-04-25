@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { ExamSubmission } = require("../models");
+const { authenticate, requireAdminOrTeacher } = require("../middleware/Authmiddleware");
+
+router.use(authenticate, requireAdminOrTeacher);
 
 // GET /api/exams/session/:sessionId/submissions
 // Teacher fetches all student snapshots for one exam session.

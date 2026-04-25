@@ -33,7 +33,99 @@ const lessonStorage = multer.diskStorage({
 
 const lessonUpload = multer({ storage: lessonStorage });
 
-// No auth for now (temporary)
+const { authenticate, requireAdmin, requireAdminOrTeacher } = require("../middleware/Authmiddleware");
+
+// Public lookup by invite code (defined before the global guard below)
+router.get("/classrooms/join/:code", async (req, res) => {
+  try {
+    const classroom = await Class.findOne({ where: { inviteCode: req.params.code } });
+    if (!classroom) return res.status(404).json({ error: "Invalid invite code" });
+    res.json({ id: classroom.id, name: classroom.name, academicYear: classroom.academicYear });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to find classroom" });
+  }
+});
+
+// Everything below requires authentication
+router.use(authenticate);
+
+// Grades / Specialities / Levels: admin only (curriculum structure)
+const adminOnlyPaths = [
+  "/grades", "/grades/:id",
+  "/specialities", "/specialities/:id", "/grades/:gradeId/specialities",
+  "/levels", "/levels/:id", "/specialities/:specialityId/levels",
+];
+router.use((req, res, next) => {
+  const isWriteOnAdminEntity =
+    ["POST", "PUT", "DELETE"].includes(req.method) &&
+    /^\/(grades|specialities|levels)(\/|$)/.test(req.path);
+  if (isWriteOnAdminEntity) return requireAdmin(req, res, next);
+  next();
+});
+
+// Everything else (courses/modules/lessons/classrooms/students/stats): admin or teacher
+router.use(requireAdminOrTeacher);
+
+// Helpers: a teacher can only touch classrooms/courses/modules/lessons they own.
+// Admin bypasses every check.
+const isAdmin = (req) => req.user.role === "admin";
+
+const ownsClassroom = async (req, classroomId) => {
+  if (isAdmin(req)) return true;
+  const c = await Class.findByPk(classroomId);
+  return !!(c && c.teacherId === req.user.id);
+};
+
+const ownsCourse = async (req, courseId) => {
+  if (isAdmin(req)) return true;
+  const c = await Course.findByPk(courseId);
+  return !!(c && c.teacherId === req.user.id);
+};
+
+const ownsModule = async (req, moduleId) => {
+  if (isAdmin(req)) return true;
+  const m = await Module.findByPk(moduleId);
+  if (!m) return false;
+  return ownsCourse(req, m.courseId);
+};
+
+const ownsLesson = async (req, lessonId) => {
+  if (isAdmin(req)) return true;
+  const l = await Lesson.findByPk(lessonId);
+  if (!l) return false;
+  if (l.moduleId) return ownsModule(req, l.moduleId);
+  if (l.courseId) return ownsCourse(req, l.courseId);
+  return false;
+};
+
+const forbid = (res) => res.status(403).json({ error: "You can only manage your own classrooms and their content." });
+
+// Ownership guards on writes (PUT/DELETE/POST sub-resources)
+router.use(async (req, res, next) => {
+  try {
+    if (isAdmin(req)) return next();
+    if (!["PUT", "DELETE", "POST"].includes(req.method)) return next();
+
+    const m = req.path.match(/^\/(classrooms|courses|modules|lessons)\/([^/]+)(\/(.*))?$/);
+    if (!m) return next();
+    const [, kind, id] = m;
+    // skip non-UUID sub-paths like /lessons/upload
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(id)) return next();
+
+    let allowed = true;
+    if (kind === "classrooms") allowed = await ownsClassroom(req, id);
+    else if (kind === "courses") allowed = await ownsCourse(req, id);
+    else if (kind === "modules") allowed = await ownsModule(req, id);
+    else if (kind === "lessons") allowed = await ownsLesson(req, id);
+
+    if (!allowed) return forbid(res);
+    next();
+  } catch (e) {
+    console.error("Ownership guard error:", e);
+    res.status(500).json({ error: "Authorization check failed" });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GRADE ROUTES
@@ -372,6 +464,7 @@ router.get("/courses", async (req, res) => {
   try {
     const { levelId } = req.query;
     const where = levelId ? { levelId } : {};
+    if (req.user.role === "teacher") where.teacherId = req.user.id;
     const courses = await Course.findAll({
       where,
       include: [
@@ -461,6 +554,16 @@ router.post("/courses", async (req, res) => {
     if (!levelId || !title) {
       return res.status(400).json({ error: "levelId and title are required" });
     }
+    // Teachers can only create courses owned by themselves and only in classrooms they own.
+    if (req.user.role === "teacher") {
+      teacherId = req.user.id;
+      if (classId) {
+        const cls = await Class.findByPk(classId);
+        if (!cls || cls.teacherId !== req.user.id) {
+          return res.status(403).json({ error: "You can only add courses to your own classrooms." });
+        }
+      }
+    }
     const course = await Course.create({
       levelId,
       classId: classId || null,
@@ -540,6 +643,13 @@ router.get("/modules", async (req, res) => {
   try {
     const { courseId } = req.query;
     const where = courseId ? { courseId } : {};
+    if (req.user.role === "teacher") {
+      const myCourses = await Course.findAll({ where: { teacherId: req.user.id }, attributes: ["id"] });
+      const ids = myCourses.map((c) => c.id);
+      where.courseId = where.courseId
+        ? (ids.includes(where.courseId) ? where.courseId : "__none__")
+        : ids.length ? ids : ["__none__"];
+    }
     const modules = await Module.findAll({
       where,
       include: [
@@ -595,6 +705,9 @@ router.post("/modules", async (req, res) => {
     const { courseId, title, description, order, isPublished } = req.body;
     if (!courseId || !title) {
       return res.status(400).json({ error: "courseId and title are required" });
+    }
+    if (req.user.role === "teacher" && !(await ownsCourse(req, courseId))) {
+      return res.status(403).json({ error: "You can only add modules to your own courses." });
     }
     const module = await Module.create({
       courseId,
@@ -656,6 +769,17 @@ router.get("/lessons", async (req, res) => {
   try {
     const { moduleId } = req.query;
     const where = moduleId ? { moduleId } : {};
+    if (req.user.role === "teacher") {
+      const myCourses = await Course.findAll({ where: { teacherId: req.user.id }, attributes: ["id"] });
+      const courseIds = myCourses.map((c) => c.id);
+      const myModules = courseIds.length
+        ? await Module.findAll({ where: { courseId: courseIds }, attributes: ["id"] })
+        : [];
+      const moduleIds = myModules.map((m) => m.id);
+      where.moduleId = where.moduleId
+        ? (moduleIds.includes(where.moduleId) ? where.moduleId : "__none__")
+        : moduleIds.length ? moduleIds : ["__none__"];
+    }
     const lessons = await Lesson.findAll({
       where,
       include: [{ model: Module, as: "module", attributes: ["id", "title"] }],
@@ -724,6 +848,10 @@ router.post("/lessons", async (req, res) => {
       req.body;
     if (!title || (!moduleId && !courseId)) {
       return res.status(400).json({ error: "title and either moduleId or courseId are required" });
+    }
+    if (req.user.role === "teacher") {
+      const ok = moduleId ? await ownsModule(req, moduleId) : await ownsCourse(req, courseId);
+      if (!ok) return res.status(403).json({ error: "You can only add lessons inside your own modules/courses." });
     }
     const lesson = await Lesson.create({
       moduleId: moduleId || null,
@@ -796,6 +924,8 @@ router.get("/classrooms", async (req, res) => {
     if (gradeId) where.gradeId = gradeId;
     if (specialityId) where.specialityId = specialityId;
     if (levelId) where.levelId = levelId;
+
+    if (req.user.role === "teacher") where.teacherId = req.user.id;
 
     const classrooms = await Class.findAll({
       where,
@@ -937,24 +1067,17 @@ const generateInviteCode = async () => {
   return code;
 };
 
-// Get classroom by invite code (public)
-router.get("/classrooms/join/:code", async (req, res) => {
-  try {
-    const classroom = await Class.findOne({ where: { inviteCode: req.params.code } });
-    if (!classroom) return res.status(404).json({ error: "Invalid invite code" });
-    res.json({ id: classroom.id, name: classroom.name, academicYear: classroom.academicYear });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to find classroom" });
-  }
-});
-
 // Create classroom
 router.post("/classrooms", async (req, res) => {
   try {
-    const { name, description, teacherId, gradeId, specialityId, levelId, academicYear, isActive } =
+    let { name, description, teacherId, gradeId, specialityId, levelId, academicYear, isActive } =
       req.body;
     if (!name) {
       return res.status(400).json({ error: "name is required" });
+    }
+    // A teacher always becomes the owner of classrooms they create
+    if (req.user.role === "teacher") {
+      teacherId = req.user.id;
     }
     const inviteCode = await generateInviteCode();
     const classroom = await Class.create({

@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { User, Class, Enrollment, Grade, Speciality, Level } = require("../models");
+const { authenticate, requireAdmin } = require("../middleware/Authmiddleware");
 
+// All user routes require an authenticated user
+router.use(authenticate);
 
-router.get("/getAllUsers", async (req, res) => {
+router.get("/getAllUsers", requireAdmin, async (req, res) => {
     try {
         const users = await User.findAll();
         res.json(users);
@@ -24,7 +27,7 @@ router.get("/users/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch user" });
   }
 });
-router.post("/users", async (req, res) => {
+router.post("/users", requireAdmin, async (req, res) => {
   try {
     const { firstname, lastname, email, password, role } = req.body;
     const newUser = await User.create({ firstname, lastname, email, password, role });
@@ -36,13 +39,17 @@ router.post("/users", async (req, res) => {
 });
 router.put("/users/:id", async (req, res) => {
   try {
+    // Only admin can update other users; users can update themselves but not their role
+    if (req.user.role !== "admin" && req.user.id !== req.params.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const { firstname, lastname, email, password, role } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
       user.firstname = firstname ?? user.firstname;
       user.lastname = lastname ?? user.lastname;
       user.email = email ?? user.email;
-      user.role = role ?? user.role;
+      if (req.user.role === "admin") user.role = role ?? user.role;
 
       // Update password only when explicitly provided.
       if (typeof password === "string" && password.trim().length > 0) {
@@ -59,7 +66,7 @@ router.put("/users/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update user" });
   }
 });
-router.delete("/users/:id", async (req, res) => {
+router.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (user) {
@@ -102,6 +109,37 @@ router.get("/profile/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
+router.post("/join-classroom", async (req, res) => {
+  try {
+    const { inviteCode } = req.body;
+    if (!inviteCode) return res.status(400).json({ error: "Invite code is required" });
+
+    if (req.user.role !== "student") {
+      return res.status(403).json({ error: "Only students can join classrooms via invite code" });
+    }
+
+    const classroom = await Class.findOne({ where: { inviteCode: inviteCode.trim().toUpperCase() } });
+    if (!classroom) return res.status(404).json({ error: "Invalid invite code" });
+
+    if (!classroom.isActive) return res.status(403).json({ error: "This classroom is no longer active" });
+
+    const [, created] = await Enrollment.findOrCreate({
+      where: { classId: classroom.id, studentId: req.user.id },
+      defaults: { status: "active" },
+    });
+
+    if (!created) return res.status(409).json({ error: "You are already enrolled in this classroom" });
+
+    res.status(201).json({
+      message: "Joined classroom successfully",
+      classroom: { id: classroom.id, name: classroom.name, academicYear: classroom.academicYear },
+    });
+  } catch (err) {
+    console.error("Error joining classroom:", err);
+    res.status(500).json({ error: "Failed to join classroom" });
   }
 });
 

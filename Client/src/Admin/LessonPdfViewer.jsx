@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layout, Menu, Button, Typography, Empty, Space, Tag } from "antd";
+import { Layout, Menu, Button, Typography, Empty, Space, Tag, Popconfirm } from "antd";
 import {
   FileTextOutlined,
   RobotOutlined,
   BookOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
@@ -21,7 +23,7 @@ const { Title, Text } = Typography;
 
 const SERVER_URL = "http://localhost:5000";
 
-export default function LessonPdfViewer({ lessons = [] }) {
+export default function LessonPdfViewer({ lessons = [], onDelete, onEdit }) {
   const navigate = useNavigate();
   const displayLessons = useMemo(
     () => lessons.filter((l) => (l.type === "pdf" || l.type === "code") && l.contentUrl),
@@ -71,14 +73,28 @@ export default function LessonPdfViewer({ lessons = [] }) {
     key: lesson.id,
     icon: <FileTextOutlined />,
     label: (
-      <Space size={6}>
-        <span style={{ fontSize: 13 }}>
-          {lesson.title.length > 20 ? lesson.title.slice(0, 20) + "..." : lesson.title}
-        </span>
-        <Tag color={lesson.type === "pdf" ? "blue" : "purple"} style={{ marginInlineEnd: 0 }}>
-          {lesson.type?.toUpperCase()}
-        </Tag>
-      </Space>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+        <Space size={4} style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {lesson.title.length > 16 ? lesson.title.slice(0, 16) + "..." : lesson.title}
+          </span>
+          <Tag color={lesson.type === "pdf" ? "blue" : "purple"} style={{ marginInlineEnd: 0 }}>
+            {lesson.type?.toUpperCase()}
+          </Tag>
+        </Space>
+        {(onEdit || onDelete) && (
+          <Space size={2} onClick={(e) => e.stopPropagation()}>
+            {onEdit && (
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(lesson); }} />
+            )}
+            {onDelete && (
+              <Popconfirm title="Delete this lesson?" onConfirm={() => onDelete(lesson.id)}>
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+              </Popconfirm>
+            )}
+          </Space>
+        )}
+      </div>
     ),
   }));
 

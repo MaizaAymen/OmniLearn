@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { CodeSubmission, StudentProblemSet } = require("../models");
+const { authenticate } = require("../middleware/Authmiddleware");
+
+router.use(authenticate);
 
 // POST /api/submissions — save a submission and upsert the problem record
 router.post("/", async (req, res) => {
@@ -55,6 +58,10 @@ router.post("/", async (req, res) => {
 router.get("/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+    // Students can only see their own submissions
+    if (req.user.role === "student" && req.user.id !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     const [submissions, problemSets] = await Promise.all([
       CodeSubmission.findAll({
