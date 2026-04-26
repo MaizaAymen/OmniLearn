@@ -67,6 +67,18 @@ const User = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    bio: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    githubUrl: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    linkedinUrl: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
   },
   {
     tableName: "users",

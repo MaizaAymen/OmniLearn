@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { User, Class, Enrollment, Grade, Speciality, Level } = require("../models");
+const { User, Class, Enrollment, Grade, Speciality, Level, Course, Module, Lesson } = require("../models");
 const { authenticate, requireAdmin } = require("../middleware/Authmiddleware");
 
 // All user routes require an authenticated user
@@ -43,12 +43,15 @@ router.put("/users/:id", async (req, res) => {
     if (req.user.role !== "admin" && req.user.id !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { firstname, lastname, email, password, role } = req.body;
+    const { firstname, lastname, email, password, role, bio, githubUrl, linkedinUrl } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
       user.firstname = firstname ?? user.firstname;
       user.lastname = lastname ?? user.lastname;
       user.email = email ?? user.email;
+      if (bio !== undefined) user.bio = bio;
+      if (githubUrl !== undefined) user.githubUrl = githubUrl;
+      if (linkedinUrl !== undefined) user.linkedinUrl = linkedinUrl;
       if (req.user.role === "admin") user.role = role ?? user.role;
 
       // Update password only when explicitly provided.
@@ -180,5 +183,83 @@ router.get("/users/:id/classrooms", async (req, res) => {
 });
 
 
+
+// ── Student classroom-view endpoints ────────────────────────────────────────
+// Enrolled students (and admin/teacher) can read classroom content.
+
+const canViewClassroom = async (user, classroomId) => {
+  if (user.role === "admin" || user.role === "teacher") return true;
+  const enrollment = await Enrollment.findOne({ where: { classId: classroomId, studentId: user.id } });
+  return !!enrollment;
+};
+
+router.get("/student/classrooms/:id", async (req, res) => {
+  try {
+    if (!(await canViewClassroom(req.user, req.params.id))) {
+      return res.status(403).json({ error: "You are not enrolled in this classroom" });
+    }
+    const classroom = await Class.findByPk(req.params.id, {
+      include: [
+        { model: Grade, as: "grade" },
+        { model: Speciality, as: "speciality" },
+        { model: Level, as: "level" },
+        { model: User, as: "teacher", attributes: ["id", "firstname", "lastname"] },
+        {
+          model: Enrollment,
+          as: "enrollments",
+          include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email"] }],
+        },
+      ],
+    });
+    if (!classroom) return res.status(404).json({ error: "Classroom not found" });
+    res.json(classroom);
+  } catch (err) {
+    console.error("Error fetching student classroom:", err);
+    res.status(500).json({ error: "Failed to fetch classroom" });
+  }
+});
+
+router.get("/student/classrooms/:id/courses", async (req, res) => {
+  try {
+    if (!(await canViewClassroom(req.user, req.params.id))) {
+      return res.status(403).json({ error: "You are not enrolled in this classroom" });
+    }
+    const courses = await Course.findAll({
+      where: { classId: req.params.id },
+      include: [{ model: Module, as: "modules", include: [{ model: Lesson, as: "lessons" }] }],
+    });
+    res.json(courses);
+  } catch (err) {
+    console.error("Error fetching student classroom courses:", err);
+    res.status(500).json({ error: "Failed to fetch courses" });
+  }
+});
+
+router.get("/student/courses/:id/modules", async (req, res) => {
+  try {
+    const modules = await Module.findAll({
+      where: { courseId: req.params.id },
+      include: [{ model: Lesson, as: "lessons", order: [["order", "ASC"]] }],
+      order: [["order", "ASC"]],
+    });
+    res.json(modules);
+  } catch (err) {
+    console.error("Error fetching student course modules:", err);
+    res.status(500).json({ error: "Failed to fetch modules" });
+  }
+});
+
+router.get("/student/modules/:id/lessons", async (req, res) => {
+  try {
+    const lessons = await Lesson.findAll({
+      where: { moduleId: req.params.id },
+      order: [["order", "ASC"]],
+    });
+    res.json(lessons);
+  } catch (err) {
+    console.error("Error fetching student module lessons:", err);
+    res.status(500).json({ error: "Failed to fetch lessons" });
+  }
+});
 
 module.exports = router;

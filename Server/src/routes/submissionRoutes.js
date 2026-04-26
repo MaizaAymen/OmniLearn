@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const { CodeSubmission, StudentProblemSet } = require("../models");
+const { Op } = require("sequelize");
+const { CodeSubmission, StudentProblemSet, Problem } = require("../models");
 const { authenticate } = require("../middleware/Authmiddleware");
 
 router.use(authenticate);
@@ -63,21 +64,58 @@ router.get("/:userId", async (req, res) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const [submissions, problemSets] = await Promise.all([
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+
+    const [submissions, problemSets, yearSubmissions] = await Promise.all([
       CodeSubmission.findAll({
         where: { userId },
         order: [["createdAt", "DESC"]],
         limit: 50,
       }),
       StudentProblemSet.findAll({ where: { studentId: userId } }),
+      CodeSubmission.findAll({
+        where: { userId, createdAt: { [Op.gte]: yearStart } },
+        attributes: ["createdAt", "language"],
+        raw: true,
+      }),
     ]);
 
-    const solved = problemSets.filter((p) => p.status === "solved").length;
+    const solvedProblemIds = problemSets
+      .filter((p) => p.status === "solved")
+      .map((p) => p.problemId);
+    const solved = solvedProblemIds.length;
     const attempted = problemSets.filter((p) => p.status === "attempted").length;
+
+    const languageBreakdown = {};
+    for (const s of yearSubmissions) {
+      const lang = (s.language || "unknown").toLowerCase();
+      languageBreakdown[lang] = (languageBreakdown[lang] || 0) + 1;
+    }
+
+    const difficultyBreakdown = { Easy: 0, Medium: 0, Hard: 0 };
+    if (solvedProblemIds.length && Problem) {
+      const solvedProblems = await Problem.findAll({
+        where: { id: { [Op.in]: solvedProblemIds } },
+        attributes: ["id", "difficulty"],
+        raw: true,
+      });
+      for (const p of solvedProblems) {
+        if (difficultyBreakdown[p.difficulty] !== undefined) {
+          difficultyBreakdown[p.difficulty]++;
+        }
+      }
+    }
 
     res.json({
       submissions,
+      solvedProblemIds,
       stats: { solved, attempted, total: problemSets.length },
+      yearSubmissions: yearSubmissions.map((s) => ({
+        createdAt: s.createdAt,
+        language: s.language,
+      })),
+      languageBreakdown,
+      difficultyBreakdown,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

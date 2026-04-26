@@ -14,7 +14,15 @@ const VALID_ROLES         = new Set(["host", "co-host", "editor", "viewer"]);
 const VALID_COLLAB_MODES  = new Set(["free", "controlled", "turn-based"]);
 const VALID_VISIBILITIES  = new Set(["public", "private", "unlisted"]);
 const VALID_IDENTITY      = new Set(["real", "anonymous", "pseudonymous"]);
-const VALID_SESSION_TYPES = new Set(["study", "classroom", "exam", "pair"]);
+const VALID_SESSION_TYPES = new Set(["practice", "classroom", "interview"]);
+
+// Presets that drive collab mode + teacher mode for each session type.
+// Exam is no longer its own type — it's a sub-feature of "classroom".
+const MODE_PRESETS = {
+  practice:   { collabMode: "free",       teacherMode: false },
+  classroom:  { collabMode: "controlled", teacherMode: true  },
+  interview:  { collabMode: "turn-based", teacherMode: false },
+};
 const PERMISSION_KEYS     = ["canEdit", "canComment", "canKick", "canMute", "canChangePermissions"];
 
 // ── Limits & defaults (one place to tweak) ────────────────────────────────
@@ -372,6 +380,12 @@ function createSession(rawConfig) {
     exam:         cfg.exam,
     _examTimer:   null,   // setTimeout handle; not serialized to clients
 
+    // Language lock — null means unlocked, otherwise a language string
+    languageLock: null,
+
+    // Raised hands — socketId → { name, raisedAt }
+    handRaises:   {},
+
     createdAt:    Date.now(),
   };
 
@@ -493,7 +507,8 @@ function buildSessionPayload(session) {
     tldrawStore:    session.tldrawStore,
     teacherMode:    Boolean(session.teacherMode),
     exam:           publicExam(session.exam),
-    postSession:    session.postSession,               // #10
+    postSession:    session.postSession,
+    languageLock:   session.languageLock || null,
   };
 }
 
@@ -836,6 +851,112 @@ function setupSessionHub(httpServer) {
       ack?.({ ok: true });
     });
 
+    // ── Language lock (host-only) ─────────────────────────────────────────
+    // language = "javascript" | "python" | "java" | null (unlock)
+    socket.on("session:language:lock", ({ language } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canChangePermissions")) {
+        return ack?.({ ok: false, message: "Only the host can lock the language" });
+      }
+
+      session.languageLock = language || null;
+
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:language:locked", {
+        language: session.languageLock,
+      });
+      ack?.({ ok: true, language: session.languageLock });
+    });
+
+    // ── Kick participant (host-only, blocks rejoin for session lifetime) ──
+    socket.on("session:kick", ({ socketId: targetId, reason } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+      if (!hasPermission(session, socket.id, "canKick")) {
+        return ack?.({ ok: false, message: "No permission to kick" });
+      }
+
+      const target = session.participants[targetId];
+      if (!target) return ack?.({ ok: false, message: "User not in session" });
+      if (target.role === "host") return ack?.({ ok: false, message: "Cannot kick the host" });
+
+      // Block by name for the session lifetime
+      const normalizedName = normalizeName(target.name);
+      if (!session.blacklist.includes(normalizedName)) {
+        session.blacklist.push(normalizedName);
+      }
+
+      io.sockets.sockets.get(targetId)?.emit("session:kicked", {
+        reason: reason || "You were removed from the session by the host",
+      });
+
+      // Force-leave the target
+      delete session.participants[targetId];
+      if (session.studentWork) delete session.studentWork[targetId];
+      const targetSocket = io.sockets.sockets.get(targetId);
+      if (targetSocket) {
+        targetSocket.leave(getSessionRoom(mem.problemId, mem.sessionId));
+        socketToMembership.delete(targetId);
+      }
+
+      broadcastParticipants(io, session);
+      broadcastSessionLists(io, mem.problemId);
+      ack?.({ ok: true });
+    });
+
+    // ── Raise / lower hand (students request edit access) ────────────────
+    socket.on("session:hand:raise", (_payload, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+
+      const participant = session.participants[socket.id];
+      if (!participant) return ack?.({ ok: false });
+
+      session.handRaises[socket.id] = { name: participant.name, raisedAt: Date.now() };
+
+      // Notify only host/co-host
+      for (const [sid, p] of Object.entries(session.participants)) {
+        if (p.role === "host" || p.role === "co-host") {
+          io.sockets.sockets.get(sid)?.emit("session:hand:raised", {
+            socketId: socket.id,
+            name:     participant.name,
+          });
+        }
+      }
+      ack?.({ ok: true });
+    });
+
+    socket.on("session:hand:lower", ({ socketId: targetId } = {}, ack) => {
+      const mem = socketToMembership.get(socket.id);
+      if (!mem) return ack?.({ ok: false, message: "Not in a session" });
+
+      const session = findSession(mem.problemId, mem.sessionId);
+      if (!session) return ack?.({ ok: false, message: "Session not found" });
+
+      // Student lowers own hand; host can dismiss anyone's hand
+      const sid = targetId && hasPermission(session, socket.id, "canChangePermissions")
+        ? targetId
+        : socket.id;
+
+      delete session.handRaises[sid];
+
+      for (const [hostSid, p] of Object.entries(session.participants)) {
+        if (p.role === "host" || p.role === "co-host") {
+          io.sockets.sockets.get(hostSid)?.emit("session:hand:lowered", { socketId: sid });
+        }
+      }
+      ack?.({ ok: true });
+    });
+
     // ── Update collab settings ────────────────────────────────────────────
     socket.on("session:collab:update", (payload, ack) => {
       const mem = socketToMembership.get(socket.id);
@@ -982,10 +1103,11 @@ function setupSessionHub(httpServer) {
       ack?.({ ok: true, index: next, problemId: ids[next] });
     });
 
-    // ── #3 Mid-session mode transition (host-only) ────────────────────────
-    // Re-applies server defaults for the given type without recreating the
-    // session, so collab mode / teacher mode / exam enablement can flip live.
-    socket.on("session:mode:transition", ({ type } = {}, ack) => {
+    // ── Mid-session mode update (host-only) ───────────────────────────────
+    // Flips a live session between practice / classroom / interview without
+    // recreating it. For classroom, an optional `exam` payload arms the exam
+    // timer; switching to a non-classroom mode always cancels any active exam.
+    socket.on("session:mode:update", ({ type, exam } = {}, ack) => {
       const mem = socketToMembership.get(socket.id);
       if (!mem) return ack?.({ ok: false, message: "Not in a session" });
 
@@ -994,33 +1116,32 @@ function setupSessionHub(httpServer) {
       if (!hasPermission(session, socket.id, "canChangePermissions")) {
         return ack?.({ ok: false, message: "Only the host can switch mode" });
       }
-      if (!VALID_SESSION_TYPES.has(type)) {
-        return ack?.({ ok: false, message: "Unknown session type" });
-      }
 
-      const PRESETS = {
-        study:     { collabMode: "free",       teacherMode: false, examEnabled: false },
-        classroom: { collabMode: "controlled", teacherMode: true,  examEnabled: false },
-        exam:      { collabMode: "free",       teacherMode: true,  examEnabled: true  },
-        pair:      { collabMode: "turn-based", teacherMode: false, examEnabled: false },
-      };
-      const preset = PRESETS[type];
+      const preset = MODE_PRESETS[type];
+      if (!preset) return ack?.({ ok: false, message: "Unknown session type" });
 
-      session.collab.mode     = preset.collabMode;
-      session.teacherMode     = preset.teacherMode;
-      if (!preset.examEnabled && session.exam) {
-        // Cancel any running exam when leaving exam mode.
+      session.type        = type;
+      session.collab.mode = preset.collabMode;
+      session.teacherMode = preset.teacherMode;
+
+      // Exam is only meaningful in classroom mode. Outside it, always disable.
+      const wantExam = type === "classroom" && Boolean(exam?.enabled);
+      if (!wantExam) {
         if (session._examTimer) { clearTimeout(session._examTimer); session._examTimer = null; }
-        session.exam.enabled = false;
-        session.exam.phase   = "waiting";
-        session.exam.startedAt = null;
-        session.exam.endsAt    = null;
-      } else if (preset.examEnabled) {
-        session.exam = session.exam || defaultExam({ enabled: true });
-        session.exam.enabled = true;
+        if (session.exam) {
+          session.exam.enabled   = false;
+          session.exam.phase     = "waiting";
+          session.exam.startedAt = null;
+          session.exam.endsAt    = null;
+        }
+      } else {
+        session.exam = defaultExam({
+          enabled: true,
+          durationMinutes: exam?.durationMinutes ?? session.exam?.durationMinutes,
+        });
       }
 
-      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:mode:transitioned", {
+      io.to(getSessionRoom(mem.problemId, mem.sessionId)).emit("session:mode:updated", {
         type,
         collab:      session.collab,
         teacherMode: session.teacherMode,
@@ -1108,6 +1229,15 @@ function setupSessionHub(httpServer) {
 
       if (!hasPermission(session, socket.id, "canEdit")) {
         socket.emit("session:permission:error", { message: "You do not have edit access" });
+        return;
+      }
+
+      if (
+        session.languageLock &&
+        language !== session.languageLock &&
+        !hasPermission(session, socket.id, "canChangePermissions")
+      ) {
+        socket.emit("session:permission:error", { message: `Language is locked to ${session.languageLock}` });
         return;
       }
 

@@ -12,6 +12,7 @@ import {
   Layout,
   List,
   Menu,
+  Progress,
   Row,
   Select,
   Space,
@@ -27,6 +28,8 @@ import {
   CameraOutlined,
   CloseOutlined,
   EditOutlined,
+  GithubOutlined,
+  LinkedinOutlined,
   LockOutlined,
   MailOutlined,
   SaveOutlined,
@@ -35,6 +38,7 @@ import {
 import ImgCrop from "antd-img-crop";
 import Cookies from "js-cookie";
 import dayjs from "dayjs";
+import CodingDashboard from "./CodingDashboard";
 
 const { Title, Text } = Typography;
 const { Sider, Content } = Layout;
@@ -150,6 +154,9 @@ export default function Profile() {
   const [submissions, setSubmissions] = useState([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [submissionStats, setSubmissionStats] = useState({ solved: 0, attempted: 0, total: 0 });
+  const [activity, setActivity] = useState({});
+  const [languageBreakdown, setLanguageBreakdown] = useState({});
+  const [difficultyBreakdown, setDifficultyBreakdown] = useState({ Easy: 0, Medium: 0, Hard: 0 });
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
 
@@ -177,6 +184,17 @@ export default function Profile() {
       const data = await res.json();
       setSubmissions(data.submissions || []);
       setSubmissionStats(data.stats || { solved: 0, attempted: 0, total: 0 });
+
+      const localActivity = {};
+      for (const s of data.yearSubmissions || []) {
+        const d = new Date(s.createdAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        localActivity[key] = (localActivity[key] || 0) + 1;
+      }
+      setActivity(localActivity);
+
+      setLanguageBreakdown(data.languageBreakdown || {});
+      setDifficultyBreakdown(data.difficultyBreakdown || { Easy: 0, Medium: 0, Hard: 0 });
     } catch (err) {
       message.error(err.message || "Failed to load submissions");
     } finally {
@@ -225,6 +243,9 @@ export default function Profile() {
         lastname: data.lastname,
         email: data.email,
         role: data.role,
+        bio: data.bio,
+        githubUrl: data.githubUrl,
+        linkedinUrl: data.linkedinUrl,
       });
     } catch (err) {
       message.error(err.message || "Failed to load profile");
@@ -319,6 +340,22 @@ export default function Profile() {
   const initials = user
     ? `${user.firstname?.[0] ?? ""}${user.lastname?.[0] ?? ""}`.toUpperCase()
     : "?";
+
+  const completion = (() => {
+    if (!user) return { percent: 0, missing: [] };
+    const checks = [
+      { key: "avatar", label: "avatar", done: !!(user.avatar || avatarUrl) },
+      { key: "bio", label: "a bio", done: !!user.bio?.trim() },
+      { key: "githubUrl", label: "GitHub link", done: !!user.githubUrl?.trim() },
+      { key: "linkedinUrl", label: "LinkedIn link", done: !!user.linkedinUrl?.trim() },
+      { key: "email", label: "verified email", done: !!user.isEmailVerified },
+    ];
+    const done = checks.filter((c) => c.done).length;
+    return {
+      percent: Math.round((done / checks.length) * 100),
+      missing: checks.filter((c) => !c.done).map((c) => c.label),
+    };
+  })();
 
   const menuItems = [
     {
@@ -423,23 +460,14 @@ export default function Profile() {
                 </div>
               ) : (
                 <>
-                  <Row gutter={16} style={{ marginBottom: 24 }}>
-                    <Col span={8}>
-                      <Card size="small" style={{ textAlign: "center" }}>
-                        <Statistic title="Solved" value={submissionStats.solved} valueStyle={{ color: "#52c41a" }} />
-                      </Card>
-                    </Col>
-                    <Col span={8}>
-                      <Card size="small" style={{ textAlign: "center" }}>
-                        <Statistic title="Attempted" value={submissionStats.attempted} valueStyle={{ color: "#faad14" }} />
-                      </Card>
-                    </Col>
-                    <Col span={8}>
-                      <Card size="small" style={{ textAlign: "center" }}>
-                        <Statistic title="Total" value={submissionStats.total} />
-                      </Card>
-                    </Col>
-                  </Row>
+                  <CodingDashboard
+                    activity={activity}
+                    languageBreakdown={languageBreakdown}
+                    difficultyBreakdown={difficultyBreakdown}
+                    stats={submissionStats}
+                  />
+                  <Divider />
+                  <Title level={5} style={{ marginTop: 0 }}>Recent submissions</Title>
                   {submissions.length === 0 ? (
                     <Empty description="No submissions yet — go solve some problems!" />
                   ) : (
@@ -577,14 +605,40 @@ export default function Profile() {
                 </Title>
                 <Text type="secondary">{user.email}</Text>
                 <div style={{ marginTop: 8 }}>
-                  <Space>
+                  <Space wrap>
                     <Tag color={roleColor[user.role] ?? "default"}>
                       {user.role?.toUpperCase()}
                     </Tag>
                     <Tag color={user.isActive ? "success" : "error"}>
                       {user.isActive ? "Active" : "Inactive"}
                     </Tag>
+                    {user.githubUrl && (
+                      <Tooltip title="GitHub">
+                        <a href={user.githubUrl} target="_blank" rel="noreferrer" style={{ color: "#24292f" }}>
+                          <GithubOutlined style={{ fontSize: 18 }} />
+                        </a>
+                      </Tooltip>
+                    )}
+                    {user.linkedinUrl && (
+                      <Tooltip title="LinkedIn">
+                        <a href={user.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: "#0a66c2" }}>
+                          <LinkedinOutlined style={{ fontSize: 18 }} />
+                        </a>
+                      </Tooltip>
+                    )}
                   </Space>
+                </div>
+                <div style={{ marginTop: 12, maxWidth: 360 }}>
+                  <Progress
+                    percent={completion.percent}
+                    size="small"
+                    status={completion.percent === 100 ? "success" : "active"}
+                  />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {completion.percent === 100
+                      ? "Profile complete — nice work!"
+                      : `You're ${completion.percent}% done — add ${completion.missing.slice(0, 2).join(" & ")}.`}
+                  </Text>
                 </div>
               </Col>
               <Col>
@@ -606,6 +660,9 @@ export default function Profile() {
                         lastname: user.lastname,
                         email: user.email,
                         role: user.role,
+                        bio: user.bio,
+                        githubUrl: user.githubUrl,
+                        linkedinUrl: user.linkedinUrl,
                       });
                     }}
                   >
@@ -626,6 +683,31 @@ export default function Profile() {
                     <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
                     <Descriptions.Item label="Role">
                       <Tag color={roleColor[user.role]}>{user.role}</Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Bio">
+                      {user.bio ? (
+                        <Text>{user.bio}</Text>
+                      ) : (
+                        <Text type="secondary" italic>No bio yet — click Edit to add one.</Text>
+                      )}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="GitHub">
+                      {user.githubUrl ? (
+                        <a href={user.githubUrl} target="_blank" rel="noreferrer">
+                          <GithubOutlined /> {user.githubUrl}
+                        </a>
+                      ) : (
+                        <Text type="secondary">—</Text>
+                      )}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="LinkedIn">
+                      {user.linkedinUrl ? (
+                        <a href={user.linkedinUrl} target="_blank" rel="noreferrer">
+                          <LinkedinOutlined /> {user.linkedinUrl}
+                        </a>
+                      ) : (
+                        <Text type="secondary">—</Text>
+                      )}
                     </Descriptions.Item>
                   </Descriptions>
                 ) : (
@@ -660,6 +742,34 @@ export default function Profile() {
                     >
                       <Input prefix={<MailOutlined />} />
                     </Form.Item>
+                    <Form.Item label="Bio" name="bio">
+                      <Input.TextArea
+                        rows={3}
+                        maxLength={500}
+                        showCount
+                        placeholder="Tell others a bit about yourself..."
+                      />
+                    </Form.Item>
+                    <Row gutter={12}>
+                      <Col span={12}>
+                        <Form.Item
+                          label="GitHub URL"
+                          name="githubUrl"
+                          rules={[{ type: "url", message: "Must be a valid URL" }]}
+                        >
+                          <Input prefix={<GithubOutlined />} placeholder="https://github.com/username" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item
+                          label="LinkedIn URL"
+                          name="linkedinUrl"
+                          rules={[{ type: "url", message: "Must be a valid URL" }]}
+                        >
+                          <Input prefix={<LinkedinOutlined />} placeholder="https://linkedin.com/in/username" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
                     {storedUser.role === "admin" ? (
                       <Form.Item label="Role" name="role">
                         <Select>

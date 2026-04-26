@@ -7,6 +7,7 @@ function CodeEditorPanel({
   code,
   isRunning,
   readOnly = false,
+  languageLocked = false,
   onLanguageChange,
   onCodeChange,
   onRunCode,
@@ -24,7 +25,7 @@ function CodeEditorPanel({
             alt={LANGUAGE_CONFIG[selectedLanguage].name}
             className="size-6"
           />
-          <select className="select select-sm" value={selectedLanguage} onChange={onLanguageChange}>
+          <select className="select select-sm" value={selectedLanguage} onChange={onLanguageChange} disabled={languageLocked}>
             {Object.entries(LANGUAGE_CONFIG).map(([key, lang]) => (
               <option key={key} value={key}>
                 {lang.name}

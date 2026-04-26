@@ -9,8 +9,6 @@ import ProblemDescription from "./ProblemDescription";
 import OutputPanel from "../Codeeditor/OutputPanel";
 import CodeEditorPanel from "../Codeeditor/Codeeditor";
 import { executeCode } from "../Codeeditor/Api";
-import { StreamVideoProvider } from "../ScreenShare/StreamVideoProvider";
-import { ScreenRecorder } from "../ScreenShare/ScreenRecorder";
 
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -36,11 +34,29 @@ import {
 
 import "./ProblemPage.css";
 
+const normalizeOutput = (s, { strict = false } = {}) => {
+  let result = (s ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join("\n")
+    .toLowerCase();
+  if (!strict) {
+    result = result.replace(/\s+/g, "").replace(/['"`]/g, "");
+  }
+  return result;
+};
+
+const outputsMatch = (actual, expected) => {
+  if (normalizeOutput(actual, { strict: true }) === normalizeOutput(expected, { strict: true })) return true;
+  return normalizeOutput(actual) === normalizeOutput(expected);
+};
+
 const SESSION_TYPES = [
-  { key: "study",     icon: "📚", label: "Study Group",      desc: "Free collaboration, open to anyone" },
-  { key: "classroom", icon: "🎓", label: "Classroom",        desc: "Teacher-led, students have private editors" },
-  { key: "exam",      icon: "⏱",  label: "Timed Exam",       desc: "Private, timed, each student works alone" },
-  { key: "pair",      icon: "🤝", label: "Pair Programming", desc: "Two people, turn-based editing" },
+  { key: "practice",  icon: "📚", label: "Practice",  desc: "Free collaboration, open to anyone" },
+  { key: "classroom", icon: "🎓", label: "Classroom", desc: "Teacher-led — toggle exam timer when ready" },
+  { key: "interview", icon: "🤝", label: "Interview", desc: "Two people, turn-based editing" },
 ];
 
 function TagAutocomplete({ label, note, tags, setTags, users, badgeClass = "" }) {
@@ -142,6 +158,7 @@ function ProblemPage() {
   const [activeRightTab, setActiveRightTab] = useState("testcase"); // testcase | result
   const [showDiff, setShowDiff] = useState(false);
   const [originalCode, setOriginalCode] = useState("");
+  const [verifiedCorrectCode, setVerifiedCorrectCode] = useState(null);
   const socketRef = useRef(null);
   const attemptedJoinFromLinkRef = useRef(null);
 
@@ -167,6 +184,7 @@ function ProblemPage() {
   const [sessionWhitelist, setSessionWhitelist] = useState([]);
   const [sessionMaxParticipants, setSessionMaxParticipants] = useState(10);
   const [sessionExamDuration, setSessionExamDuration] = useState(30);
+  const [sessionExamEnabled, setSessionExamEnabled] = useState(false);
   const [sessionPlaylistIds, setSessionPlaylistIds] = useState([]);
   const [accessModel, setAccessModel] = useState("anyone"); // "anyone" | "link" | "invited" | "classroom" | "password"
 
@@ -223,6 +241,11 @@ function ProblemPage() {
 
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
+
+  // Language lock, hand raises
+  const [sessionLanguageLock, setSessionLanguageLock] = useState(null);
+  const [handRaised, setHandRaised] = useState(false);
+  const [raisedHands, setRaisedHands] = useState([]); // [{ socketId, name }] — host only
 
   // Teacher-supervision state (teacher watches one student's private editor)
   const [watchingStudent, setWatchingStudent] = useState(null); // { socketId, name }
@@ -405,6 +428,31 @@ function ProblemPage() {
       toast("Session settings updated", { icon: "⚙" });
     });
 
+    // Language lock
+    socket.on("session:language:locked", ({ language }) => {
+      setSessionLanguageLock(language || null);
+      toast(language ? `Language locked to ${language}` : "Language unlocked", { icon: "🔒" });
+    });
+
+    // Kicked from session
+    socket.on("session:kicked", ({ reason }) => {
+      toast.error(reason || "You were removed from the session");
+      setActiveSession(null);
+      setSessionParticipants([]);
+      setSessionParticipantDetails([]);
+      setRaisedHands([]);
+      setHandRaised(false);
+      setSessionLanguageLock(null);
+    });
+
+    // Host receives hand raise / lower notifications
+    socket.on("session:hand:raised", ({ socketId: sid, name }) => {
+      setRaisedHands((prev) => prev.some((h) => h.socketId === sid) ? prev : [...prev, { socketId: sid, name }]);
+    });
+    socket.on("session:hand:lowered", ({ socketId: sid }) => {
+      setRaisedHands((prev) => prev.filter((h) => h.socketId !== sid));
+    });
+
     // #2 Playlist: host advanced to the next problem.
     socket.on("session:problem:changed", ({ index, problemId }) => {
       setActiveSession((prev) => prev ? { ...prev, currentProblemIndex: index, problemId } : prev);
@@ -412,9 +460,9 @@ function ProblemPage() {
       toast(`Now on problem ${index + 1}`, { icon: "📘" });
     });
 
-    // #3 Mid-session mode transition: server broadcasts new collab/exam state.
-    socket.on("session:mode:transitioned", ({ type, collab, teacherMode, exam: e }) => {
-      setActiveSession((prev) => prev ? { ...prev, collab, teacherMode } : prev);
+    // Mid-session mode update: server broadcasts new collab/exam state.
+    socket.on("session:mode:updated", ({ type, collab, teacherMode, exam: e }) => {
+      setActiveSession((prev) => prev ? { ...prev, collab, teacherMode, type } : prev);
       setExam(e || null);
       toast(`Mode changed → ${type}`, { icon: "🔁" });
     });
@@ -484,15 +532,15 @@ function ProblemPage() {
   };
 
   // Defaults for each session type — one place to change them.
+  // Exam is no longer a type; in classroom mode the host opts in via `sessionExamEnabled`.
   const TYPE_DEFAULTS = {
-    study:     { visibility:"public",  allowAnonymous:true,  requireJoinApproval:false, teacherMode:false, maxParticipants:10,  defaultRole:"editor", collabMode:"free",       examEnabled:false, autoLock:false },
-    classroom: { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30,  defaultRole:"viewer", collabMode:"controlled", examEnabled:false, autoLock:false },
-    exam:      { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30,  defaultRole:"editor", collabMode:"free",       examEnabled:true,  autoLock:false },
-    pair:      { visibility:"private", allowAnonymous:false, requireJoinApproval:false, teacherMode:false, maxParticipants:2,   defaultRole:"editor", collabMode:"turn-based", examEnabled:false, autoLock:true  },
+    practice:  { visibility:"public",  allowAnonymous:true,  requireJoinApproval:false, teacherMode:false, maxParticipants:10, defaultRole:"editor", collabMode:"free",       autoLock:false },
+    classroom: { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30, defaultRole:"viewer", collabMode:"controlled", autoLock:false },
+    interview: { visibility:"private", allowAnonymous:false, requireJoinApproval:false, teacherMode:false, maxParticipants:2,  defaultRole:"editor", collabMode:"turn-based", autoLock:true  },
   };
 
   // Map the chosen session type to a sensible default access model.
-  const ACCESS_BY_TYPE = { study: "anyone", classroom: "classroom", exam: "classroom", pair: "link" };
+  const ACCESS_BY_TYPE = { practice: "anyone", classroom: "classroom", interview: "link" };
 
   // Changing the access-model dropdown derives the underlying visibility/whitelist/password fields.
   const changeAccessModel = (model) => {
@@ -530,6 +578,7 @@ function ProblemPage() {
     setSessionType("");
     setSelectedClassroomId("");
     setAccessModel("anyone");
+    setSessionExamEnabled(false);
   };
 
   // Derive "accessModel" from the live session's visibility + waiting-room flag.
@@ -645,10 +694,15 @@ function ProblemPage() {
     });
   };
 
-  // #3 Host switches session type live (study ↔ classroom ↔ exam ↔ pair).
-  const handleModeTransition = (type) => {
+  // Host switches session type live (practice ↔ classroom ↔ interview).
+  // For classroom, optionally arm the exam timer in the same call.
+  const handleModeUpdate = (type, opts = {}) => {
     if (!type || !socketRef.current) return;
-    socketRef.current.emit("session:mode:transition", { type }, (res) => {
+    const payload = { type };
+    if (type === "classroom" && opts.examEnabled) {
+      payload.exam = { enabled: true, durationMinutes: Number(opts.durationMinutes) || 30 };
+    }
+    socketRef.current.emit("session:mode:update", payload, (res) => {
       if (!res?.ok) return toast.error(res?.message || "Could not switch mode");
       toast.success(`Switched to ${type} mode`);
     });
@@ -750,6 +804,11 @@ function ProblemPage() {
       toast.error("Language is locked during the exam");
       return;
     }
+    const isHost = currentUserRole === "host" || currentUserRole === "co-host";
+    if (!isHost && sessionLanguageLock && newLang !== sessionLanguageLock) {
+      toast.error(`Language is locked to ${sessionLanguageLock}`);
+      return;
+    }
     setSelectedLanguage(newLang);
 
     if (isInSession && sessionCodeByLanguage[newLang] !== undefined) {
@@ -830,7 +889,8 @@ function ProblemPage() {
     if (!socketRef.current || !currentProblemId) return;
 
     // All the "hidden" knobs are derived from the session type at emit time.
-    const d = TYPE_DEFAULTS[sessionType] || TYPE_DEFAULTS.study;
+    const d = TYPE_DEFAULTS[sessionType] || TYPE_DEFAULTS.practice;
+    const examOn = sessionType === "classroom" && sessionExamEnabled;
 
     socketRef.current.emit(
       "session:create",
@@ -855,7 +915,7 @@ function ProblemPage() {
         defaultRole: d.defaultRole,
         collab: { mode: d.collabMode, turnDuration: 30, showLiveCursors: true, showSelections: true, typingIndicators: true },
         // Exam
-        exam: { enabled: d.examEnabled, durationMinutes: Number(sessionExamDuration) || 30, lockLanguage: true },
+        exam: { enabled: examOn, durationMinutes: Number(sessionExamDuration) || 30, lockLanguage: true },
         // Playlist (empty → server falls back to [problemId])
         problemIds: sessionPlaylistIds,
         playlistMode: "free",
@@ -888,6 +948,9 @@ function ProblemPage() {
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
         setTldrawInitialStore(joined.tldrawStore || {});
+        setSessionLanguageLock(joined.languageLock || null);
+        setRaisedHands([]);
+        setHandRaised(false);
 
         // Reset form
         setSessionName("");
@@ -939,6 +1002,9 @@ function ProblemPage() {
         setCurrentUserPermission(response.userPermission || "editable");
         setSessionCodeByLanguage(joined.codeByLanguage || {});
         setTldrawInitialStore(joined.tldrawStore || {});
+        setSessionLanguageLock(joined.languageLock || null);
+        setRaisedHands([]);
+        setHandRaised(false);
         setSessionJoinId("");
         setSessionJoinPassword("");
         setSearchParams((prev) => {
@@ -971,6 +1037,9 @@ function ProblemPage() {
     setIsInWaitingRoom(false);
     setParticipantsSidebarOpen(false);
     setChatSidebarOpen(false);
+    setSessionLanguageLock(null);
+    setRaisedHands([]);
+    setHandRaised(false);
     setChatMessages([]);
     setChatInput("");
     setChatUnread(0);
@@ -1045,18 +1114,13 @@ function ProblemPage() {
       let isCorrect = false;
       if (result.success) {
         const expected = currentProblem.expectedOutput?.[selectedLanguage];
-        const normalize = (s) =>
-          (s ?? "")
-            .replace(/\r\n/g, "\n")
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-            .join("\n")
-            .toLowerCase();
-        const actual = normalize(result.output);
-        if (!expected || actual === normalize(expected)) {
+        if (expected && outputsMatch(result.output, expected)) {
           isCorrect = true;
           toast.success("All test cases passed! 🎉");
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+        } else if (!expected) {
+          isCorrect = true;
+          toast.success("Code ran successfully!");
           confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         } else {
           toast.error("Output doesn't match expected result");
@@ -1066,10 +1130,14 @@ function ProblemPage() {
       }
 
       const storedUser = (() => { try { return JSON.parse(Cookies.get("user") || "{}"); } catch { return {}; } })();
-      if (storedUser?.id) {
+      const authToken = Cookies.get("token");
+      if (storedUser?.id && authToken) {
         fetch("http://localhost:5000/api/submissions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
           body: JSON.stringify({
             userId: storedUser.id,
             problemId: currentProblemId,
@@ -1107,15 +1175,6 @@ function ProblemPage() {
         ? `${currentProblem.title}: ${currentProblem.description?.text || ""}${examplesText ? `\n\nExamples:\n${examplesText}` : ""}${expected ? `\n\nExpected output (the corrected code MUST produce exactly this when executed):\n${expected}` : ""}`
         : "General coding problem";
 
-      const normalize = (s) =>
-        (s ?? "")
-          .replace(/\r\n/g, "\n")
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-          .join("\n")
-          .toLowerCase();
-
       const requestCorrection = async (currentCode, actualOutput) => {
         const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {
           method: "POST",
@@ -1134,12 +1193,16 @@ function ProblemPage() {
       let correction = await requestCorrection(code, undefined);
       let working = correction.correctedCode || code;
       let lastSummary = correction.summary;
+      let matched = false;
 
       if (expected) {
         const maxRetries = 2;
         for (let i = 0; i <= maxRetries; i++) {
           const run = await executeCode(selectedLanguage, working);
-          if (run.success && normalize(run.output) === normalize(expected)) break;
+          if (run.success && outputsMatch(run.output, expected)) {
+            matched = true;
+            break;
+          }
           if (i === maxRetries) break;
           const actual = run.success ? run.output : (run.error || "execution failed");
           correction = await requestCorrection(working, actual);
@@ -1147,15 +1210,23 @@ function ProblemPage() {
           working = correction.correctedCode;
           lastSummary = correction.summary || lastSummary;
         }
+      } else {
+        matched = true;
       }
 
       if (working !== code) {
         setOriginalCode(code);
         setCode(working);
         setShowDiff(true);
-        toast.success(lastSummary || "Code corrected successfully!");
-      } else {
+        if (matched) {
+          toast.success(lastSummary || "Code corrected successfully!");
+        } else {
+          toast(lastSummary || "Code updated, but output still doesn't match expected. You may need to refine further.", { icon: "⚠️" });
+        }
+      } else if (matched) {
         toast.success(lastSummary || "No issues found - code looks good!");
+      } else {
+        toast.error(lastSummary || "Couldn't auto-correct to match expected output.");
       }
     } catch (err) {
       toast.error(err.message || "Error correcting code");
@@ -1259,10 +1330,7 @@ function ProblemPage() {
   }
 
   return (
-    <StreamVideoProvider
-      userId={currentProblemId}
-      userName={`User-${currentProblemId}`}
-    >
+    <>
       <div className="problem-page h-screen flex flex-col overflow-hidden bg-base-300">
         {/* TOP BAR */}
         <div className="problem-topbar flex items-center justify-between px-3 py-1.5 bg-base-100 border-b border-base-300 gap-2">
@@ -1348,13 +1416,6 @@ function ProblemPage() {
             Submit
           </button>
 
-          <div className="divider divider-horizontal mx-1 h-6" />
-
-          {/* Screen Recorder */}
-          <ScreenRecorder
-            problemId={currentProblemId}
-            problemTitle={currentProblem?.title}
-          />
         </div>
 
         {/* Right: Timer + Reset */}
@@ -1450,19 +1511,25 @@ function ProblemPage() {
                 Invite
               </button>
 
-              {/* #3 Host-only mode switcher (live transition) */}
+              {/* Host-only live mode switcher */}
               {(currentUserRole === "host" || currentUserRole === "co-host") && (
                 <select
                   className="select select-xs select-bordered"
                   value=""
-                  onChange={(e) => { if (e.target.value) handleModeTransition(e.target.value); e.target.value = ""; }}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    e.target.value = "";
+                    if (!v) return;
+                    if (v === "classroom-exam") handleModeUpdate("classroom", { examEnabled: true, durationMinutes: 30 });
+                    else handleModeUpdate(v);
+                  }}
                   title="Switch session mode live"
                 >
                   <option value="">Switch mode…</option>
-                  <option value="study">Study</option>
+                  <option value="practice">Practice</option>
                   <option value="classroom">Classroom</option>
-                  <option value="exam">Exam</option>
-                  <option value="pair">Pair</option>
+                  <option value="classroom-exam">Classroom + Exam timer</option>
+                  <option value="interview">Interview</option>
                 </select>
               )}
 
@@ -1531,6 +1598,82 @@ function ProblemPage() {
                     </>
                   )}
                 </>
+              )}
+
+              {/* ── Language lock (host sets, everyone sees) ── */}
+              {(currentUserRole === "host" || currentUserRole === "co-host") ? (
+                <select
+                  className="select select-xs select-bordered"
+                  value={sessionLanguageLock || ""}
+                  onChange={(e) => {
+                    const lang = e.target.value || null;
+                    socketRef.current?.emit("session:language:lock", { language: lang }, (res) => {
+                      if (!res?.ok) toast.error(res?.message || "Could not set language lock");
+                    });
+                  }}
+                  title="Lock session language"
+                >
+                  <option value="">Lang: free</option>
+                  <option value="javascript">Lock: JS</option>
+                  <option value="python">Lock: Python</option>
+                  <option value="java">Lock: Java</option>
+                </select>
+              ) : sessionLanguageLock ? (
+                <span className="badge badge-sm badge-warning gap-1" title="Language locked by host">
+                  🔒 {sessionLanguageLock}
+                </span>
+              ) : null}
+
+              {/* ── Raise hand (students only) ── */}
+              {currentUserRole !== "host" && currentUserRole !== "co-host" && (
+                <button
+                  className={`btn btn-xs gap-1 ${handRaised ? "btn-warning" : "btn-ghost"}`}
+                  title={handRaised ? "Lower hand" : "Raise hand to request edit access"}
+                  onClick={() => {
+                    if (handRaised) {
+                      socketRef.current?.emit("session:hand:lower", {});
+                      setHandRaised(false);
+                    } else {
+                      socketRef.current?.emit("session:hand:raise", {}, (res) => {
+                        if (res?.ok) setHandRaised(true);
+                        else toast.error(res?.message || "Could not raise hand");
+                      });
+                    }
+                  }}
+                >
+                  ✋ {handRaised ? "Lower hand" : "Raise hand"}
+                </button>
+              )}
+
+              {/* ── Raised hands panel (host only) ── */}
+              {(currentUserRole === "host" || currentUserRole === "co-host") && raisedHands.length > 0 && (
+                <div className="dropdown dropdown-end">
+                  <button tabIndex={0} className="btn btn-xs btn-warning gap-1">
+                    ✋ {raisedHands.length}
+                  </button>
+                  <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-300 mt-1 space-y-1">
+                    {raisedHands.map((h) => (
+                      <li key={h.socketId} className="flex items-center gap-2">
+                        <span className="text-xs flex-1 truncate">{h.name}</span>
+                        <button
+                          className="btn btn-xs btn-success"
+                          onClick={() => {
+                            socketRef.current?.emit("session:role:change", { socketId: h.socketId, newRole: "editor" });
+                            socketRef.current?.emit("session:hand:lower", { socketId: h.socketId });
+                          }}
+                        >
+                          Allow
+                        </button>
+                        <button
+                          className="btn btn-xs btn-ghost"
+                          onClick={() => socketRef.current?.emit("session:hand:lower", { socketId: h.socketId })}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               <button
@@ -1657,6 +1800,12 @@ function ProblemPage() {
               code={code}
               isRunning={isRunning}
               readOnly={isInSession && currentUserPermission !== "editable"}
+              languageLocked={
+                isInSession &&
+                currentUserRole !== "host" &&
+                currentUserRole !== "co-host" &&
+                !!sessionLanguageLock
+              }
               onLanguageChange={handleLanguageChange}
               onCodeChange={handleCodeChange}
               onRunCode={handleRunCode}
@@ -1929,23 +2078,36 @@ function ProblemPage() {
                 />
               </div>
 
-              {/* 5. Exam duration (only for exam type) */}
-              {sessionType === "exam" && (
-                <div>
-                  <label className="label pb-1">
-                    <span className="label-text text-xs font-medium">Exam duration (minutes)</span>
+              {/* 5. Exam timer — only meaningful in Classroom mode */}
+              {sessionType === "classroom" && (
+                <div className="rounded-lg border border-base-300 p-3 bg-base-100">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm checkbox-primary"
+                      checked={sessionExamEnabled}
+                      onChange={(e) => setSessionExamEnabled(e.target.checked)}
+                    />
+                    <span className="label-text text-xs font-medium">Include exam timer</span>
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={300}
-                    className="input input-sm input-bordered w-full"
-                    value={sessionExamDuration}
-                    onChange={(e) => setSessionExamDuration(e.target.value)}
-                  />
-                  <p className="text-[11px] text-base-content/60 mt-1">
-                    Students join first — click “Start Exam” when ready. Timer auto-saves submissions.
-                  </p>
+                  {sessionExamEnabled && (
+                    <div className="mt-3">
+                      <label className="label pb-1">
+                        <span className="label-text text-xs font-medium">Exam duration (minutes)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={300}
+                        className="input input-sm input-bordered w-full"
+                        value={sessionExamDuration}
+                        onChange={(e) => setSessionExamDuration(e.target.value)}
+                      />
+                      <p className="text-[11px] text-base-content/60 mt-1">
+                        Students join first — click “Start Exam” when ready. Timer auto-saves submissions.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2180,13 +2342,27 @@ function ProblemPage() {
                             <span className={`badge badge-xs ${roleBadge}`}>{p.role}</span>
                           )}
                           {(currentUserRole === "host" || currentUserRole === "co-host") && p.role !== "host" && p.role !== "co-host" && (
-                            <button
-                              className="btn btn-ghost btn-xs px-1"
-                              title={`Watch ${p.name}'s desk`}
-                              onClick={() => handleWatchStudent(p.socketId, p.name)}
-                            >
-                              👁
-                            </button>
+                            <>
+                              <button
+                                className="btn btn-ghost btn-xs px-1"
+                                title={`Watch ${p.name}'s desk`}
+                                onClick={() => handleWatchStudent(p.socketId, p.name)}
+                              >
+                                👁
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-xs px-1 text-error"
+                                title={`Kick ${p.name}`}
+                                onClick={() => {
+                                  if (!confirm(`Kick ${p.name} from the session?`)) return;
+                                  socketRef.current?.emit("session:kick", { socketId: p.socketId }, (res) => {
+                                    if (!res?.ok) toast.error(res?.message || "Could not kick user");
+                                  });
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </>
                           )}
                           <span className="w-2 h-2 rounded-full bg-success shrink-0" title="Online" />
                         </div>
@@ -2423,7 +2599,7 @@ function ProblemPage() {
           </div>
         </div>
       )}
-    </StreamVideoProvider>
+    </>
   );
 }
 

@@ -209,6 +209,7 @@ module.exports = {
   Notification,
   CodeSubmission,
   StudentProblemSet,
+  Problem,
   Grade,
   Speciality,
   Level,

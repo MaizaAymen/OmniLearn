@@ -47,6 +47,7 @@ import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 const { Title, Text } = Typography;
 const API = "http://localhost:5000/api";
 const ADMIN = `${API}/admin`;
+const STUDENT = `${API}/student`;
 const SERVER_URL = "http://localhost:5000";
 
 const getUser = () => {
@@ -86,12 +87,14 @@ export default function ClassroomView() {
 
   const defaultLayoutPluginInstance = defaultLayoutPlugin({ sidebarTabs: () => [] });
 
+  const BASE = user.role === "student" ? STUDENT : ADMIN;
+
   useEffect(() => {
     if (!classId) return;
     setLoading(true);
     Promise.all([
-      fetch(`${ADMIN}/classrooms/${classId}`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`${ADMIN}/classrooms/${classId}/courses`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${BASE}/classrooms/${classId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${BASE}/classrooms/${classId}/courses`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API}/ai/ai/getallproblems`).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(async ([clsData, coursesData, problemsData]) => {
@@ -103,7 +106,7 @@ export default function ClassroomView() {
         const moduleEntries = await Promise.all(
           courseList.map(async (c) => {
             try {
-              const res = await fetch(`${ADMIN}/courses/${c.id}/modules`);
+              const res = await fetch(`${BASE}/courses/${c.id}/modules`);
               const data = await res.json();
               return [c.id, Array.isArray(data) ? data : []];
             } catch {
@@ -120,7 +123,7 @@ export default function ClassroomView() {
   const loadModulesForCourse = async (courseId) => {
     if (modulesByCourse[courseId]) return modulesByCourse[courseId];
     try {
-      const res = await fetch(`${ADMIN}/courses/${courseId}/modules`);
+      const res = await fetch(`${BASE}/courses/${courseId}/modules`);
       const data = await res.json();
       const arr = Array.isArray(data) ? data : [];
       setModulesByCourse((prev) => ({ ...prev, [courseId]: arr }));
@@ -134,7 +137,7 @@ export default function ClassroomView() {
   const loadLessonsForModule = async (moduleId) => {
     if (lessonsByModule[moduleId]) return lessonsByModule[moduleId];
     try {
-      const res = await fetch(`${ADMIN}/modules/${moduleId}/lessons`);
+      const res = await fetch(`${BASE}/modules/${moduleId}/lessons`);
       const data = await res.json();
       const arr = Array.isArray(data) ? data : [];
       setLessonsByModule((prev) => ({ ...prev, [moduleId]: arr }));

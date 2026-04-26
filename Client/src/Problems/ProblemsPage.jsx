@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
-import { ChevronRightIcon, Code2Icon, GitForkIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { getDifficultyBadgeClass } from "./utils";
 import Navbar from "../components/Navbar";
 
@@ -29,6 +29,7 @@ function ProblemsPage() {
 
   const [problems, setProblems]   = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [solvedIds, setSolvedIds] = useState(() => new Set());
   const [search, setSearch]       = useState("");
   const [diffFilter, setDiffFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState(
@@ -52,6 +53,22 @@ function ProblemsPage() {
   }
 
   useEffect(() => { fetchProblems(); }, [statusFilter]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = Cookies.get("token");
+    if (!token) return;
+    fetch(`http://localhost:5000/api/submissions/${user.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (Array.isArray(data?.solvedProblemIds)) {
+          setSolvedIds(new Set(data.solvedProblemIds));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
 
   async function forkProblem(id) {
     try {
@@ -194,10 +211,12 @@ function ProblemsPage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visible.map(problem => (
+            {visible.map(problem => {
+              const isSolved = solvedIds.has(problem.id);
+              return (
               <div
                 key={problem.id}
-                className="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-0.5 transition-all border border-base-300"
+                className={`card bg-base-100 shadow hover:shadow-lg hover:-translate-y-0.5 transition-all border ${isSolved ? "border-success/60" : "border-base-300"}`}
               >
                 <div className="card-body p-5">
                   <div className="flex items-start gap-3 mb-3">
@@ -205,7 +224,15 @@ function ProblemsPage() {
                       <Code2Icon className="size-5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h2 className="font-bold truncate">{problem.title}</h2>
+                      <div className="flex items-center gap-1.5">
+                        <h2 className="font-bold truncate">{problem.title}</h2>
+                        {isSolved && (
+                          <CheckCircle2Icon
+                            className="size-4 text-success shrink-0"
+                            aria-label="Solved"
+                          />
+                        )}
+                      </div>
                       <p className="text-xs text-base-content/60 truncate">{problem.category}</p>
                     </div>
                     <span className={`badge badge-sm ${getDifficultyBadgeClass(problem.difficulty)}`}>
@@ -273,7 +300,8 @@ function ProblemsPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -21,6 +21,7 @@ import {
   Dropdown,
   Layout,
   Menu,
+  Modal,
   Space,
   Tag,
   Tooltip,
@@ -80,10 +81,20 @@ const Sidebar = ({ children }) => {
     : null;
 
   const handleLogout = () => {
-    Cookies.remove('user');
-    Cookies.remove('token');
-    if (storedUser?.id) localStorage.removeItem(`avatar_${storedUser.id}`);
-    navigate('/auth');
+    Modal.confirm({
+      title: 'Sign out',
+      content: 'Are you sure you want to sign out?',
+      okText: 'Sign out',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk() {
+        Cookies.remove('user');
+        Cookies.remove('token');
+        Cookies.remove('refreshToken');
+        navigate('/auth');
+      },
+    });
   };
 
   const userMenuItems = [
