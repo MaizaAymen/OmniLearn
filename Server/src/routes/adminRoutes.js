@@ -13,6 +13,7 @@ const {
   Class,
   Enrollment,
   User,
+  Announcement,
 } = require("../models");
 
 const LESSON_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "lesson-files");
@@ -757,6 +758,79 @@ router.delete("/modules/:id", async (req, res) => {
   } catch (error) {
     console.error("Error deleting module:", error);
     res.status(500).json({ error: "Failed to delete module" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANNOUNCEMENT ROUTES (classroom-level, like Google Classroom stream)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// List announcements for a classroom
+router.get("/classrooms/:classId/announcements", async (req, res) => {
+  try {
+    const classroom = await Class.findByPk(req.params.classId);
+    if (!classroom) return res.status(404).json({ error: "Classroom not found" });
+
+    const announcements = await Announcement.findAll({
+      where: { classId: req.params.classId },
+      include: [
+        { model: User, as: "author", attributes: ["id", "firstname", "lastname", "email", "role"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+    res.json(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+    res.status(500).json({ error: "Failed to fetch announcements" });
+  }
+});
+
+// Create an announcement in a classroom
+router.post("/classrooms/:classId/announcements", async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { title, content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+    const classroom = await Class.findByPk(classId);
+    if (!classroom) return res.status(404).json({ error: "Classroom not found" });
+
+    if (req.user.role === "teacher" && !(await ownsClassroom(req, classId))) {
+      return res.status(403).json({ error: "You can only post announcements in your own classrooms." });
+    }
+
+    const announcement = await Announcement.create({
+      classId,
+      authorId: req.user.id,
+      title: title?.trim() || null,
+      content: content.trim(),
+    });
+    const full = await Announcement.findByPk(announcement.id, {
+      include: [
+        { model: User, as: "author", attributes: ["id", "firstname", "lastname", "email", "role"] },
+      ],
+    });
+    res.status(201).json(full);
+  } catch (error) {
+    console.error("Error creating announcement:", error);
+    res.status(500).json({ error: "Failed to create announcement" });
+  }
+});
+
+// Delete an announcement (author or admin)
+router.delete("/announcements/:id", async (req, res) => {
+  try {
+    const announcement = await Announcement.findByPk(req.params.id);
+    if (!announcement) return res.status(404).json({ error: "Announcement not found" });
+    if (!isAdmin(req) && announcement.authorId !== req.user.id) {
+      return res.status(403).json({ error: "You can only delete your own announcements." });
+    }
+    await announcement.destroy();
+    res.json({ message: "Announcement deleted" });
+  } catch (error) {
+    console.error("Error deleting announcement:", error);
+    res.status(500).json({ error: "Failed to delete announcement" });
   }
 });
 

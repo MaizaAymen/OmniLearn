@@ -23,6 +23,7 @@ import MyClassrooms from "./Classroom/MyClassrooms";
 import ClassroomView from "./Classroom/ClassroomView";
 import JoinClassroom from "./Classroom/JoinClassroom";
 import ProblemCreatePage from "./Problems/ProblemCreatePage";
+import Messages from "./Messaging/Messages";
 
 const getRole = () => {
   try {
@@ -67,6 +68,7 @@ function App() {
       <Route path="/my-classrooms" element={<Guard allow={ALL}><MyClassrooms /></Guard>} />
       <Route path="/my-classrooms/:classId" element={<Guard allow={ALL}><ClassroomView /></Guard>} />
       <Route path="/join/:code" element={<Guard allow={ALL}><JoinClassroom /></Guard>} />
+      <Route path="/messages" element={<Guard allow={ALL}><Messages /></Guard>} />
     </Routes>
   );
 

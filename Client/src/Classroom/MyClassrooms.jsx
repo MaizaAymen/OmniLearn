@@ -18,6 +18,7 @@ import {
   Button,
   message,
   Tooltip,
+  Popconfirm,
 } from "antd";
 import {
   ReadOutlined,
@@ -29,7 +30,9 @@ import {
   CopyOutlined,
   PlusOutlined,
   LinkOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
+import { createClassroom, deleteClassroom } from "../Admin/api";
 
 const { Title, Text } = Typography;
 const API = "http://localhost:5000/api";
@@ -76,7 +79,15 @@ export default function MyClassrooms() {
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newYear, setNewYear] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const isStudent = user.role === "student";
+  const canManage = user.role === "teacher" || user.role === "admin";
+  const canManageClassroom = (c) =>
+    user.role === "admin" || (user.role === "teacher" && c.teacher?.id === user.id);
 
   const fetchClassrooms = () => {
     if (!user.id) { setLoading(false); return; }
@@ -113,6 +124,35 @@ export default function MyClassrooms() {
       message.error("Network error. Please try again.");
     } finally {
       setJoining(false);
+    }
+  };
+
+  const submitClassroom = async () => {
+    if (!newName.trim()) return message.error("Name is required");
+    setSaving(true);
+    try {
+      await createClassroom({ name: newName.trim(), academicYear: newYear.trim() || undefined });
+      message.success("Classroom created");
+      setCreateOpen(false);
+      setNewName("");
+      setNewYear("");
+      setLoading(true);
+      fetchClassrooms();
+    } catch (err) {
+      message.error(err.message || "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeClassroom = async (e, c) => {
+    e.stopPropagation();
+    try {
+      await deleteClassroom(c.id);
+      setClassrooms((p) => p.filter((x) => x.id !== c.id));
+      message.success("Deleted");
+    } catch (err) {
+      message.error(err.message || "Delete failed");
     }
   };
 
@@ -202,6 +242,17 @@ export default function MyClassrooms() {
                 Join Classroom
               </Button>
             )}
+            {canManage && (
+              <Button
+                type="primary"
+                size="large"
+                icon={<PlusOutlined />}
+                onClick={() => setCreateOpen(true)}
+                style={{ background: "#111827", borderColor: "#111827" }}
+              >
+                Create Classroom
+              </Button>
+            )}
           </Space>
         </div>
 
@@ -226,7 +277,7 @@ export default function MyClassrooms() {
                   <Text type="secondary">
                     {isStudent
                       ? "Enter an invite code to get started."
-                      : "Create a classroom from the Education panel."}
+                      : "Click Create Classroom to get started."}
                   </Text>
                 </Space>
               }
@@ -291,10 +342,28 @@ export default function MyClassrooms() {
                       >
                         {initials(c.name) || <ReadOutlined />}
                       </div>
-                      <Badge
-                        count={<LockOutlined style={{ color: "#9ca3af", fontSize: 11 }} />}
-                        style={{ background: "transparent" }}
-                      />
+                      {canManageClassroom(c) ? (
+                        <Popconfirm
+                          title="Delete this classroom?"
+                          okText="Delete"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={(e) => removeClassroom(e, c)}
+                          onCancel={(e) => e?.stopPropagation?.()}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Popconfirm>
+                      ) : (
+                        <Badge
+                          count={<LockOutlined style={{ color: "#9ca3af", fontSize: 11 }} />}
+                          style={{ background: "transparent" }}
+                        />
+                      )}
                     </div>
 
                     <Title
@@ -425,6 +494,36 @@ export default function MyClassrooms() {
             })}
           </Row>
         )}
+
+        {/* Create classroom (teachers/admins) */}
+        <Modal
+          open={createOpen}
+          title="Create Classroom"
+          onCancel={() => setCreateOpen(false)}
+          onOk={submitClassroom}
+          okText="Create"
+          confirmLoading={saving}
+          centered
+          width={400}
+        >
+          <Space direction="vertical" size={12} style={{ width: "100%", padding: "4px 0" }}>
+            <Input
+              size="large"
+              placeholder="Classroom name (e.g. 3A Math)"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onPressEnter={submitClassroom}
+              autoFocus
+            />
+            <Input
+              size="large"
+              placeholder="Academic year (optional, e.g. 2025)"
+              value={newYear}
+              onChange={(e) => setNewYear(e.target.value)}
+              onPressEnter={submitClassroom}
+            />
+          </Space>
+        </Modal>
 
         {/* Join modal (students only) */}
         <Modal

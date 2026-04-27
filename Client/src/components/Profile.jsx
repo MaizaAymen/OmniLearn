@@ -38,7 +38,11 @@ import {
 import ImgCrop from "antd-img-crop";
 import Cookies from "js-cookie";
 import dayjs from "dayjs";
+import { useNavigate } from "react-router-dom";
+import { BellOutlined, TeamOutlined, CheckOutlined } from "@ant-design/icons";
+import { Badge } from "antd";
 import CodingDashboard from "./CodingDashboard";
+import { api as msgApi, getSocket } from "../Messaging/api";
 
 const { Title, Text } = Typography;
 const { Sider, Content } = Layout;
@@ -157,8 +161,11 @@ export default function Profile() {
   const [activity, setActivity] = useState({});
   const [languageBreakdown, setLanguageBreakdown] = useState({});
   const [difficultyBreakdown, setDifficultyBreakdown] = useState({ Easy: 0, Medium: 0, Hard: 0 });
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  const navigate = useNavigate();
 
   const storedUser = (() => {
     try {
@@ -172,7 +179,78 @@ export default function Profile() {
 
   useEffect(() => {
     if (selectedKey === "problems" && userId) fetchSubmissions();
+    if (selectedKey === "notifications" && userId) fetchNotifications();
   }, [selectedKey]);
+
+  // Live updates: append new notifications as they arrive over socket.
+  useEffect(() => {
+    if (!userId) return;
+    const socket = getSocket();
+    if (!socket) return;
+    const onNew = (n) => setNotifications((prev) => [n, ...prev]);
+    socket.on("notification:new", onNew);
+    return () => socket.off("notification:new", onNew);
+  }, [userId]);
+
+  const fetchNotifications = async () => {
+    setNotificationsLoading(true);
+    try {
+      const data = await msgApi.listNotifications();
+      setNotifications(data);
+    } catch {
+      message.error("Failed to load notifications");
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  const markNotificationRead = async (n) => {
+    if (n.isRead) return;
+    try {
+      await msgApi.markNotificationRead(n.id);
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    const unread = notifications.filter((n) => !n.isRead);
+    if (unread.length === 0) return;
+    try {
+      await Promise.all(unread.map((n) => msgApi.markNotificationRead(n.id)));
+      setNotifications((prev) => prev.map((x) => ({ ...x, isRead: true })));
+    } catch {
+      message.error("Failed to update notifications");
+    }
+  };
+
+  const acceptInvite = async (n) => {
+    const conversationId = n.data?.conversationId;
+    if (!conversationId) return;
+    try {
+      await msgApi.acceptInvite(conversationId);
+      await msgApi.markNotificationRead(n.id);
+      setNotifications((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, isRead: true, _resolved: "accepted" } : x))
+      );
+      message.success("Joined the group");
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Could not accept invite");
+    }
+  };
+
+  const rejectInvite = async (n) => {
+    const conversationId = n.data?.conversationId;
+    if (!conversationId) return;
+    try {
+      await msgApi.rejectInvite(conversationId);
+      await msgApi.markNotificationRead(n.id);
+      setNotifications((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, isRead: true, _resolved: "rejected" } : x))
+      );
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Could not reject invite");
+    }
+  };
 
   const fetchSubmissions = async () => {
     setSubmissionsLoading(true);
@@ -236,8 +314,7 @@ export default function Profile() {
       if (!res.ok) throw new Error("Failed to load profile");
       const data = await res.json();
       setUser(data);
-      const saved = localStorage.getItem(`avatar_${data.id}`);
-      if (saved) setAvatarUrl(saved);
+      if (data.avatar) setAvatarUrl(data.avatar);
       form.setFieldsValue({
         firstname: data.firstname,
         lastname: data.lastname,
@@ -318,23 +395,38 @@ export default function Profile() {
     }
   };
 
-  const handleAvatarUpload = ({ file, onSuccess, onError }) => {
+  const handleAvatarUpload = async ({ file, onSuccess, onError }) => {
+    const currentToken = Cookies.get("token");
+    if (!currentToken) {
+      message.error("Session expired. Please log in again.");
+      onError?.(new Error("No token"));
+      return;
+    }
     setUploadingAvatar(true);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target.result;
-      localStorage.setItem(`avatar_${userId}`, base64);
-      setAvatarUrl(base64);
-      setUploadingAvatar(false);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch(`${API_BASE}/users/${userId}/avatar`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAvatarUrl(data.avatar);
+      const stored = Cookies.get("user");
+      if (stored) {
+        Cookies.set("user", JSON.stringify({ ...JSON.parse(stored), avatar: data.avatar }), { expires: 7 });
+      }
+      window.dispatchEvent(new CustomEvent("avatar-updated", { detail: { avatar: data.avatar } }));
       message.success("Avatar updated");
       onSuccess?.();
-    };
-    reader.onerror = () => {
+    } catch (err) {
+      message.error("Failed to upload avatar");
+      onError?.(err);
+    } finally {
       setUploadingAvatar(false);
-      message.error("Failed to read image");
-      onError?.(new Error("Failed to read image"));
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const initials = user
@@ -366,7 +458,22 @@ export default function Profile() {
         { key: "classroom", icon: ClassroomSvg, label: "Classroom" },
         { key: "problems", icon: ProblemsSvg, label: "Problems" },
         { key: "security", icon: SecuritySvg, label: "Security" },
-        { key: "notifications", icon: NotificationsSvg, label: "Notifications" },
+        {
+          key: "notifications",
+          icon: NotificationsSvg,
+          label: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              Notifications
+              {notifications.filter((n) => !n.isRead).length > 0 && (
+                <Badge
+                  count={notifications.filter((n) => !n.isRead).length}
+                  size="small"
+                  color="#ff4d4f"
+                />
+              )}
+            </span>
+          ),
+        },
       ],
     },
     { type: "divider" },
@@ -441,19 +548,163 @@ export default function Profile() {
             bordered={false}
             style={{ borderRadius: 10, border: "1px solid #f0f0f0" }}
           >
-            <Title level={5} style={{ margin: 0 }}>
-              {selectedKey === "classroom" ? "My Classrooms" : selectedKey === "problems" ? "Problem Progress" : "Profile Information"}
-            </Title>
-            <Text type="secondary">
-              {selectedKey === "classroom"
-                ? "Classrooms you are currently enrolled in or teaching."
-                : selectedKey === "problems"
-                ? "Your problem-solving history and stats."
-                : "Update your personal information and account details."}
-            </Text>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <Title level={5} style={{ margin: 0 }}>
+                  {selectedKey === "classroom"
+                    ? "My Classrooms"
+                    : selectedKey === "problems"
+                    ? "Problem Progress"
+                    : selectedKey === "notifications"
+                    ? "Notifications"
+                    : "Profile Information"}
+                </Title>
+                <Text type="secondary">
+                  {selectedKey === "classroom"
+                    ? "Classrooms you are currently enrolled in or teaching."
+                    : selectedKey === "problems"
+                    ? "Your problem-solving history and stats."
+                    : selectedKey === "notifications"
+                    ? "Messages, group invites, and other activity from your account."
+                    : "Update your personal information and account details."}
+                </Text>
+              </div>
+              {selectedKey === "notifications" && notifications.some((n) => !n.isRead) && (
+                <Button icon={<CheckOutlined />} onClick={markAllRead}>
+                  Mark all read
+                </Button>
+              )}
+            </div>
             <Divider />
 
-            {selectedKey === "problems" ? (
+            {selectedKey === "notifications" ? (
+              notificationsLoading ? (
+                <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
+                  <Spin />
+                </div>
+              ) : notifications.length === 0 ? (
+                <Empty description="You're all caught up — no notifications yet." />
+              ) : (
+                <List
+                  itemLayout="horizontal"
+                  dataSource={notifications}
+                  renderItem={(n) => {
+                    const isInvite = n.type === "invite";
+                    const isPending = isInvite && !n._resolved;
+                    const clickable = !isInvite && (n.link || n.data?.conversationId);
+                    return (
+                      <List.Item
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: 12,
+                          marginBottom: 8,
+                          background: n.isRead ? "#FAFAF7" : "#EEF2FF",
+                          border: "1px solid #ECECE8",
+                          cursor: clickable ? "pointer" : "default",
+                          transition: "background 0.15s",
+                        }}
+                        onClick={() => {
+                          if (!clickable) return;
+                          markNotificationRead(n);
+                          if (n.link) navigate(n.link);
+                        }}
+                        actions={[
+                          isPending && (
+                            <Button
+                              key="accept"
+                              type="primary"
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                acceptInvite(n);
+                              }}
+                              style={{ background: "#4F46E5", border: "none" }}
+                            >
+                              Accept
+                            </Button>
+                          ),
+                          isPending && (
+                            <Button
+                              key="reject"
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                rejectInvite(n);
+                              }}
+                            >
+                              Reject
+                            </Button>
+                          ),
+                          !isInvite && !n.isRead && (
+                            <Button
+                              key="read"
+                              size="small"
+                              type="text"
+                              icon={<CheckOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markNotificationRead(n);
+                              }}
+                            >
+                              Mark read
+                            </Button>
+                          ),
+                        ].filter(Boolean)}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            <Avatar
+                              size={42}
+                              style={{
+                                background: isInvite ? "#EEF2FF" : "#4F46E5",
+                                color: isInvite ? "#4F46E5" : "#fff",
+                                fontSize: 18,
+                              }}
+                            >
+                              {isInvite ? <TeamOutlined /> : <BellOutlined />}
+                            </Avatar>
+                          }
+                          title={
+                            <Space size={8}>
+                              <Text strong={!n.isRead} style={{ color: "#1F2937" }}>
+                                {n.message}
+                              </Text>
+                              {!n.isRead && (
+                                <Badge color="#4F46E5" />
+                              )}
+                            </Space>
+                          }
+                          description={
+                            <Space size={8}>
+                              <Tag
+                                bordered={false}
+                                color={isInvite ? "purple" : "blue"}
+                                style={{ fontSize: 11, textTransform: "capitalize" }}
+                              >
+                                {n.type}
+                              </Tag>
+                              {n._resolved === "accepted" && (
+                                <Tag bordered={false} color="success" style={{ fontSize: 11 }}>
+                                  Joined
+                                </Tag>
+                              )}
+                              {n._resolved === "rejected" && (
+                                <Tag bordered={false} color="default" style={{ fontSize: 11 }}>
+                                  Declined
+                                </Tag>
+                              )}
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {dayjs(n.createdAt).format("MMM D, YYYY · HH:mm")}
+                              </Text>
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              )
+            ) : selectedKey === "problems" ? (
               submissionsLoading ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
                   <Spin />

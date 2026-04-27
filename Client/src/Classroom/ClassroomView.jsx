@@ -19,6 +19,11 @@ import {
   ConfigProvider,
   message,
   Input,
+  Modal,
+  Form,
+  Select,
+  Upload,
+  Popconfirm,
 } from "antd";
 import {
   UserOutlined,
@@ -35,7 +40,22 @@ import {
   RightOutlined,
   CodeOutlined,
   FilePdfOutlined,
+  NotificationOutlined,
+  SendOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
+import {
+  createCourse,
+  deleteCourse,
+  createModule,
+  deleteModule,
+  createLesson,
+  deleteLesson,
+  uploadLessonFile,
+} from "../Admin/api";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import Prism from "prismjs";
@@ -56,6 +76,14 @@ const getUser = () => {
   } catch {
     return {};
   }
+};
+
+const authHeaders = (json = false) => {
+  const token = Cookies.get("token");
+  const h = {};
+  if (json) h["Content-Type"] = "application/json";
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
 };
 
 const teacherName = (t) =>
@@ -84,6 +112,19 @@ export default function ClassroomView() {
   const [lessonSearch, setLessonSearch] = useState("");
   const [activeTab, setActiveTab] = useState("content");
   const [allProblems, setAllProblems] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementDraft, setAnnouncementDraft] = useState("");
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
+  const [announcementsLoaded, setAnnouncementsLoaded] = useState(false);
+
+  const isTeacherOrAdmin = user.role === "teacher" || user.role === "admin";
+  const canManage =
+    user.role === "admin" ||
+    (user.role === "teacher" && classroom?.teacher?.id === user.id);
+
+  const [editor, setEditor] = useState(null); // { kind, course?, module? }
+  const [editForm] = Form.useForm();
+  const editType = Form.useWatch("type", editForm);
 
   const defaultLayoutPluginInstance = defaultLayoutPlugin({ sidebarTabs: () => [] });
 
@@ -148,6 +189,141 @@ export default function ClassroomView() {
     }
   };
 
+  const loadAnnouncements = async () => {
+    if (!classId) return;
+    try {
+      const res = await fetch(`${BASE}/classrooms/${classId}/announcements`, {
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      setAnnouncements(Array.isArray(data) ? data : []);
+    } catch {
+      setAnnouncements([]);
+    } finally {
+      setAnnouncementsLoaded(true);
+    }
+  };
+
+  const postAnnouncement = async () => {
+    const content = announcementDraft.trim();
+    if (!content) return;
+    setPostingAnnouncement(true);
+    try {
+      const res = await fetch(`${ADMIN}/classrooms/${classId}/announcements`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to post");
+      const created = await res.json();
+      setAnnouncements((prev) => [created, ...prev]);
+      setAnnouncementDraft("");
+      message.success("Announcement posted");
+    } catch {
+      message.error("Failed to post announcement");
+    } finally {
+      setPostingAnnouncement(false);
+    }
+  };
+
+  const deleteAnnouncement = async (announcementId) => {
+    try {
+      const res = await fetch(`${ADMIN}/announcements/${announcementId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      setAnnouncements((prev) => prev.filter((a) => a.id !== announcementId));
+      message.success("Deleted");
+    } catch {
+      message.error("Failed to delete");
+    }
+  };
+
+  const openEditor = (kind, ctx = {}) => {
+    editForm.resetFields();
+    if (kind === "lesson") editForm.setFieldsValue({ type: "pdf" });
+    setEditor({ kind, ...ctx });
+  };
+
+  const submitEditor = async () => {
+    const values = await editForm.validateFields();
+    try {
+      if (editor.kind === "course") {
+        const c = await createCourse({
+          ...values,
+          classId,
+          levelId: classroom.levelId,
+          teacherId: classroom.teacher?.id || user.id,
+        });
+        setCourses((p) => [...p, c]);
+        setModulesByCourse((p) => ({ ...p, [c.id]: [] }));
+      } else if (editor.kind === "module") {
+        const m = await createModule({ ...values, courseId: editor.course.id });
+        setModulesByCourse((p) => ({
+          ...p,
+          [editor.course.id]: [...(p[editor.course.id] || []), m],
+        }));
+      } else if (editor.kind === "lesson") {
+        const l = await createLesson({
+          ...values,
+          moduleId: editor.module.id,
+          courseId: editor.course.id,
+        });
+        setLessonsByModule((p) => ({
+          ...p,
+          [editor.module.id]: [...(p[editor.module.id] || []), l],
+        }));
+      }
+      message.success("Created");
+      setEditor(null);
+    } catch (err) {
+      message.error(err.message || "Failed");
+    }
+  };
+
+  const removeEntity = async (kind, item, parent) => {
+    try {
+      if (kind === "course") {
+        await deleteCourse(item.id);
+        setCourses((p) => p.filter((c) => c.id !== item.id));
+      } else if (kind === "module") {
+        await deleteModule(item.id);
+        setModulesByCourse((p) => ({
+          ...p,
+          [parent.id]: (p[parent.id] || []).filter((m) => m.id !== item.id),
+        }));
+      } else if (kind === "lesson") {
+        await deleteLesson(item.id);
+        setLessonsByModule((p) => ({
+          ...p,
+          [parent.id]: (p[parent.id] || []).filter((l) => l.id !== item.id),
+        }));
+        if (selectedLesson?.id === item.id) setSelectedLesson(null);
+      }
+      message.success("Deleted");
+    } catch (err) {
+      message.error(err.message || "Delete failed");
+    }
+  };
+
+  const handleLessonUpload = async ({ file, onSuccess, onError }) => {
+    try {
+      if (editType === "pdf" && file.type !== "application/pdf") {
+        message.error("Please upload a PDF file");
+        onError?.(new Error("bad type"));
+        return;
+      }
+      const res = await uploadLessonFile(file);
+      editForm.setFieldsValue({ contentUrl: res?.fileUrl || "" });
+      message.success("File uploaded");
+      onSuccess?.(res);
+    } catch (err) {
+      message.error(err.message || "Upload failed");
+      onError?.(err);
+    }
+  };
+
   const loadAssignmentsForModule = async (moduleId) => {
     if (assignmentsByModule[moduleId] || !user.id) return;
     try {
@@ -208,6 +384,11 @@ export default function ClassroomView() {
     });
   }, [activeTab, allModulesFlat, user.id]);
 
+  useEffect(() => {
+    if (activeTab !== "announcements" || announcementsLoaded) return;
+    loadAnnouncements();
+  }, [activeTab, announcementsLoaded]);
+
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: 64 }}>
@@ -256,7 +437,20 @@ export default function ClassroomView() {
               <Text strong style={{ fontSize: 13, letterSpacing: 0.3 }}>
                 COURSE CONTENT
               </Text>
-              <Tag style={tagStyle}>{courses.length}</Tag>
+              <Space size={6}>
+                <Tag style={tagStyle}>{courses.length}</Tag>
+                {canManage && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => openEditor("course")}
+                    style={{ background: "#111827", borderColor: "#111827" }}
+                  >
+                    Course
+                  </Button>
+                )}
+              </Space>
             </Space>
             <Input
               allowClear
@@ -302,6 +496,31 @@ export default function ClassroomView() {
                       <Text strong style={{ fontSize: 13, flex: 1 }}>
                         {course.title || course.name}
                       </Text>
+                      {canManage && (
+                        <Space size={2} onClick={(e) => e.stopPropagation()}>
+                          <Tooltip title="Add module">
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<PlusOutlined style={{ fontSize: 11 }} />}
+                              onClick={() => openEditor("module", { course })}
+                            />
+                          </Tooltip>
+                          <Popconfirm
+                            title="Delete this course?"
+                            okText="Delete"
+                            okButtonProps={{ danger: true }}
+                            onConfirm={() => removeEntity("course", course)}
+                          >
+                            <Button
+                              size="small"
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+                            />
+                          </Popconfirm>
+                        </Space>
+                      )}
                     </div>
 
                     {open && (
@@ -337,6 +556,31 @@ export default function ClassroomView() {
                                   <Text style={{ fontSize: 12.5, flex: 1, color: "#374151" }}>
                                     {m.title}
                                   </Text>
+                                  {canManage && (
+                                    <Space size={2} onClick={(e) => e.stopPropagation()}>
+                                      <Tooltip title="Add lesson">
+                                        <Button
+                                          size="small"
+                                          type="text"
+                                          icon={<PlusOutlined style={{ fontSize: 11 }} />}
+                                          onClick={() => openEditor("lesson", { course, module: m })}
+                                        />
+                                      </Tooltip>
+                                      <Popconfirm
+                                        title="Delete this module?"
+                                        okText="Delete"
+                                        okButtonProps={{ danger: true }}
+                                        onConfirm={() => removeEntity("module", m, course)}
+                                      >
+                                        <Button
+                                          size="small"
+                                          type="text"
+                                          danger
+                                          icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+                                        />
+                                      </Popconfirm>
+                                    </Space>
+                                  )}
                                 </div>
 
                                 {mOpen && (
@@ -394,6 +638,33 @@ export default function ClassroomView() {
                                             >
                                               {l.title}
                                             </span>
+                                            {canManage && (
+                                              <Popconfirm
+                                                title="Delete this lesson?"
+                                                okText="Delete"
+                                                okButtonProps={{ danger: true }}
+                                                onConfirm={(e) => {
+                                                  e?.stopPropagation?.();
+                                                  removeEntity("lesson", l, m);
+                                                }}
+                                                onCancel={(e) => e?.stopPropagation?.()}
+                                              >
+                                                <Button
+                                                  size="small"
+                                                  type="text"
+                                                  danger
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  icon={
+                                                    <DeleteOutlined
+                                                      style={{
+                                                        fontSize: 11,
+                                                        color: active ? "#fff" : undefined,
+                                                      }}
+                                                    />
+                                                  }
+                                                />
+                                              </Popconfirm>
+                                            )}
                                           </div>
                                         );
                                       })
@@ -490,9 +761,11 @@ export default function ClassroomView() {
                   <Tag style={tagStyle}>{(selectedLesson.type || "").toUpperCase()}</Tag>
                 </Space>
                 <Space>
-                  <Tag icon={<LockOutlined />} style={tagStyle}>
-                    Read-only
-                  </Tag>
+                  {!canManage && (
+                    <Tag icon={<LockOutlined />} style={tagStyle}>
+                      Read-only
+                    </Tag>
+                  )}
                   {selectedLesson.type === "pdf" && (
                     <Button
                       type="primary"
@@ -745,6 +1018,104 @@ export default function ClassroomView() {
     </div>
   );
 
+  const announcementsTab = (
+    <div style={{ marginTop: 4 }}>
+      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+        {isTeacherOrAdmin && (
+          <Card
+            size="small"
+            style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
+          >
+            <Input.TextArea
+              placeholder="Share something with your class…"
+              value={announcementDraft}
+              onChange={(e) => setAnnouncementDraft(e.target.value)}
+              autoSize={{ minRows: 2, maxRows: 6 }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                loading={postingAnnouncement}
+                onClick={postAnnouncement}
+                style={{ background: "#111827", borderColor: "#111827" }}
+              >
+                Post
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {!announcementsLoaded ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : announcements.length === 0 ? (
+          <Card style={{ borderRadius: 12, border: "1px solid #eef0f3" }}>
+            <Empty description="No announcements yet." />
+          </Card>
+        ) : (
+          announcements.map((a) => {
+            const canDelete =
+              user.role === "admin" || (a.author && a.author.id === user.id);
+            return (
+              <Card
+                key={a.id}
+                size="small"
+                style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
+              >
+                <Space align="start" size={10} style={{ width: "100%" }}>
+                  <Avatar
+                    size={36}
+                    icon={<UserOutlined />}
+                    style={{ background: "#f3f4f6", color: "#6b7280" }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <Space
+                      size={8}
+                      wrap
+                      style={{ width: "100%", justifyContent: "space-between" }}
+                    >
+                      <Space size={8} wrap>
+                        <Text strong style={{ fontSize: 13 }}>
+                          {teacherName(a.author)}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 11.5 }}>
+                          {new Date(a.createdAt).toLocaleString()}
+                        </Text>
+                      </Space>
+                      {canDelete && (
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          onClick={() => deleteAnnouncement(a.id)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Space>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        whiteSpace: "pre-wrap",
+                        color: "#1f2937",
+                        fontSize: 13.5,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {a.content}
+                    </div>
+                  </div>
+                </Space>
+              </Card>
+            );
+          })
+        )}
+      </Space>
+    </div>
+  );
+
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#111827", borderRadius: 12 } }}>
       <div style={{ maxWidth: 1440, margin: "0 auto" }}>
@@ -811,14 +1182,94 @@ export default function ClassroomView() {
               </Space>
             </Col>
             <Col>
-              <Tooltip title="You can view but not edit this classroom">
-                <Tag icon={<LockOutlined />} style={{ ...tagStyle, padding: "4px 10px" }}>
-                  Read-only
+              <Tooltip
+                title={
+                  canManage
+                    ? "You can manage this classroom's content"
+                    : "You can view but not edit this classroom"
+                }
+              >
+                <Tag
+                  icon={canManage ? <SettingOutlined /> : <LockOutlined />}
+                  style={{ ...tagStyle, padding: "4px 10px" }}
+                >
+                  {canManage ? "Manage" : "Read-only"}
                 </Tag>
               </Tooltip>
             </Col>
           </Row>
         </Card>
+
+        <Modal
+          title={
+            editor?.kind === "course"
+              ? "New course"
+              : editor?.kind === "module"
+              ? `New module in ${editor?.course?.title || ""}`
+              : editor?.kind === "lesson"
+              ? `New lesson in ${editor?.module?.title || ""}`
+              : ""
+          }
+          open={!!editor}
+          onCancel={() => setEditor(null)}
+          onOk={submitEditor}
+          okText="Create"
+          destroyOnClose
+        >
+          <Form form={editForm} layout="vertical">
+            <Form.Item name="title" label="Title" rules={[{ required: true }]}>
+              <Input autoFocus placeholder="Title" />
+            </Form.Item>
+
+            {editor?.kind !== "lesson" && (
+              <Form.Item name="description" label="Description">
+                <Input.TextArea rows={2} placeholder="Optional" />
+              </Form.Item>
+            )}
+
+            {editor?.kind === "lesson" && (
+              <>
+                <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+                  <Select
+                    options={[
+                      { value: "pdf", label: "PDF" },
+                      { value: "code", label: "Code" },
+                      { value: "video", label: "Video" },
+                      { value: "text", label: "Text" },
+                    ]}
+                  />
+                </Form.Item>
+
+                {editType === "pdf" ? (
+                  <Form.Item label="PDF file" required>
+                    <Upload customRequest={handleLessonUpload} maxCount={1} accept="application/pdf">
+                      <Button icon={<UploadOutlined />}>Upload PDF</Button>
+                    </Upload>
+                    <Form.Item
+                      name="contentUrl"
+                      noStyle
+                      rules={[{ required: true, message: "Upload a PDF" }]}
+                    >
+                      <Input type="hidden" />
+                    </Form.Item>
+                  </Form.Item>
+                ) : (
+                  <Form.Item
+                    name="contentUrl"
+                    label={editType === "code" ? "Code" : "Content URL / text"}
+                    rules={[{ required: true }]}
+                  >
+                    {editType === "code" ? (
+                      <Input.TextArea rows={6} placeholder="Paste code here" />
+                    ) : (
+                      <Input placeholder="https://..." />
+                    )}
+                  </Form.Item>
+                )}
+              </>
+            )}
+          </Form>
+        </Modal>
 
         <Tabs
           activeKey={activeTab}
@@ -833,6 +1284,15 @@ export default function ClassroomView() {
                 </Space>
               ),
               children: contentTab,
+            },
+            {
+              key: "announcements",
+              label: (
+                <Space size={6}>
+                  <NotificationOutlined /> Announcements
+                </Space>
+              ),
+              children: announcementsTab,
             },
             {
               key: "assignments",

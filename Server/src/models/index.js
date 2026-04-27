@@ -31,6 +31,9 @@ const UmlDiagram = require("./UmlDiagram");
 const StudentProblemSet = require("./StudentProblemSet");
 const ClassAssignment = require("./ClassAssignment");
 const ExamSubmission = require("./ExamSubmission");
+const Announcement = require("./Announcement");
+const Conversation = require("./Conversation");
+const Message = require("./Message");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -189,6 +192,22 @@ CodeSubmission.belongsTo(Module, { foreignKey: "moduleId", as: "module" });
 User.hasMany(ExamSubmission, { foreignKey: "userId", as: "examSubmissions" });
 ExamSubmission.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// ─── Class ↔ Announcements (1:N) ─────────────────────────────────────────────
+Class.hasMany(Announcement, { foreignKey: "classId", as: "announcements" });
+Announcement.belongsTo(Class, { foreignKey: "classId", as: "class" });
+
+// ─── User ↔ Announcements (1:N) ──────────────────────────────────────────────
+User.hasMany(Announcement, { foreignKey: "authorId", as: "announcements" });
+Announcement.belongsTo(User, { foreignKey: "authorId", as: "author" });
+
+// ─── Conversation ↔ Messages (1:N) ───────────────────────────────────────────
+Conversation.hasMany(Message, { foreignKey: "conversationId", as: "messages" });
+Message.belongsTo(Conversation, { foreignKey: "conversationId", as: "conversation" });
+
+// ─── User ↔ Messages (1:N, sender) ───────────────────────────────────────────
+User.hasMany(Message, { foreignKey: "senderId", as: "sentMessages" });
+Message.belongsTo(User, { foreignKey: "senderId", as: "sender" });
+
 module.exports = {
   User,
   Profile,
@@ -217,5 +236,8 @@ module.exports = {
   UmlDiagram,
   ClassAssignment,
   ExamSubmission,
+  Announcement,
+  Conversation,
+  Message,
 };
 

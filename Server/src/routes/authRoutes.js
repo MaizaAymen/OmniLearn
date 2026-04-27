@@ -89,7 +89,7 @@ router.post("/login", async (req, res) => {
         res.json({
             token,
             refreshToken,
-            user: { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname, role: user.role },
+            user: { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname, role: user.role, avatar: user.avatar },
         });
     } catch (error) {
         res.status(500).json({ error: "Erreur lors de la connexion" });

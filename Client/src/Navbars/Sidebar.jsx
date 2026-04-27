@@ -1,19 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   BellOutlined,
-  CodeOutlined,
-  CompassOutlined,
   DeploymentUnitOutlined,
   LoginOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MessageOutlined,
   ProjectOutlined,
   ReadOutlined,
   SettingOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { api as msgApi, getSocket } from '../Messaging/api';
 import {
   Avatar,
   Badge,
@@ -54,6 +54,7 @@ const ROLE_MENU = {
   '/live-sessions': ['admin', 'teacher'],
   '/classroom-pdf': ['admin', 'teacher', 'student'],
   '/my-classrooms': ['admin', 'teacher', 'student'],
+  '/messages':      ['admin', 'teacher', 'student'],
   '/pdf-assistant': ['admin', 'teacher', 'student'],
   '/roadmaps':      ['admin', 'teacher', 'student'],
   '/problem-roadmap': ['admin', 'teacher', 'student'],
@@ -76,9 +77,48 @@ const Sidebar = ({ children }) => {
   const initials = storedUser
     ? `${storedUser.firstname?.[0] ?? ''}${storedUser.lastname?.[0] ?? ''}`.toUpperCase() || (storedUser.email?.[0] ?? '?').toUpperCase()
     : '?';
-  const avatarSrc = storedUser?.id
-    ? localStorage.getItem(`avatar_${storedUser.id}`)
-    : null;
+  const [avatarSrc, setAvatarSrc] = useState(storedUser?.avatar || null);
+  const [notifications, setNotifications] = useState([]);
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
+
+  // Load notifications + listen for new ones via socket.
+  useEffect(() => {
+    if (!storedUser?.id) return;
+    msgApi.listNotifications().then(setNotifications).catch(() => {});
+    const socket = getSocket();
+    if (!socket) return;
+    const onNew = (n) => setNotifications((prev) => [n, ...prev].slice(0, 100));
+    socket.on('notification:new', onNew);
+    return () => socket.off('notification:new', onNew);
+  }, []);
+
+  const markRead = async (n) => {
+    if (!n.isRead) {
+      try {
+        await msgApi.markNotificationRead(n.id);
+        setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+      } catch {}
+    }
+    if (n.link) navigate(n.link);
+  };
+
+  useEffect(() => {
+    if (storedUser?.id) {
+      const token = Cookies.get('token');
+      fetch(`http://localhost:5000/api/profile/${storedUser.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => { if (data?.avatar) setAvatarSrc(data.avatar); })
+        .catch(() => {});
+    }
+    const handler = (e) => setAvatarSrc(e.detail.avatar);
+    window.addEventListener('avatar-updated', handler);
+    return () => window.removeEventListener('avatar-updated', handler);
+  }, []);
 
   const handleLogout = () => {
     Modal.confirm({
@@ -120,20 +160,72 @@ const Sidebar = ({ children }) => {
     },
   ];
 
-  const notificationMenuItems = [
-    {
-      key: 'empty',
-      label: (
-        <div style={{ padding: '12px 8px', textAlign: 'center', minWidth: 220 }}>
-          <BellOutlined style={{ fontSize: 22, color: '#bfbfbf' }} />
-          <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
-            You're all caught up
+  const notificationMenuItems = notifications.length === 0
+    ? [
+        {
+          key: 'empty',
+          label: (
+            <div style={{ padding: '12px 8px', textAlign: 'center', minWidth: 280 }}>
+              <BellOutlined style={{ fontSize: 22, color: '#bfbfbf' }} />
+              <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
+                You're all caught up
+              </div>
+            </div>
+          ),
+          disabled: true,
+        },
+      ]
+    : notifications.slice(0, 8).map((n) => ({
+        key: n.id,
+        onClick: () => markRead(n),
+        label: (
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+              padding: '6px 4px',
+              minWidth: 300,
+              maxWidth: 340,
+              background: n.isRead ? 'transparent' : '#EEF2FF',
+              borderRadius: 8,
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: '#4F46E5',
+                color: '#fff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                fontSize: 14,
+              }}
+            >
+              {n.type === 'invite' ? <TeamOutlined /> : <BellOutlined />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
+                  display: 'block',
+                  fontSize: 13,
+                  color: '#1F2937',
+                  whiteSpace: 'normal',
+                  fontWeight: n.isRead ? 400 : 600,
+                }}
+              >
+                {n.message}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {new Date(n.createdAt).toLocaleString()}
+              </Text>
+            </div>
           </div>
-        </div>
-      ),
-      disabled: true,
-    },
-  ];
+        ),
+      }));
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -160,6 +252,11 @@ const Sidebar = ({ children }) => {
         key: '/my-classrooms',
         icon: <ReadOutlined />,
         label: 'My Classrooms',
+      },
+      {
+        key: '/messages',
+        icon: <MessageOutlined />,
+        label: 'Messages',
       },
       {
         key: '/pdf-assistant',
@@ -205,6 +302,7 @@ const Sidebar = ({ children }) => {
     if (location.pathname.startsWith('/live-sessions')) return '/live-sessions';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
     if (location.pathname.startsWith('/my-classrooms')) return '/my-classrooms';
+    if (location.pathname.startsWith('/messages')) return '/messages';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
@@ -291,7 +389,12 @@ const Sidebar = ({ children }) => {
                     color: '#595959',
                   }}
                   icon={
-                    <Badge dot offset={[-2, 2]} color="#ff4d4f">
+                    <Badge
+                      count={unreadCount}
+                      offset={[-2, 2]}
+                      size="small"
+                      color="#ff4d4f"
+                    >
                       <BellOutlined style={{ fontSize: 18 }} />
                     </Badge>
                   }

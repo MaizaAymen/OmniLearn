@@ -21,15 +21,15 @@ const Notification = sequelize.define(
     },
     title: {
       type: DataTypes.STRING(255),
-      allowNull: false,
+      allowNull: true,
     },
     message: {
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    // e.g. "info", "warning", "alert", "success"
+    // e.g. "info", "warning", "alert", "success", "message", "invite"
     type: {
-      type: DataTypes.ENUM("info", "warning", "alert", "success"),
+      type: DataTypes.STRING(32),
       defaultValue: "info",
     },
     isRead: {
@@ -39,6 +39,11 @@ const Notification = sequelize.define(
     // Optional deep-link metadata
     link: {
       type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    // Free-form payload — used by invites to carry conversationId.
+    data: {
+      type: DataTypes.JSONB,
       allowNull: true,
     },
   },

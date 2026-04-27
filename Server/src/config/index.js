@@ -11,4 +11,7 @@ module.exports = {
   BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS) || 12,
   NODE_ENV: process.env.NODE_ENV || "development",
   CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "dngl3p2vl",
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || "672928921445773",
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || "zM_yDgc9kxci-smkbJbrxyU5dNI",
 };

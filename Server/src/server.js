@@ -16,7 +16,11 @@ const pdfRoutes = require("./routes/pdfRoutes");
 const submissionRoutes = require("./routes/submissionRoutes");
 const assignmentRoutes = require("./routes/assignmentRoutes");
 const examRoutes = require("./routes/examRoutes");
+const conversationRoutes = require("./routes/conversationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const { setupSessionHub } = require("./realtime/sessionHub");
+const { setupMessageHub } = require("./realtime/messageHub");
 // Import models/index.js to register all models and associations
 const models = require("./models");
 
@@ -40,6 +44,9 @@ app.use("/api/uml", UmlRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/exams", examRoutes);
+app.use("/api/conversations", conversationRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 
 app.get("/", (req, res) => {
@@ -58,7 +65,9 @@ app.get("/", (req, res) => {
     await models.Level.sync();
     await sequelize.sync({ alter: true });
     await sequelize.query('ALTER TABLE learn.lessons ALTER COLUMN "moduleId" DROP NOT NULL;').catch(() => {});
-    setupSessionHub(server);
+    const io = setupSessionHub(server);
+    setupMessageHub(io);
+    app.set("io", io);
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

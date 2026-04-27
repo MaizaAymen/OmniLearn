@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
-const { User, Class, Enrollment, Grade, Speciality, Level, Course, Module, Lesson } = require("../models");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+const { User, Class, Enrollment, Grade, Speciality, Level, Course, Module, Lesson, Announcement } = require("../models");
 const { authenticate, requireAdmin } = require("../middleware/Authmiddleware");
+const config = require("../config");
+
+cloudinary.config({
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET,
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // All user routes require an authenticated user
 router.use(authenticate);
@@ -13,6 +24,33 @@ router.get("/getAllUsers", requireAdmin, async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: "Erreur lors de la récupération des utilisateurs" });
     }
+});
+
+// Lightweight user search for any authenticated user (used by messaging UI).
+// GET /api/users-search?q=al
+router.get("/users-search", async (req, res) => {
+  try {
+    const { Op } = require("sequelize");
+    const q = String(req.query.q || "").trim();
+    const where = q
+      ? {
+          [Op.or]: [
+            { firstname: { [Op.iLike]: `%${q}%` } },
+            { lastname:  { [Op.iLike]: `%${q}%` } },
+            { email:     { [Op.iLike]: `%${q}%` } },
+          ],
+        }
+      : {};
+    const users = await User.findAll({
+      where,
+      attributes: ["id", "firstname", "lastname", "email", "role"],
+      limit: 30,
+    });
+    res.json(users.filter((u) => u.id !== req.user.id));
+  } catch (err) {
+    console.error("users-search:", err);
+    res.status(500).json({ error: "Search failed" });
+  }
 });
 router.get("/users/:id", async (req, res) => {
   try {
@@ -69,6 +107,33 @@ router.put("/users/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update user" });
   }
 });
+router.post("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
+  try {
+    if (req.user.role !== "admin" && req.user.id !== req.params.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "avatars", public_id: `avatar_${user.id}`, overwrite: true, transformation: [{ width: 300, height: 300, crop: "fill" }] },
+        (error, result) => { if (error) reject(error); else resolve(result); }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    user.avatar = result.secure_url;
+    await user.save();
+    res.json({ avatar: result.secure_url });
+  } catch (err) {
+    console.error("Avatar upload error:", err);
+    res.status(500).json({ error: "Failed to upload avatar" });
+  }
+});
+
 router.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
@@ -246,6 +311,26 @@ router.get("/student/courses/:id/modules", async (req, res) => {
   } catch (err) {
     console.error("Error fetching student course modules:", err);
     res.status(500).json({ error: "Failed to fetch modules" });
+  }
+});
+
+// Student: read announcements for a classroom they're enrolled in
+router.get("/student/classrooms/:id/announcements", async (req, res) => {
+  try {
+    if (!(await canViewClassroom(req.user, req.params.id))) {
+      return res.status(403).json({ error: "You are not enrolled in this classroom" });
+    }
+    const announcements = await Announcement.findAll({
+      where: { classId: req.params.id },
+      include: [
+        { model: User, as: "author", attributes: ["id", "firstname", "lastname", "email", "role"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+    res.json(announcements);
+  } catch (err) {
+    console.error("Error fetching student announcements:", err);
+    res.status(500).json({ error: "Failed to fetch announcements" });
   }
 });
 
