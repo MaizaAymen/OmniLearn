@@ -19,6 +19,8 @@ import {
   message,
   Tooltip,
   Popconfirm,
+  Form,
+  Select,
 } from "antd";
 import {
   ReadOutlined,
@@ -32,7 +34,15 @@ import {
   LinkOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
-import { createClassroom, deleteClassroom } from "../Admin/api";
+import {
+  createClassroom,
+  deleteClassroom,
+  fetchGrades,
+  fetchSpecialities,
+  fetchLevels,
+  fetchAvailableStudents,
+  assignStudentsToClassroom,
+} from "../Admin/api";
 
 const { Title, Text } = Typography;
 const API = "http://localhost:5000/api";
@@ -80,9 +90,18 @@ export default function MyClassrooms() {
   const [joining, setJoining] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newYear, setNewYear] = useState("");
   const [saving, setSaving] = useState(false);
+  const [grades, setGrades] = useState([]);
+  const [specialities, setSpecialities] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [classroomForm] = Form.useForm();
+  const formGradeId = Form.useWatch("gradeId", classroomForm);
+  const formSpecialityId = Form.useWatch("specialityId", classroomForm);
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [createdClassroom, setCreatedClassroom] = useState(null);
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [studentsToInvite, setStudentsToInvite] = useState([]);
 
   const isStudent = user.role === "student";
   const canManage = user.role === "teacher" || user.role === "admin";
@@ -127,22 +146,54 @@ export default function MyClassrooms() {
     }
   };
 
+  const openCreate = async () => {
+    classroomForm.resetFields();
+    setCreateOpen(true);
+    try {
+      const [g, s, l] = await Promise.all([fetchGrades(), fetchSpecialities(), fetchLevels()]);
+      setGrades(g || []);
+      setSpecialities(s || []);
+      setLevels(l || []);
+    } catch (err) {
+      message.error(err.message || "Failed to load options");
+    }
+  };
+
   const submitClassroom = async () => {
-    if (!newName.trim()) return message.error("Name is required");
+    const values = await classroomForm.validateFields();
     setSaving(true);
     try {
-      await createClassroom({ name: newName.trim(), academicYear: newYear.trim() || undefined });
+      const created = await createClassroom(values);
       message.success("Classroom created");
       setCreateOpen(false);
-      setNewName("");
-      setNewYear("");
       setLoading(true);
       fetchClassrooms();
+      try {
+        const students = await fetchAvailableStudents(created.id);
+        setAvailableStudents(students || []);
+      } catch {
+        setAvailableStudents([]);
+      }
+      setStudentsToInvite([]);
+      setCreatedClassroom(created);
+      setInviteOpen(true);
     } catch (err) {
       message.error(err.message || "Failed");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleInviteStudents = async () => {
+    if (!createdClassroom) return setInviteOpen(false);
+    if (studentsToInvite.length === 0) return setInviteOpen(false);
+    try {
+      await assignStudentsToClassroom(createdClassroom.id, studentsToInvite);
+      message.success(`${studentsToInvite.length} student(s) invited`);
+    } catch (err) {
+      message.error(err.message || "Failed to invite students");
+    }
+    setInviteOpen(false);
   };
 
   const removeClassroom = async (e, c) => {
@@ -247,7 +298,7 @@ export default function MyClassrooms() {
                 type="primary"
                 size="large"
                 icon={<PlusOutlined />}
-                onClick={() => setCreateOpen(true)}
+                onClick={openCreate}
                 style={{ background: "#111827", borderColor: "#111827" }}
               >
                 Create Classroom
@@ -504,25 +555,133 @@ export default function MyClassrooms() {
           okText="Create"
           confirmLoading={saving}
           centered
-          width={400}
+          width={460}
+          destroyOnClose
         >
-          <Space direction="vertical" size={12} style={{ width: "100%", padding: "4px 0" }}>
-            <Input
-              size="large"
-              placeholder="Classroom name (e.g. 3A Math)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onPressEnter={submitClassroom}
-              autoFocus
-            />
-            <Input
-              size="large"
-              placeholder="Academic year (optional, e.g. 2025)"
-              value={newYear}
-              onChange={(e) => setNewYear(e.target.value)}
-              onPressEnter={submitClassroom}
-            />
-          </Space>
+          <Form form={classroomForm} layout="vertical" style={{ paddingTop: 4 }}>
+            <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+              <Input placeholder="e.g. 3A" />
+            </Form.Item>
+            <Form.Item name="gradeId" label="Grade">
+              <Select
+                placeholder="Select grade"
+                allowClear
+                options={grades.map((g) => ({ value: g.id, label: g.displayName || g.name }))}
+                onChange={() =>
+                  classroomForm.setFieldsValue({ specialityId: undefined, levelId: undefined })
+                }
+              />
+            </Form.Item>
+            <Form.Item name="specialityId" label="Speciality">
+              <Select
+                placeholder="Select speciality"
+                allowClear
+                options={specialities
+                  .filter((s) => !formGradeId || s.gradeId === formGradeId)
+                  .map((s) => ({ value: s.id, label: s.displayName || s.name }))}
+                onChange={() => classroomForm.setFieldsValue({ levelId: undefined })}
+              />
+            </Form.Item>
+            <Form.Item name="levelId" label="Level">
+              <Select
+                placeholder="Select level"
+                allowClear
+                options={levels
+                  .filter((l) => !formSpecialityId || l.specialityId === formSpecialityId)
+                  .map((l) => ({ value: l.id, label: l.displayName || l.name }))}
+              />
+            </Form.Item>
+            <Form.Item name="academicYear" label="Year">
+              <Input placeholder="2025" />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Post-create invite modal */}
+        <Modal
+          title="Classroom Created"
+          open={inviteOpen}
+          onCancel={() => setInviteOpen(false)}
+          onOk={handleInviteStudents}
+          okText={studentsToInvite.length > 0 ? "Invite & Close" : "Done"}
+          width={480}
+          destroyOnClose
+        >
+          {createdClassroom && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  background: "#f8f9fa",
+                  borderRadius: 8,
+                  padding: "20px 16px",
+                }}
+              >
+                <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
+                  INVITE CODE
+                </Text>
+                <div
+                  style={{
+                    fontSize: 36,
+                    fontWeight: 700,
+                    letterSpacing: 8,
+                    color: "#111827",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {createdClassroom.inviteCode}
+                </div>
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdClassroom.inviteCode);
+                    message.success("Code copied!");
+                  }}
+                >
+                  Copy Code
+                </Button>
+              </div>
+
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>JOIN LINK</Text>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/join/${createdClassroom.inviteCode}`}
+                    prefix={<LinkOutlined style={{ color: "#5f6368" }} />}
+                  />
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/join/${createdClassroom.inviteCode}`
+                      );
+                      message.success("Link copied!");
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  INVITE STUDENTS DIRECTLY (optional)
+                </Text>
+                <Select
+                  mode="multiple"
+                  style={{ width: "100%", marginTop: 6 }}
+                  placeholder="Select students to add now"
+                  value={studentsToInvite}
+                  onChange={setStudentsToInvite}
+                  options={availableStudents.map((s) => ({
+                    value: s.id,
+                    label: `${s.firstname || ""} ${s.lastname || ""} (${s.email})`.trim(),
+                  }))}
+                />
+              </div>
+            </div>
+          )}
         </Modal>
 
         {/* Join modal (students only) */}

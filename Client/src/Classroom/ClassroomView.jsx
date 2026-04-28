@@ -46,6 +46,8 @@ import {
   DeleteOutlined,
   UploadOutlined,
   SettingOutlined,
+  TeamOutlined,
+  UserDeleteOutlined,
 } from "@ant-design/icons";
 import {
   createCourse,
@@ -237,6 +239,29 @@ export default function ClassroomView() {
       message.success("Deleted");
     } catch {
       message.error("Failed to delete");
+    }
+  };
+
+  const removeStudent = async (studentId) => {
+    try {
+      const res = await fetch(`${ADMIN}/classrooms/${classId}/students/${studentId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to remove");
+      setClassroom((prev) =>
+        prev
+          ? {
+              ...prev,
+              enrollments: (prev.enrollments || []).filter(
+                (e) => (e.student?.id || e.studentId) !== studentId
+              ),
+            }
+          : prev
+      );
+      message.success("Student removed");
+    } catch {
+      message.error("Failed to remove student");
     }
   };
 
@@ -1116,6 +1141,67 @@ export default function ClassroomView() {
     </div>
   );
 
+  const students = (classroom.enrollments || [])
+    .map((e) => e.student)
+    .filter(Boolean);
+
+  const membersTab = (
+    <Card
+      size="small"
+      style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff", marginTop: 4 }}
+    >
+      <Space align="center" style={{ marginBottom: 12 }}>
+        <TeamOutlined style={{ color: "#6b7280" }} />
+        <Text strong>Students</Text>
+        <Tag style={tagStyle}>{students.length}</Tag>
+      </Space>
+
+      {students.length === 0 ? (
+        <Empty description="No students have joined yet." />
+      ) : (
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          {students.map((s) => {
+            const fullName =
+              `${s.firstname || ""} ${s.lastname || ""}`.trim() || s.email;
+            return (
+              <div
+                key={s.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                }}
+              >
+                <Avatar
+                  size={32}
+                  src={s.avatar || undefined}
+                  icon={!s.avatar ? <UserOutlined /> : undefined}
+                  style={{ background: "#eef2f7", color: "#374151" }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text strong style={{ display: "block", fontSize: 13 }}>{fullName}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{s.email}</Text>
+                </div>
+                {canManage && (
+                  <Popconfirm
+                    title={`Remove ${fullName}?`}
+                    okText="Remove"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => removeStudent(s.id)}
+                  >
+                    <Button type="text" size="small" danger icon={<UserDeleteOutlined />} />
+                  </Popconfirm>
+                )}
+              </div>
+            );
+          })}
+        </Space>
+      )}
+    </Card>
+  );
+
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#111827", borderRadius: 12 } }}>
       <div style={{ maxWidth: 1440, margin: "0 auto" }}>
@@ -1302,6 +1388,15 @@ export default function ClassroomView() {
                 </Space>
               ),
               children: assignmentsTab,
+            },
+            {
+              key: "members",
+              label: (
+                <Space size={6}>
+                  <TeamOutlined /> Students ({students.length})
+                </Space>
+              ),
+              children: membersTab,
             },
           ]}
         />

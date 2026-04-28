@@ -34,6 +34,9 @@ const ExamSubmission = require("./ExamSubmission");
 const Announcement = require("./Announcement");
 const Conversation = require("./Conversation");
 const Message = require("./Message");
+// ─── Plans / Institutions ────────────────────────────────────────────────────
+const Institution = require("./Institution");
+const InviteLink = require("./InviteLink");
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -208,6 +211,16 @@ Message.belongsTo(Conversation, { foreignKey: "conversationId", as: "conversatio
 User.hasMany(Message, { foreignKey: "senderId", as: "sentMessages" });
 Message.belongsTo(User, { foreignKey: "senderId", as: "sender" });
 
+// ─── Institution ↔ Users (1:N) ───────────────────────────────────────────────
+// Un user appartient à au plus une institution. Une institution a plusieurs users.
+Institution.hasMany(User, { foreignKey: "institutionId", as: "members" });
+User.belongsTo(Institution, { foreignKey: "institutionId", as: "institution" });
+
+// ─── Institution ↔ InviteLinks (1:N) ─────────────────────────────────────────
+// Une institution génère plusieurs liens d'invitation.
+Institution.hasMany(InviteLink, { foreignKey: "institutionId", as: "inviteLinks" });
+InviteLink.belongsTo(Institution, { foreignKey: "institutionId", as: "institution" });
+
 module.exports = {
   User,
   Profile,
@@ -239,5 +252,7 @@ module.exports = {
   Announcement,
   Conversation,
   Message,
+  Institution,
+  InviteLink,
 };
 

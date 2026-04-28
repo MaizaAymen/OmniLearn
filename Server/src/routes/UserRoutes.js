@@ -81,7 +81,7 @@ router.put("/users/:id", async (req, res) => {
     if (req.user.role !== "admin" && req.user.id !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { firstname, lastname, email, password, role, bio, githubUrl, linkedinUrl } = req.body;
+    const { firstname, lastname, email, password, role, bio, githubUrl, linkedinUrl, avatar, isActive } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
       user.firstname = firstname ?? user.firstname;
@@ -90,6 +90,13 @@ router.put("/users/:id", async (req, res) => {
       if (bio !== undefined) user.bio = bio;
       if (githubUrl !== undefined) user.githubUrl = githubUrl;
       if (linkedinUrl !== undefined) user.linkedinUrl = linkedinUrl;
+      if (avatar !== undefined) user.avatar = avatar; // null clears it
+      // Self-deactivate or admin toggle
+      if (isActive !== undefined) {
+        if (req.user.role === "admin" || (req.user.id === req.params.id && isActive === false)) {
+          user.isActive = isActive;
+        }
+      }
       if (req.user.role === "admin") user.role = role ?? user.role;
 
       // Update password only when explicitly provided.
@@ -134,8 +141,12 @@ router.post("/users/:id/avatar", upload.single("avatar"), async (req, res) => {
   }
 });
 
-router.delete("/users/:id", requireAdmin, async (req, res) => {
+router.delete("/users/:id", async (req, res) => {
   try {
+    // Admin can delete anyone; users can delete their own account.
+    if (req.user.role !== "admin" && req.user.id !== req.params.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const user = await User.findByPk(req.params.id);
     if (user) {
       await user.destroy();
@@ -187,6 +198,18 @@ router.post("/join-classroom", async (req, res) => {
 
     if (req.user.role !== "student") {
       return res.status(403).json({ error: "Only students can join classrooms via invite code" });
+    }
+
+    // ─── PLAN GATE ────────────────────────────────────────────────────────
+    // Les classrooms font partie du plan "institution".
+    // Étape 1 : si l'utilisateur n'a pas un plan "institution", on bloque.
+    // Étape 2 : on lui suggère d'utiliser un lien d'invitation d'institution.
+    if (req.user.plan !== "institution") {
+      return res.status(402).json({
+        error: "Upgrade required",
+        feature: "Classrooms are part of the Institution plan. Ask your school for an invite link.",
+        upgradeTo: "institution",
+      });
     }
 
     const classroom = await Class.findOne({ where: { inviteCode: inviteCode.trim().toUpperCase() } });
@@ -272,7 +295,7 @@ router.get("/student/classrooms/:id", async (req, res) => {
         {
           model: Enrollment,
           as: "enrollments",
-          include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email"] }],
+          include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email", "avatar"] }],
         },
       ],
     });

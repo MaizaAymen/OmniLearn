@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
-import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, LockIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
 import { getDifficultyBadgeClass } from "./utils";
 import Navbar from "../components/Navbar";
 
@@ -25,7 +25,12 @@ function ProblemsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const user = getUser();
-  const isTeacher = user.role === "teacher" || user.role === "admin";
+  const isTeacher = user.role === "teacher";
+  const isAdmin = user.role === "admin";
+  const isStaff = isTeacher || isAdmin;
+  // ÉTAPE 1 : on lit le plan depuis le cookie (rempli au login).
+  // Si rien → "free" par défaut. Sert à afficher la bannière d'upgrade.
+  const isFreeUser = !isStaff && (user.plan ?? "free") === "free";
 
   const [problems, setProblems]   = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,13 +38,13 @@ function ProblemsPage() {
   const [search, setSearch]       = useState("");
   const [diffFilter, setDiffFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState(
-    isTeacher ? (searchParams.get("status") || "all") : "published"
+    isStaff ? (searchParams.get("status") || "all") : "published"
   );
 
   async function fetchProblems(status) {
     setIsLoading(true);
     try {
-      const param = isTeacher ? (status || statusFilter) : "";
+      const param = isStaff ? (status || statusFilter) : "";
       const url = param ? `${API}/getallproblems?status=${param}` : `${API}/getallproblems`;
       const res = await fetch(url);
       if (!res.ok) throw new Error();
@@ -106,9 +111,19 @@ function ProblemsPage() {
     return problems.filter(p => {
       const matchDiff   = diffFilter === "All" || p.difficulty === diffFilter;
       const matchSearch = !q || p.title?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q);
-      return matchDiff && matchSearch;
+      if (!matchDiff || !matchSearch) return false;
+
+      // Forks: only the teacher who created the fork can see it; admin sees all forks; others can't.
+      if (p.forkedFrom) {
+        if (isAdmin) return true;
+        if (isTeacher && p.createdBy && p.createdBy === user.id) return true;
+        return false;
+      }
+      // Archived originals are admin-only — a teacher must not see problems the admin archived.
+      if (p.status === "archived" && !isAdmin) return false;
+      return true;
     });
-  }, [problems, search, diffFilter]);
+  }, [problems, search, diffFilter, isAdmin, isTeacher, user.id]);
 
   const easyCount   = problems.filter(p => p.difficulty === "Easy").length;
   const mediumCount = problems.filter(p => p.difficulty === "Medium").length;
@@ -120,13 +135,39 @@ function ProblemsPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-12">
 
+        {/* ─── BANNIÈRE D'UPGRADE (utilisateurs free seulement) ─────────────
+            Étape 1 : on n'affiche que si l'utilisateur est sur le plan free.
+            Étape 2 : un clic envoie vers /profile (où vivra le bouton upgrade).
+            Étape 3 : on rappelle ce qu'il débloque (tous les problèmes + IA + PDF). */}
+        {isFreeUser && (
+          <div className="alert alert-info mb-6 shadow-md">
+            <LockIcon className="size-5 shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-bold flex items-center gap-2">
+                <SparklesIcon className="size-4" />
+                You're on the Free plan
+              </h3>
+              <p className="text-sm opacity-80">
+                You can solve our 10 free-tier problems. Upgrade to Pro to unlock
+                all problems, AI code correction, and the PDF analyzer.
+              </p>
+            </div>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => navigate("/profile")}
+            >
+              Upgrade to Pro
+            </button>
+          </div>
+        )}
+
         {/* HEADER */}
         <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
           <div>
             <h1 className="text-4xl font-bold mb-2">Practice Problems</h1>
             <p className="text-base-content/70">Sharpen your coding skills with curated problems</p>
           </div>
-          {isTeacher && (
+          {isStaff && (
             <button
               className="btn btn-primary gap-2"
               onClick={() => navigate("/problems/create")}
@@ -183,8 +224,8 @@ function ProblemsPage() {
             </div>
           </div>
 
-          {/* Status filter — teachers only */}
-          {isTeacher && (
+          {/* Status filter — staff only */}
+          {isStaff && (
             <div className="flex gap-2 flex-wrap items-center">
               <span className="text-xs text-base-content/50 font-medium uppercase tracking-wide">Status:</span>
               {STATUS_FILTERS.map(s => (
@@ -240,12 +281,22 @@ function ProblemsPage() {
                     </span>
                   </div>
 
-                  {/* Status badge — teachers only */}
-                  {isTeacher && problem.status && problem.status !== "published" && (
-                    <div className="mb-2">
-                      <span className={`badge badge-sm ${STATUS_BADGE[problem.status] || "badge-ghost"}`}>
-                        {problem.status}
-                      </span>
+                  {/* Status badge + fork-author badge — staff only */}
+                  {isStaff && (
+                    <div className="mb-2 flex items-center gap-1 flex-wrap">
+                      {problem.status && problem.status !== "published" && (
+                        <span className={`badge badge-sm ${STATUS_BADGE[problem.status] || "badge-ghost"}`}>
+                          {problem.status}
+                        </span>
+                      )}
+                      {problem.forkedFrom && (
+                        <span className="badge badge-sm badge-outline gap-1">
+                          <GitForkIcon className="size-3" />
+                          {problem.creator
+                            ? `Forked by ${problem.creator.firstname} ${problem.creator.lastname}`
+                            : "Fork"}
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -271,32 +322,43 @@ function ProblemsPage() {
                       Solve <ChevronRightIcon className="size-4" />
                     </Link>
 
-                    {isTeacher && (
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        <button
-                          className="btn btn-xs btn-ghost gap-1"
-                          onClick={() => forkProblem(problem.id)}
-                          title="Fork & Customize"
-                        >
-                          <GitForkIcon className="size-3" /> Fork
-                        </button>
-                        {(problem.status === "draft" || problem.status === "review" || !problem.status) && (
-                          <button className="btn btn-xs btn-success" onClick={() => changeStatus(problem.id, "published")}>
-                            Publish
-                          </button>
-                        )}
-                        {problem.status === "published" && (
-                          <button className="btn btn-xs btn-ghost" onClick={() => changeStatus(problem.id, "archived")}>
-                            Archive
-                          </button>
-                        )}
-                        {problem.status === "archived" && (
-                          <button className="btn btn-xs btn-outline" onClick={() => changeStatus(problem.id, "published")}>
-                            Restore
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {isStaff && (() => {
+                      const isFork = !!problem.forkedFrom;
+                      const isOwnFork = isFork && problem.createdBy && problem.createdBy === user.id;
+                      // Teachers can publish/archive/restore ONLY on their own forks.
+                      // Admins can publish/archive/restore on any problem.
+                      const canChangeStatus = isAdmin || (isTeacher && isOwnFork);
+                      // Forking a fork is not useful — only allow forking originals.
+                      const canFork = !isFork;
+                      return (
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {canFork && (
+                            <button
+                              className="btn btn-xs btn-ghost gap-1"
+                              onClick={() => forkProblem(problem.id)}
+                              title="Fork & Customize"
+                            >
+                              <GitForkIcon className="size-3" /> Fork
+                            </button>
+                          )}
+                          {canChangeStatus && (problem.status === "draft" || problem.status === "review" || !problem.status) && (
+                            <button className="btn btn-xs btn-success" onClick={() => changeStatus(problem.id, "published")}>
+                              Publish
+                            </button>
+                          )}
+                          {canChangeStatus && problem.status === "published" && (
+                            <button className="btn btn-xs btn-ghost" onClick={() => changeStatus(problem.id, "archived")}>
+                              Archive
+                            </button>
+                          )}
+                          {canChangeStatus && problem.status === "archived" && (
+                            <button className="btn btn-xs btn-outline" onClick={() => changeStatus(problem.id, "published")}>
+                              Restore
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

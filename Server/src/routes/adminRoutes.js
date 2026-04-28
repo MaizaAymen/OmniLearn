@@ -14,7 +14,9 @@ const {
   Enrollment,
   User,
   Announcement,
+  Notification,
 } = require("../models");
+const { emitNotification } = require("../realtime/messageHub");
 
 const LESSON_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "lesson-files");
 if (!fs.existsSync(LESSON_UPLOAD_DIR)) {
@@ -1045,7 +1047,7 @@ router.get("/classrooms/:id", async (req, res) => {
         {
           model: Enrollment,
           as: "enrollments",
-          include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email"] }],
+          include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email", "avatar"] }],
         },
       ],
     });
@@ -1264,7 +1266,7 @@ router.get("/classrooms/:id/students", async (req, res) => {
   }
 });
 
-// Assign students to classroom
+// Send classroom invitations to students (they must accept).
 router.post("/classrooms/:id/students", async (req, res) => {
   try {
     const { studentIds } = req.body;
@@ -1279,20 +1281,39 @@ router.post("/classrooms/:id/students", async (req, res) => {
       return res.status(404).json({ error: "Classroom not found" });
     }
 
-    const enrollments = await Promise.all(
-      studentIds.map(async (studentId) => {
-        const [enrollment] = await Enrollment.findOrCreate({
-          where: { classId: classroomId, studentId },
-          defaults: { classId: classroomId, studentId, status: "active" },
-        });
-        return enrollment;
-      })
-    );
+    const inviterName =
+      `${req.user.firstname || ""} ${req.user.lastname || ""}`.trim() || "Your teacher";
+    const io = req.app.get("io");
 
-    res.status(201).json({ message: "Students enrolled successfully", enrollments });
+    const invitations = [];
+    for (const studentId of studentIds) {
+      // Skip students already enrolled.
+      const existing = await Enrollment.findOne({
+        where: { classId: classroomId, studentId },
+      });
+      if (existing) continue;
+
+      // Skip duplicate pending invites for this classroom.
+      const dup = await Notification.findOne({
+        where: { userId: studentId, type: "classroom-invite", isRead: false },
+      });
+      if (dup && dup.data && dup.data.classId === classroomId) continue;
+
+      const notif = await Notification.create({
+        userId: studentId,
+        type: "classroom-invite",
+        title: "Classroom invitation",
+        message: `${inviterName} invited you to join "${classroom.name}"`,
+        data: { classId: classroomId, classroomName: classroom.name, inviterName },
+      });
+      emitNotification(io, studentId, notif);
+      invitations.push(notif);
+    }
+
+    res.status(201).json({ message: "Invitations sent", invitations });
   } catch (error) {
-    console.error("Error enrolling students:", error);
-    res.status(500).json({ error: "Failed to enroll students" });
+    console.error("Error sending invitations:", error);
+    res.status(500).json({ error: "Failed to send invitations" });
   }
 });
 

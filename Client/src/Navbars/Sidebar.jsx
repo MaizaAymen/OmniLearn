@@ -21,6 +21,7 @@ import {
   Dropdown,
   Layout,
   Menu,
+  message,
   Modal,
   Space,
   Tag,
@@ -49,21 +50,42 @@ const ROLE_COLOR = {
 
 // Which roles can see each sidebar key
 const ROLE_MENU = {
-  '/':              ['admin', 'teacher', 'student'],
-  '/problems':      ['admin', 'teacher', 'student'],
-  '/live-sessions': ['admin', 'teacher'],
-  '/classroom-pdf': ['admin', 'teacher', 'student'],
-  '/my-classrooms': ['admin', 'teacher', 'student'],
-  '/messages':      ['admin', 'teacher', 'student'],
-  '/pdf-assistant': ['admin', 'teacher', 'student'],
-  '/roadmaps':      ['admin', 'teacher', 'student'],
-  '/problem-roadmap': ['admin', 'teacher', 'student'],
-  '/uml/problems':  ['admin', 'teacher', 'student'],
+  '/':              ['admin', 'institution_admin', 'teacher', 'student'],
+  '/problems':      ['admin', 'institution_admin', 'teacher', 'student'],
+  '/live-sessions': ['admin', 'institution_admin', 'teacher'],
+  '/classroom-pdf': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/my-classrooms': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/messages':      ['admin', 'institution_admin', 'teacher', 'student'],
+  '/pdf-assistant': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/roadmaps':      ['admin', 'institution_admin', 'teacher', 'student'],
+  '/problem-roadmap': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/uml/problems':  ['admin', 'institution_admin', 'teacher', 'student'],
   '/users':         ['admin'],
-  '/education':     ['admin', 'teacher'],
+  '/education':     ['admin', 'institution_admin', 'teacher'],
   '/auth':          ['anon'],
-  '/profile':       ['admin', 'teacher', 'student'],
+  '/profile':       ['admin', 'institution_admin', 'teacher', 'student'],
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILTRES PAR PLAN
+// Étape 1 : on liste les pages qui demandent un plan minimum.
+// Étape 2 : si l'utilisateur n'a pas le plan, le lien n'apparaît pas.
+//
+// Rappel des plans :
+//   free        → 10 problèmes + messagerie seulement
+//   pro         → tous les problèmes + IA + PDF
+//   institution → en plus, classrooms et live sessions
+// ─────────────────────────────────────────────────────────────────────────────
+const PLAN_REQUIRED = {
+  '/pdf-assistant':   'pro',
+  '/classroom-pdf':   'institution',
+  '/my-classrooms':   'institution',
+  '/live-sessions':   'institution',
+};
+
+const PLAN_RANK = { free: 0, pro: 1, institution: 2 };
+const hasPlan = (userPlan, requiredPlan) =>
+  PLAN_RANK[userPlan ?? 'free'] >= PLAN_RANK[requiredPlan];
 
 const Sidebar = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -71,6 +93,10 @@ const Sidebar = ({ children }) => {
   const location = useLocation();
   const storedUser = getStoredUser();
   const role = storedUser?.role ?? null;
+  // ÉTAPE 1 : on récupère le plan de l'utilisateur depuis le cookie.
+  // Si rien → "free" par défaut. Sert à décider quels liens afficher.
+  // L'admin de plateforme passe toujours, même sans plan défini.
+  const plan = storedUser?.plan ?? 'free';
   const fullName = storedUser
     ? `${storedUser.firstname ?? ''} ${storedUser.lastname ?? ''}`.trim() || storedUser.email
     : 'Guest';
@@ -103,6 +129,29 @@ const Sidebar = ({ children }) => {
       } catch {}
     }
     if (n.link) navigate(n.link);
+  };
+
+  const acceptInvite = async (e, n) => {
+    e?.stopPropagation?.();
+    try {
+      const res = await msgApi.acceptInvitation(n.id);
+      setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+      message.success(`Joined "${n.data?.classroomName || 'classroom'}"`);
+      if (res?.classId) navigate(`/my-classrooms/${res.classId}`);
+    } catch {
+      message.error('Could not accept invitation');
+    }
+  };
+
+  const declineInvite = async (e, n) => {
+    e?.stopPropagation?.();
+    try {
+      await msgApi.declineInvitation(n.id);
+      setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+      message.success('Invitation declined');
+    } catch {
+      message.error('Could not decline invitation');
+    }
   };
 
   useEffect(() => {
@@ -175,57 +224,75 @@ const Sidebar = ({ children }) => {
           disabled: true,
         },
       ]
-    : notifications.slice(0, 8).map((n) => ({
-        key: n.id,
-        onClick: () => markRead(n),
-        label: (
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              alignItems: 'flex-start',
-              padding: '6px 4px',
-              minWidth: 300,
-              maxWidth: 340,
-              background: n.isRead ? 'transparent' : '#EEF2FF',
-              borderRadius: 8,
-            }}
-          >
+    : notifications.slice(0, 8).map((n) => {
+        const isClassroomInvite = n.type === 'classroom-invite';
+        return {
+          key: n.id,
+          onClick: () => (isClassroomInvite ? null : markRead(n)),
+          label: (
             <div
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: '#4F46E5',
-                color: '#fff',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                fontSize: 14,
+                display: 'flex',
+                gap: 10,
+                alignItems: 'flex-start',
+                padding: '6px 4px',
+                minWidth: 300,
+                maxWidth: 340,
+                background: n.isRead ? 'transparent' : '#EEF2FF',
+                borderRadius: 8,
               }}
             >
-              {n.type === 'invite' ? <TeamOutlined /> : <BellOutlined />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text
+              <div
                 style={{
-                  display: 'block',
-                  fontSize: 13,
-                  color: '#1F2937',
-                  whiteSpace: 'normal',
-                  fontWeight: n.isRead ? 400 : 600,
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: '#4F46E5',
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: 14,
                 }}
               >
-                {n.message}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {new Date(n.createdAt).toLocaleString()}
-              </Text>
+                {n.type === 'invite' || isClassroomInvite ? <TeamOutlined /> : <BellOutlined />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    display: 'block',
+                    fontSize: 13,
+                    color: '#1F2937',
+                    whiteSpace: 'normal',
+                    fontWeight: n.isRead ? 400 : 600,
+                  }}
+                >
+                  {n.message}
+                </Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {new Date(n.createdAt).toLocaleString()}
+                </Text>
+                {isClassroomInvite && (
+                  <Space size={6} style={{ marginTop: 8 }}>
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={(e) => acceptInvite(e, n)}
+                      style={{ background: '#111827', borderColor: '#111827' }}
+                    >
+                      Accept
+                    </Button>
+                    <Button size="small" onClick={(e) => declineInvite(e, n)}>
+                      Decline
+                    </Button>
+                  </Space>
+                )}
+              </div>
             </div>
-          </div>
-        ),
-      }));
+          ),
+        };
+      });
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -290,11 +357,21 @@ const Sidebar = ({ children }) => {
         label: 'Profile',
       },
     ].filter((it) => {
+      // ÉTAPE 1 : check du rôle (qui peut voir cette page).
       const allowed = ROLE_MENU[it.key] || [];
       if (!role) return allowed.includes('anon');
-      return allowed.includes(role);
+      if (!allowed.includes(role)) return false;
+
+      // ÉTAPE 2 : l'admin de plateforme passe toujours les filtres de plan.
+      if (role === 'admin') return true;
+
+      // ÉTAPE 3 : check du plan (qui a payé pour cette page).
+      // Si la page n'est pas dans PLAN_REQUIRED → tout le monde y a accès.
+      const required = PLAN_REQUIRED[it.key];
+      if (!required) return true;
+      return hasPlan(plan, required);
     }),
-    [role]
+    [role, plan]
   );
 
   const selectedKey = useMemo(() => {

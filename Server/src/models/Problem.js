@@ -95,6 +95,14 @@ const Problem = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
+    // ── PLAN GRATUIT ───────────────────────────────────────────────────────
+    // Si TRUE, ce problème est visible aux utilisateurs "free".
+    // Seul l'admin coche cette case. On en garde ~10 max pour le plan gratuit.
+    isFreeTier: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   }, {
     timestamps: true,
   });

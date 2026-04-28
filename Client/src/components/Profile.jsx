@@ -12,6 +12,7 @@ import {
   Layout,
   List,
   Menu,
+  Modal,
   Progress,
   Row,
   Select,
@@ -27,12 +28,16 @@ import {
 import {
   CameraOutlined,
   CloseOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
   GithubOutlined,
   LinkedinOutlined,
   LockOutlined,
   MailOutlined,
   SaveOutlined,
+  StopOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import ImgCrop from "antd-img-crop";
@@ -163,6 +168,8 @@ export default function Profile() {
   const [difficultyBreakdown, setDifficultyBreakdown] = useState({ Easy: 0, Medium: 0, Hard: 0 });
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [dangerLoading, setDangerLoading] = useState(false);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const navigate = useNavigate();
@@ -355,6 +362,7 @@ export default function Profile() {
       Cookies.set("user", JSON.stringify({ ...storedUser, ...updated }), { expires: 7 });
       message.success("Profile updated successfully");
       setEditing(false);
+      setIsDirty(false);
       if (roleChanged) window.location.reload();
     } catch (err) {
       message.error(err.message || "Update failed");
@@ -427,6 +435,152 @@ export default function Profile() {
     } finally {
       setUploadingAvatar(false);
     }
+  };
+
+  const updateUser = async (patch, successMsg) => {
+    const res = await fetch(`${API_BASE}/users/${userId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error("Update failed");
+    const updated = await res.json();
+    setUser(updated);
+    Cookies.set("user", JSON.stringify({ ...storedUser, ...updated }), { expires: 7 });
+    if (successMsg) message.success(successMsg);
+    return updated;
+  };
+
+  const handleRemoveAvatar = () => {
+    Modal.confirm({
+      title: "Remove avatar?",
+      icon: <ExclamationCircleOutlined />,
+      content: "Your initials will be shown instead.",
+      okText: "Remove",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await updateUser({ avatar: null }, "Avatar removed");
+          setAvatarUrl(null);
+          window.dispatchEvent(new CustomEvent("avatar-updated", { detail: { avatar: null } }));
+        } catch (err) {
+          message.error(err.message || "Failed to remove avatar");
+        }
+      },
+    });
+  };
+
+  const handleCancelEdit = () => {
+    const reset = () => {
+      setEditing(false);
+      setIsDirty(false);
+      form.setFieldsValue({
+        firstname: user.firstname,
+        lastname: user.lastname,
+        email: user.email,
+        role: user.role,
+        bio: user.bio,
+        githubUrl: user.githubUrl,
+        linkedinUrl: user.linkedinUrl,
+      });
+    };
+    if (isDirty) {
+      Modal.confirm({
+        title: "Discard unsaved changes?",
+        icon: <ExclamationCircleOutlined />,
+        content: "You have unsaved changes. They will be lost.",
+        okText: "Discard",
+        okButtonProps: { danger: true },
+        onOk: reset,
+      });
+    } else {
+      reset();
+    }
+  };
+
+  const handleDeactivate = () => {
+    Modal.confirm({
+      title: "Deactivate your account?",
+      icon: <ExclamationCircleOutlined />,
+      content: "You won't be able to log in until an administrator re-activates your account.",
+      okText: "Deactivate",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDangerLoading(true);
+        try {
+          await updateUser({ isActive: false }, "Account deactivated");
+          Cookies.remove("token");
+          Cookies.remove("user");
+          navigate("/login");
+        } catch (err) {
+          message.error(err.message || "Could not deactivate");
+        } finally {
+          setDangerLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    let typed = "";
+    Modal.confirm({
+      title: "Permanently delete account?",
+      icon: <ExclamationCircleOutlined />,
+      okText: "Delete forever",
+      okButtonProps: { danger: true },
+      content: (
+        <div>
+          <p>This action cannot be undone. To confirm, type your email:</p>
+          <Input
+            placeholder={user.email}
+            onChange={(e) => { typed = e.target.value; }}
+          />
+        </div>
+      ),
+      onOk: async () => {
+        if (typed.trim().toLowerCase() !== user.email.toLowerCase()) {
+          message.error("Email did not match. Account NOT deleted.");
+          return Promise.reject();
+        }
+        setDangerLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/users/${userId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error("Delete failed");
+          message.success("Account deleted");
+          Cookies.remove("token");
+          Cookies.remove("user");
+          navigate("/login");
+        } catch (err) {
+          message.error(err.message || "Could not delete");
+        } finally {
+          setDangerLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleExportData = () => {
+    const payload = {
+      profile: user,
+      submissions,
+      submissionStats,
+      classrooms,
+      notifications,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `omnilearn-${user.email}-${dayjs().format("YYYYMMDD")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    message.success("Data exported");
   };
 
   const initials = user
@@ -577,7 +731,69 @@ export default function Profile() {
             </div>
             <Divider />
 
-            {selectedKey === "notifications" ? (
+            {selectedKey === "danger" ? (
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                <Card size="small" style={{ borderColor: "#ffd591" }}>
+                  <Row justify="space-between" align="middle" gutter={12}>
+                    <Col flex={1}>
+                      <Title level={5} style={{ margin: 0 }}>Export my data</Title>
+                      <Text type="secondary">
+                        Download a JSON file containing your profile, submissions, classrooms, and notifications.
+                      </Text>
+                    </Col>
+                    <Col>
+                      <Button icon={<DownloadOutlined />} onClick={handleExportData}>
+                        Export
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+
+                <Card size="small" style={{ borderColor: "#ffd591" }}>
+                  <Row justify="space-between" align="middle" gutter={12}>
+                    <Col flex={1}>
+                      <Title level={5} style={{ margin: 0 }}>Deactivate account</Title>
+                      <Text type="secondary">
+                        Disable your account. You won't be able to log in until an administrator reactivates it.
+                      </Text>
+                    </Col>
+                    <Col>
+                      <Button
+                        icon={<StopOutlined />}
+                        loading={dangerLoading}
+                        onClick={handleDeactivate}
+                      >
+                        Deactivate
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+
+                <Card size="small" style={{ borderColor: "#ffa39e" }}>
+                  <Row justify="space-between" align="middle" gutter={12}>
+                    <Col flex={1}>
+                      <Title level={5} style={{ margin: 0, color: "#cf1322" }}>
+                        Delete account permanently
+                      </Title>
+                      <Text type="secondary">
+                        This will erase your profile, submissions, and notifications. This cannot be undone.
+                      </Text>
+                    </Col>
+                    <Col>
+                      <Button
+                        danger
+                        type="primary"
+                        icon={<DeleteOutlined />}
+                        loading={dangerLoading}
+                        onClick={handleDeleteAccount}
+                      >
+                        Delete
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+              </Space>
+            ) : selectedKey === "notifications" ? (
               notificationsLoading ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
                   <Spin />
@@ -849,6 +1065,19 @@ export default function Profile() {
                     </Tooltip>
                   </Upload>
                 </ImgCrop>
+                {(user.avatar || avatarUrl) && (
+                  <div style={{ marginTop: 6, textAlign: "center" }}>
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={handleRemoveAvatar}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
               </Col>
               <Col flex={1}>
                 <Title level={4} style={{ margin: 0 }}>
@@ -902,21 +1131,7 @@ export default function Profile() {
                     Edit Profile
                   </Button>
                 ) : (
-                  <Button
-                    icon={<CloseOutlined />}
-                    onClick={() => {
-                      setEditing(false);
-                      form.setFieldsValue({
-                        firstname: user.firstname,
-                        lastname: user.lastname,
-                        email: user.email,
-                        role: user.role,
-                        bio: user.bio,
-                        githubUrl: user.githubUrl,
-                        linkedinUrl: user.linkedinUrl,
-                      });
-                    }}
-                  >
+                  <Button icon={<CloseOutlined />} onClick={handleCancelEdit}>
                     Cancel
                   </Button>
                 )}
@@ -962,7 +1177,12 @@ export default function Profile() {
                     </Descriptions.Item>
                   </Descriptions>
                 ) : (
-                  <Form form={form} layout="vertical" onFinish={handleSave}>
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={handleSave}
+                    onValuesChange={() => setIsDirty(true)}
+                  >
                     <Row gutter={12}>
                       <Col span={12}>
                         <Form.Item
@@ -983,15 +1203,11 @@ export default function Profile() {
                         </Form.Item>
                       </Col>
                     </Row>
-                    <Form.Item
-                      label="Email"
-                      name="email"
-                      rules={[
-                        { required: true, message: "Required" },
-                        { type: "email", message: "Invalid email" },
-                      ]}
-                    >
-                      <Input prefix={<MailOutlined />} />
+                    <Form.Item label="Email">
+                      <Input prefix={<MailOutlined />} value={user.email} disabled />
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Email cannot be changed. Contact an administrator if you need a different one.
+                      </Text>
                     </Form.Item>
                     <Form.Item label="Bio" name="bio">
                       <Input.TextArea
@@ -1006,6 +1222,7 @@ export default function Profile() {
                         <Form.Item
                           label="GitHub URL"
                           name="githubUrl"
+                          hasFeedback
                           rules={[{ type: "url", message: "Must be a valid URL" }]}
                         >
                           <Input prefix={<GithubOutlined />} placeholder="https://github.com/username" />
@@ -1015,13 +1232,14 @@ export default function Profile() {
                         <Form.Item
                           label="LinkedIn URL"
                           name="linkedinUrl"
+                          hasFeedback
                           rules={[{ type: "url", message: "Must be a valid URL" }]}
                         >
                           <Input prefix={<LinkedinOutlined />} placeholder="https://linkedin.com/in/username" />
                         </Form.Item>
                       </Col>
                     </Row>
-                    {storedUser.role === "admin" ? (
+                    {storedUser.role === "admin" && storedUser.id !== userId ? (
                       <Form.Item label="Role" name="role">
                         <Select>
                           <Select.Option value="student">Student</Select.Option>
@@ -1033,7 +1251,9 @@ export default function Profile() {
                       <Form.Item label="Role">
                         <Tag color={roleColor[user.role]}>{user.role}</Tag>
                         <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                          Only an administrator can change your role.
+                          {storedUser.id === userId
+                            ? "You can't change your own role."
+                            : "Only an administrator can change your role."}
                         </Text>
                       </Form.Item>
                     )}
@@ -1042,9 +1262,10 @@ export default function Profile() {
                       icon={<SaveOutlined />}
                       htmlType="submit"
                       loading={saving}
+                      disabled={!isDirty}
                       block
                     >
-                      Save Changes
+                      {isDirty ? "Save Changes" : "No changes"}
                     </Button>
                   </Form>
                 )}
@@ -1121,7 +1342,10 @@ export default function Profile() {
                 </Title>
                 <Descriptions column={1} size="small">
                   <Descriptions.Item label="User ID">
-                    <Text copyable style={{ fontSize: 11 }}>
+                    <Text
+                      copyable
+                      style={{ fontSize: 11, fontFamily: "monospace", color: "#8c8c8c" }}
+                    >
                       {user.id}
                     </Text>
                   </Descriptions.Item>
@@ -1145,6 +1369,11 @@ export default function Profile() {
                       ? dayjs(user.createdAt).format("MMM D, YYYY")
                       : "—"}
                   </Descriptions.Item>
+                  <Descriptions.Item label="Last Updated">
+                    {user.updatedAt
+                      ? dayjs(user.updatedAt).format("MMM D, YYYY HH:mm")
+                      : "—"}
+                  </Descriptions.Item>
                 </Descriptions>
               </Col>
             </Row>
@@ -1153,6 +1382,7 @@ export default function Profile() {
           </Card>
         </Content>
       </Layout>
+
     </div>
   );
 }

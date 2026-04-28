@@ -347,7 +347,7 @@ function GenerateTab({ moduleId }) {
 export default function ModuleProblemsTab({ moduleId }) {
   return (
     <Tabs
-      defaultActiveKey="browse"
+      defaultActiveKey="browse" 
       items={[
         {
           key: "browse",

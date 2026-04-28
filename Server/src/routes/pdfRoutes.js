@@ -6,6 +6,13 @@ const path = require("path");
 const pdfParse = require("pdf-parse");
 const Groq = require("groq-sdk");
 
+// ─── PLAN GATE ───────────────────────────────────────────────────────────────
+// L'analyse de PDF est une fonctionnalité Pro/Institution.
+// On applique un seul middleware partagé sur toutes les routes du fichier.
+const { authenticate, requirePro } = require("../middleware/Authmiddleware");
+router.use(authenticate);   // ÉTAPE 1 : il faut être connecté
+router.use(requirePro);     // ÉTAPE 2 : il faut être Pro ou Institution
+
 // ─── LangChain + Chroma Imports for Semantic Search (RAG) ─────────────
 // HuggingFaceInferenceEmbeddings: Creates vector embeddings using HuggingFace API
 const { HuggingFaceInferenceEmbeddings } = require("@langchain/community/embeddings/hf");

@@ -58,6 +58,12 @@ export const api = {
 
   markNotificationRead: (id) =>
     axios.put(`${API_BASE}/notifications/${id}/read`, {}, { headers: authHeaders() }).then((r) => r.data),
+
+  acceptInvitation: (id) =>
+    axios.post(`${API_BASE}/notifications/${id}/accept`, {}, { headers: authHeaders() }).then((r) => r.data),
+
+  declineInvitation: (id) =>
+    axios.post(`${API_BASE}/notifications/${id}/decline`, {}, { headers: authHeaders() }).then((r) => r.data),
 };
 
 // Singleton socket — connects once per app session and survives route changes.

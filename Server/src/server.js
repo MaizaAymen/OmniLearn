@@ -19,6 +19,7 @@ const examRoutes = require("./routes/examRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const planRoutes = require("./routes/planRoutes");
 const { setupSessionHub } = require("./realtime/sessionHub");
 const { setupMessageHub } = require("./realtime/messageHub");
 // Import models/index.js to register all models and associations
@@ -47,6 +48,8 @@ app.use("/api/exams", examRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
+// ─── Plans, institutions, invitations par lien ────────────────────────────────
+app.use("/api/plan", planRoutes);
 
 
 app.get("/", (req, res) => {

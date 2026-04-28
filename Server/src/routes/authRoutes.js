@@ -86,10 +86,22 @@ router.post("/login", async (req, res) => {
         }
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
         const refreshToken = jwt.sign({ id: user.id, email: user.email }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
+        // ÉTAPE 1 : on inclut plan + institutionId dans la réponse de login,
+        // pour que le frontend puisse les stocker dans le cookie et filtrer
+        // la sidebar / afficher la bannière d'upgrade sans appel supplémentaire.
         res.json({
             token,
             refreshToken,
-            user: { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname, role: user.role, avatar: user.avatar },
+            user: {
+                id: user.id,
+                email: user.email,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                role: user.role,
+                plan: user.plan,
+                institutionId: user.institutionId,
+                avatar: user.avatar,
+            },
         });
     } catch (error) {
         res.status(500).json({ error: "Erreur lors de la connexion" });

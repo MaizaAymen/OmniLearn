@@ -30,10 +30,30 @@ const User = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: false,
     },
+    // ── ÉTAPE 1 : rôle de l'utilisateur ────────────────────────────────────
+    // "admin"             = super admin de la plateforme (voit TOUT le monde)
+    // "institution_admin" = admin d'UNE institution (voit seulement ses membres)
+    // "teacher"           = prof dans une institution
+    // "student"           = élève (peut être solo ou dans une institution)
     role: {
-      type: DataTypes.ENUM("admin", "teacher", "student"),
+      type: DataTypes.ENUM("admin", "institution_admin", "teacher", "student"),
       allowNull: false,
       defaultValue: "student",
+    },
+    // ── ÉTAPE 2 : plan de l'utilisateur ────────────────────────────────────
+    // "free"        = inscription par défaut, 10 problèmes + messagerie seulement
+    // "pro"         = tous les problèmes + IA + PDF (paiement individuel)
+    // "institution" = compte institutionnel (école/université) avec classrooms
+    plan: {
+      type: DataTypes.ENUM("free", "pro", "institution"),
+      allowNull: false,
+      defaultValue: "free",
+    },
+    // ── ÉTAPE 3 : lien vers l'institution (null si solo / super admin) ─────
+    institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
     },
     isActive: {
       type: DataTypes.BOOLEAN,

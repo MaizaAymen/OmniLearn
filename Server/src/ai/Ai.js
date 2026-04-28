@@ -3,7 +3,34 @@ const router = express.Router();
 const Groq = require("groq-sdk");
 const { Op } = require("sequelize");
 const Problem = require("../models/Problem");
+const User = require("../models/User");
+const Notification = require("../models/Notification");
+const { emitNotification } = require("../realtime/messageHub");
 const {slugify} = require("../utils/slugify");
+const { authenticate, optionalAuth, requirePro } = require("../middleware/Authmiddleware");
+
+async function notifyAllOnProblemPublished(req, problem) {
+  try {
+    const users = await User.findAll({
+      where: { role: ["student", "teacher"], isActive: true },
+      attributes: ["id"],
+    });
+    const io = req.app.get("io");
+    for (const u of users) {
+      const notif = await Notification.create({
+        userId: u.id,
+        type: "problem-published",
+        title: "New problem published",
+        message: `A new problem "${problem.title}" is now available`,
+        link: `/problems/${problem.id}`,
+        data: { problemId: problem.id },
+      });
+      emitNotification(io, u.id, notif);
+    }
+  } catch (err) {
+    console.error("notify problem published:", err.message);
+  }
+}
 
 
 const groq = new Groq({
@@ -362,7 +389,7 @@ Rules:
   }
 });
 
-router.get("/ai/getallproblems", async (req, res) => {
+router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
   try {
     const { status } = req.query;
     let where = {};
@@ -374,8 +401,38 @@ router.get("/ai/getallproblems", async (req, res) => {
       // default: published + legacy rows with no status
       where[Op.or] = [{ status: 'published' }, { status: null }];
     }
+
+    // ─── FILTRE PAR PLAN ───────────────────────────────────────────────────
+    // Étape 1 : si l'utilisateur n'est pas connecté → on le traite comme "free".
+    // Étape 2 : un admin ou un teacher voit TOUT (pour gérer la liste).
+    // Étape 3 : un user "free" voit UNIQUEMENT les problèmes marqués isFreeTier.
+    const isStaff = req.user && (req.user.role === "admin" || req.user.role === "teacher");
+    const isFreePlan = !req.user || req.user.plan === "free";
+    if (isFreePlan && !isStaff) {
+      where.isFreeTier = true;
+    }
+
     const problems = await Problem.findAll({ where });
-    res.json(problems);
+
+    // Attach creator info so the UI can show "Forked by <teacher name>"
+    const creatorIds = [...new Set(problems.map(p => p.createdBy).filter(Boolean))];
+    const creators = creatorIds.length
+      ? await User.findAll({
+          where: { id: creatorIds },
+          attributes: ["id", "firstname", "lastname", "role"],
+        })
+      : [];
+    const creatorMap = Object.fromEntries(
+      creators.map(u => [u.id, { id: u.id, firstname: u.firstname, lastname: u.lastname, role: u.role }])
+    );
+
+    const result = problems.map(p => {
+      const obj = p.toJSON();
+      obj.creator = obj.createdBy ? creatorMap[obj.createdBy] || null : null;
+      return obj;
+    });
+
+    res.json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error fetching problems" });
@@ -407,6 +464,7 @@ router.post("/ai/problems", async (req, res) => {
       createdBy: createdBy || null,
       forkedFrom: null,
     });
+    notifyAllOnProblemPublished(req, problem);
     res.json(problem);
   } catch (error) {
     console.error(error);
@@ -614,7 +672,11 @@ router.patch("/ai/problems/:id", async (req, res) => {
       updatable.version = (problem.version || 1) + 1;
     }
 
+    const wasPublished = problem.status === "published";
     await problem.update(updatable);
+    if (problem.status === "published" && !wasPublished) {
+      notifyAllOnProblemPublished(req, problem);
+    }
     res.json(problem);
   } catch (error) {
     console.error(error);
@@ -667,7 +729,11 @@ router.patch("/ai/problems/:id/status", async (req, res) => {
     const problem = await Problem.findByPk(id);
     if (!problem) return res.status(404).json({ error: "Problem not found" });
 
+    const wasPublished = problem.status === "published";
     await problem.update({ status });
+    if (status === "published" && !wasPublished) {
+      notifyAllOnProblemPublished(req, problem);
+    }
     res.json(problem);
   } catch (error) {
     console.error(error);
@@ -783,7 +849,11 @@ Return the corrected code with detailed changes in JSON format.`
   }
 }
 
-router.post("/ai/correct-code", async (req, res) => {
+// ─── PLAN GATE ───────────────────────────────────────────────────────────────
+// "Corriger avec IA" est réservé aux plans Pro et Institution.
+// Étape 1 : authenticate vérifie le token et charge req.user.
+// Étape 2 : requirePro vérifie req.user.plan, sinon renvoie 402 "Upgrade required".
+router.post("/ai/correct-code", authenticate, requirePro, async (req, res) => {
   try {
     const { code, language, problemContext, actualOutput } = req.body;
 
