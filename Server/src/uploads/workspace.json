@@ -1,0 +1,35 @@
+[
+  {
+    "id": "pdf_1777575185758",
+    "userId": "3e91bfb5-7a27-4cab-8f6e-fec69c9f6ee8",
+    "type": "pdf",
+    "name": "lettre de motivation.pdf",
+    "fileUrl": "https://res.cloudinary.com/dngl3p2vl/raw/upload/v1777575187/workspace/3e91bfb5-7a27-4cab-8f6e-fec69c9f6ee8/pdf/wqgky6g99svlbvaunskh",
+    "createdAt": "2026-04-30T18:53:05.758Z"
+  },
+  {
+    "id": "pdf_1777575030461",
+    "userId": "3e91bfb5-7a27-4cab-8f6e-fec69c9f6ee8",
+    "type": "pdf",
+    "name": "Attestation de PrÃ©sence.pdf",
+    "fileUrl": "https://res.cloudinary.com/dngl3p2vl/raw/upload/v1777575031/workspace/3e91bfb5-7a27-4cab-8f6e-fec69c9f6ee8/pdf/nvrbh7c2pbkvbvm8kw6o",
+    "createdAt": "2026-04-30T18:50:30.461Z"
+  },
+  {
+    "id": "pdf_1777504342776",
+    "userId": "48f6c604-aa01-4475-b254-0af79d2eeebf",
+    "type": "pdf",
+    "name": "Candidature au BUT3 Informatique.pdf",
+    "fileUrl": "https://res.cloudinary.com/dngl3p2vl/raw/upload/v1777504342/workspace/48f6c604-aa01-4475-b254-0af79d2eeebf/pdf/gtszowmil317qezmwhlf",
+    "createdAt": "2026-04-29T23:12:22.776Z"
+  },
+  {
+    "id": "code_1777504323208",
+    "userId": "48f6c604-aa01-4475-b254-0af79d2eeebf",
+    "type": "code",
+    "name": "samiros",
+    "content": "router.get(\"/me/plan\", async (req, res) => {\n  try {\n    // Combien de problèmes \"free-tier\" existent en tout (pour afficher \"X / 10\").\n    const freeTierTotal = await Problem.count({ where: { isFreeTier: true } });\n    res.json({\n      plan: req.user.plan,\n      role: req.user.role,\n      institutionId: req.user.institutionId,\n      // Limites visibles côté UI.\n      limits: {\n        problemsVisible: req.user.plan === \"free\" ? freeTierTotal : null, // null = illimité\n        canUseAI: req.user.plan !== \"free\" || req.user.role === \"admin\",\n        canUsePdf: req.user.plan !== \"free\" || req.user.role === \"admin\",\n        canJoinClassroom: req.user.plan === \"institution\" || req.user.role === \"admin\",\n      },\n    });\n  } catch (err) {\n    console.error(\"me/plan:\", err);\n    res.status(500).json({ error: \"Failed to fetch plan\" });\n  }\n});",
+    "fileUrl": "https://res.cloudinary.com/dngl3p2vl/raw/upload/v1777504322/workspace/48f6c604-aa01-4475-b254-0af79d2eeebf/code/qh4itkywh43rsw1wqmdm",
+    "createdAt": "2026-04-29T23:12:03.208Z"
+  }
+]

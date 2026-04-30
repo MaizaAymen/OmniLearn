@@ -90,6 +90,20 @@ router.post("/upgrade/pro", async (req, res) => {
   }
 });
 
+// Self-service upgrade to Institution plan.
+router.post("/upgrade/institution", async (req, res) => {
+  try {
+    if (req.user.plan === "institution") {
+      return res.status(400).json({ error: "You already have an institution plan" });
+    }
+    await User.update({ plan: "institution" }, { where: { id: req.user.id } });
+    res.json({ message: "Upgraded to Institution", plan: "institution" });
+  } catch (err) {
+    console.error("upgrade institution:", err);
+    res.status(500).json({ error: "Failed to upgrade" });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SUPER ADMIN : VOIR TOUS LES UTILISATEURS PAR PLAN
 // ─────────────────────────────────────────────────────────────────────────────

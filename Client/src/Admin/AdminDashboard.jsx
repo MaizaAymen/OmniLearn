@@ -45,6 +45,11 @@ import "prismjs/themes/prism-tomorrow.css";
 import LessonPdfViewer from "./LessonPdfViewer";
 import ModuleAssignmentsTab from "./ModuleAssignmentsTab";
 import AdminLayout from "./AdminLayout";
+// Nouveaux onglets pour le système de plans / institutions.
+import FreeTierTab from "./FreeTierTab";
+import ProTierTab from "./ProTierTab";
+import UsersByPlanTab from "./UsersByPlanTab";
+import InstitutionTab from "./InstitutionTab";
 import "./AdminDashboard.css";
 import {
   fetchGrades,
@@ -1969,6 +1974,22 @@ const AdminDashboard = () => {
 
       case "problems":
         return <ProblemBankSection />;
+
+      // ÉTAPE 1 : sélection des problèmes free-tier (gérée par l'admin).
+      case "free-tier":
+        return <FreeTierTab />;
+
+      // Sélection des problèmes pro-tier.
+      case "pro-tier":
+        return <ProTierTab />;
+
+      // ÉTAPE 2 : super-admin → vue de tous les utilisateurs par plan.
+      case "users-plan":
+        return <UsersByPlanTab />;
+
+      // ÉTAPE 3 : institution_admin → liens d'invitation et membres.
+      case "institution":
+        return <InstitutionTab />;
 
       default:
         return null;

@@ -36,7 +36,12 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.5",
     "slugify": "^1.6.6",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "stripe": "^22.1.0",
+    "ws": "^8.20.0",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.30",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -103,6 +103,14 @@ const Problem = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    // ── PLAN PRO ───────────────────────────────────────────────────────────
+    // Si TRUE, ce problème est visible aux utilisateurs "pro" (et institution).
+    // Géré par l'admin dans le Pro Tier Manager.
+    isProTier: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   }, {
     timestamps: true,
   });

@@ -228,6 +228,94 @@
   border-color: #333 !important;
 }
 
+/* Code Viewer */
+.code-viewer-container {
+  flex: 1;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: auto;
+  background: #1a1a1a;
+}
+
+.code-content {
+  padding: 20px;
+  margin: 0;
+  color: #e8e8e8;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Notes - nice card with soft yellow background */
+.sidebar-notes {
+  margin: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff9e6 0%, #fff4cc 100%);
+  border: 1px solid #ffe58f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.notes-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #f0c97a;
+}
+
+.notes-icon {
+  font-size: 14px;
+  color: #d48806;
+}
+
+.notes-title {
+  font-size: 13px !important;
+  color: #874d00 !important;
+  flex: 1;
+}
+
+.notes-saved {
+  font-size: 10px;
+  color: #ad6800;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-style: italic;
+}
+
+.notes-textarea {
+  font-size: 13px !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: #5c3a00 !important;
+  font-family: 'Segoe UI', sans-serif !important;
+  line-height: 1.5 !important;
+  box-shadow: none !important;
+}
+
+.notes-textarea::placeholder {
+  color: #b08a4a !important;
+  font-style: italic;
+}
+
+.notes-textarea:focus {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Code input modal textarea */
+.code-input {
+  font-family: 'Courier New', monospace !important;
+  font-size: 13px !important;
+  background: #fafafa !important;
+  border: 1px solid #e8e8e8 !important;
+  padding: 12px !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .classroom-content {

@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import Cookies from "js-cookie";
 import {
-  Layout,
-  Menu,
-  Button,
-  Upload,
-  Typography,
-  Spin,
-  Empty,
-  Space,
-  message,
+  Layout, Menu, Button, Upload, Typography, Spin, Empty, Space,
+  message, Input, Tag, Modal,
 } from "antd";
 import {
-  FileTextOutlined,
-  UploadOutlined,
-  RobotOutlined,
-  BookOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  FileTextOutlined, UploadOutlined, BookOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, CodeOutlined,
+  PlusOutlined, BulbOutlined, RobotOutlined,
 } from "@ant-design/icons";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
@@ -28,103 +19,115 @@ import "./ClassroomPdf.css";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
-const API_URL = "http://localhost:5000/api/pdf";
-const SERVER_URL = "http://localhost:5000";
+const API = "http://localhost:5000/api/workspace";
+
+// Pick the current user id from the cookie so notes are per-user.
+function getUserId() {
+  try {
+    const u = Cookies.get("user");
+    return u ? JSON.parse(u).id : "guest";
+  } catch {
+    return "guest";
+  }
+}
 
 export default function ClassroomPdf() {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState([]);
+  const userId = getUserId();
+  const NOTES_KEY = "ws-notes-" + userId;
+
+  const [items, setItems] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  const defaultLayoutPluginInstance = defaultLayoutPlugin({
-    sidebarTabs: () => [],
-  });
+  // Code modal
+  const [codeModalOpen, setCodeModalOpen] = useState(false);
+  const [codeName, setCodeName] = useState("");
+  const [codeContent, setCodeContent] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
+
+  // Notes (per-user, saved in localStorage)
+  const [notes, setNotes] = useState(() => localStorage.getItem(NOTES_KEY) || "");
+
+  const layoutPlugin = defaultLayoutPlugin({ sidebarTabs: () => [] });
 
   useEffect(() => {
-    loadCourses();
+    loadItems();
   }, []);
 
-  const loadCourses = async () => {
+  async function loadItems() {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/list`);
-      const items = Array.isArray(res.data.items) ? res.data.items : [];
-      const normalized = items
-        .map((item) => ({
-          id: item.pdfId,
-          name: item.filename || "Untitled Document",
-          fileUrl: item.fileUrl ? `${SERVER_URL}${item.fileUrl}` : "",
-          pages: item.pages || 0,
-          uploadedAt: item.uploadedAt || new Date().toISOString(),
-        }))
-        .filter((item) => item.id && item.fileUrl);
-      setCourses(normalized);
-      if (normalized.length > 0 && !selectedCourse) {
-        setSelectedCourse(normalized[0]);
-      }
-    } catch (error) {
-      console.error("Error loading courses:", error);
-      setCourses([]);
+      const res = await axios.get(API + "/list");
+      const list = res.data.items || [];
+      setItems(list);
+      if (list.length > 0) setSelected(list[0]);
+    } catch (e) {
+      message.error("Could not load workspace");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleUpload = async (info) => {
-    const file = info.file;
-    if (!file) return;
-
+  async function handlePdfUpload({ file }) {
     if (file.type !== "application/pdf") {
-      message.error("Please upload a PDF file");
+      message.error("PDF files only");
       return;
     }
-
-    const formData = new FormData();
-    formData.append("pdf", file);
-
+    const fd = new FormData();
+    fd.append("pdf", file);
     try {
       setUploading(true);
-      const res = await axios.post(`${API_URL}/upload`, formData);
-      const fileUrl = res.data.fileUrl ? `${SERVER_URL}${res.data.fileUrl}` : "";
-      const newCourse = {
-        id: res.data.pdfId,
-        name: res.data.filename || file.name,
-        fileUrl: fileUrl,
-        pages: res.data.pages || 0,
-        uploadedAt: new Date().toISOString(),
-      };
-      setCourses((prev) => [newCourse, ...prev]);
-      setSelectedCourse(newCourse);
-      message.success("PDF uploaded successfully");
-    } catch (error) {
-      console.error("Upload error:", error);
-      message.error("Upload failed. Please try again.");
+      const res = await axios.post(API + "/pdf", fd);
+      setItems((prev) => [res.data, ...prev]);
+      setSelected(res.data);
+      message.success("PDF uploaded to your workspace");
+    } catch {
+      message.error("Upload failed");
     } finally {
       setUploading(false);
     }
-  };
+  }
 
-  const openAssistant = (course) => {
-    if (!course?.id || !course?.fileUrl) return;
-    navigate("/pdf-assistant", {
-      state: {
-        pdfId: course.id,
-        pdfFile: course.fileUrl,
-        filename: course.name,
-      },
-    });
-  };
+  async function saveCode() {
+    if (!codeName.trim() || !codeContent.trim()) {
+      message.error("Filename and code are both required");
+      return;
+    }
+    try {
+      setSavingCode(true);
+      const res = await axios.post(API + "/code", {
+        name: codeName.trim(),
+        content: codeContent,
+      });
+      setItems((prev) => [res.data, ...prev]);
+      setSelected(res.data);
+      setCodeModalOpen(false);
+      setCodeName("");
+      setCodeContent("");
+      message.success("Code saved to your workspace");
+    } catch {
+      message.error("Could not save code");
+    } finally {
+      setSavingCode(false);
+    }
+  }
 
-  const menuItems = courses.map((course) => ({
-    key: course.id,
-    icon: <FileTextOutlined />,
+  function updateNotes(value) {
+    setNotes(value);
+    localStorage.setItem(NOTES_KEY, value);
+  }
+
+  const menuItems = items.map((it) => ({
+    key: it.id,
+    icon: it.type === "pdf" ? <FileTextOutlined /> : <CodeOutlined />,
     label: (
-      <span className="course-menu-label">
-        {course.name.length > 25 ? course.name.slice(0, 25) + "..." : course.name}
+      <span style={{ fontSize: 12 }}>
+        {it.name.length > 22 ? it.name.slice(0, 22) + "…" : it.name}
       </span>
     ),
   }));
@@ -135,57 +138,58 @@ export default function ClassroomPdf() {
         {loading ? (
           <div className="loading-container">
             <Spin size="large" />
-            <Text className="loading-text">Loading courses...</Text>
+            <Text className="loading-text">Loading your workspace...</Text>
           </div>
-        ) : !selectedCourse ? (
+        ) : !selected ? (
           <div className="empty-container">
             <Empty
               image={<BookOutlined className="empty-icon" />}
               description={
                 <Space direction="vertical" size={4}>
-                  <Text strong>No course selected</Text>
-                  <Text type="secondary">
-                    Upload a PDF or select a course from the sidebar
-                  </Text>
+                  <Text strong>Your workspace is empty</Text>
+                  <Text type="secondary">Upload a PDF or add code from the sidebar</Text>
                 </Space>
               }
-            >
-              <Upload
-                accept="application/pdf"
-                showUploadList={false}
-                customRequest={({ file }) => handleUpload({ file })}
-              >
-                <Button icon={<UploadOutlined />} loading={uploading}>
-                  Upload PDF
-                </Button>
-              </Upload>
-            </Empty>
+            />
           </div>
-        ) : (
+        ) : selected.type === "pdf" ? (
           <div className="course-detail">
             <div className="course-header">
               <div className="course-header-left">
-                <Title level={4} className="course-title">
-                  {selectedCourse.name}
-                </Title>
+                <Title level={4} className="course-title">{selected.name}</Title>
+                <Tag style={{ marginTop: 4 }}>PDF</Tag>
               </div>
               <Button
                 type="primary"
                 icon={<RobotOutlined />}
-                onClick={() => openAssistant(selectedCourse)}
+                onClick={() => navigate("/pdf-assistant", {
+                  state: {
+                    pdfId: selected.id,
+                    pdfFile: selected.fileUrl,
+                    filename: selected.name,
+                  },
+                })}
                 className="primary-btn"
               >
                 AI Assistant
               </Button>
             </div>
-
             <div className="pdf-viewer-container">
               <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
-                <Viewer
-                  fileUrl={selectedCourse.fileUrl}
-                  plugins={[defaultLayoutPluginInstance]}
-                />
+                <Viewer fileUrl={selected.fileUrl} plugins={[layoutPlugin]} />
               </Worker>
+            </div>
+          </div>
+        ) : (
+          <div className="course-detail">
+            <div className="course-header">
+              <div className="course-header-left">
+                <Title level={4} className="course-title">{selected.name}</Title>
+                <Tag color="blue" style={{ marginTop: 4 }}>Code</Tag>
+              </div>
+            </div>
+            <div className="code-viewer-container">
+              <pre className="code-content">{selected.content}</pre>
             </div>
           </div>
         )}
@@ -194,61 +198,114 @@ export default function ClassroomPdf() {
       <Sider
         width={280}
         collapsedWidth={60}
-        collapsed={sidebarCollapsed}
+        collapsed={collapsed}
         className="classroom-sidebar"
         theme="light"
       >
         <div className="sidebar-header">
-          {!sidebarCollapsed && <Title level={5}>Courses</Title>}
+          {!collapsed && <Title level={5}>My Workspace</Title>}
           <Button
             type="text"
-            icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
             className="collapse-btn"
           />
         </div>
 
-        {!sidebarCollapsed && (
+        {!collapsed && (
           <div className="sidebar-upload">
-            <Upload
-              accept="application/pdf"
-              showUploadList={false}
-              customRequest={({ file }) => handleUpload({ file })}
-            >
-              <Button
-                icon={<UploadOutlined />}
-                loading={uploading}
-                block
+            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              <Upload
+                accept="application/pdf"
+                showUploadList={false}
+                customRequest={handlePdfUpload}
               >
-                Upload PDF
+                <Button icon={<UploadOutlined />} loading={uploading} block>
+                  Upload PDF
+                </Button>
+              </Upload>
+              <Button
+                icon={<PlusOutlined />}
+                block
+                onClick={() => setCodeModalOpen(true)}
+              >
+                Add Code
               </Button>
-            </Upload>
+            </Space>
           </div>
         )}
 
         {loading ? (
-          <div className="sidebar-loading">
-            <Spin size="small" />
-          </div>
-        ) : courses.length === 0 ? (
-          !sidebarCollapsed && (
+          <div className="sidebar-loading"><Spin size="small" /></div>
+        ) : items.length === 0 ? (
+          !collapsed && (
             <div className="sidebar-empty">
-              <Text type="secondary">No courses yet</Text>
+              <Text type="secondary">No files yet</Text>
             </div>
           )
         ) : (
           <Menu
             mode="inline"
-            selectedKeys={selectedCourse ? [selectedCourse.id] : []}
+            selectedKeys={selected ? [selected.id] : []}
             items={menuItems}
             onClick={({ key }) => {
-              const course = courses.find((c) => c.id === key);
-              if (course) setSelectedCourse(course);
+              const found = items.find((i) => i.id === key);
+              if (found) setSelected(found);
             }}
             className="courses-menu"
           />
         )}
+
+        {!collapsed && (
+          <div className="sidebar-notes">
+            <div className="notes-header">
+              <BulbOutlined className="notes-icon" />
+              <Text strong className="notes-title">My Notes</Text>
+              <span className="notes-saved">auto-saved</span>
+            </div>
+            <TextArea
+              value={notes}
+              onChange={(e) => updateNotes(e.target.value)}
+              placeholder="Write a thought, a TODO, a snippet..."
+              autoSize={{ minRows: 4, maxRows: 8 }}
+              className="notes-textarea"
+              bordered={false}
+            />
+          </div>
+        )}
       </Sider>
+
+      <Modal
+        title={
+          <Space>
+            <CodeOutlined />
+            <span>Add Code to Workspace</span>
+          </Space>
+        }
+        open={codeModalOpen}
+        onCancel={() => setCodeModalOpen(false)}
+        onOk={saveCode}
+        okText="Save"
+        confirmLoading={savingCode}
+        width={720}
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <Input
+            placeholder="Filename (e.g. solution.js)"
+            value={codeName}
+            onChange={(e) => setCodeName(e.target.value)}
+            prefix={<FileTextOutlined />}
+            size="large"
+          />
+          <TextArea
+            placeholder="Paste or type your code here..."
+            value={codeContent}
+            onChange={(e) => setCodeContent(e.target.value)}
+            autoSize={{ minRows: 12, maxRows: 20 }}
+            className="code-input"
+          />
+        </Space>
+      </Modal>
     </Layout>
   );
 }

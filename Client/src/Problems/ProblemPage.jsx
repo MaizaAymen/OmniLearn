@@ -145,6 +145,12 @@ function ProblemPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Free tier: no AI correction, JavaScript only.
+  const isFreeTier = (() => {
+    try { return (JSON.parse(Cookies.get("user") || "{}").plan || "free") === "free"; }
+    catch { return true; }
+  })();
+
   const defaultProblemId = Object.keys(PROBLEMS)[0] || "";
   const [currentProblemId, setCurrentProblemId] = useState(id || defaultProblemId);
   const [apiProblem, setApiProblem] = useState(null);
@@ -279,6 +285,10 @@ function ProblemPage() {
   useEffect(() => {
     selectedLanguageRef.current = selectedLanguage;
   }, [selectedLanguage]);
+
+  useEffect(() => {
+    if (isFreeTier && selectedLanguage !== "javascript") setSelectedLanguage("javascript");
+  }, [isFreeTier, selectedLanguage]);
 
   useEffect(() => {
     chatSidebarOpenRef.current = chatSidebarOpen;
@@ -886,6 +896,10 @@ function ProblemPage() {
   };
 
   const handleCreateSession = () => {
+    if (isFreeTier) {
+      toast.error("Sessions are a Pro feature. Upgrade to create one.");
+      return;
+    }
     if (!socketRef.current || !currentProblemId) return;
 
     // All the "hidden" knobs are derived from the session type at emit time.
@@ -1346,35 +1360,7 @@ function ProblemPage() {
 
           <div className="divider divider-horizontal mx-0 h-6" />
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handlePrevProblem}
-              disabled={currentIndex <= 0}
-              className="btn btn-ghost btn-xs btn-circle"
-            >
-              <ChevronLeftIcon className="size-4" />
-            </button>
-
-            <select
-              className="select select-xs select-bordered font-medium max-w-[180px]"
-              value={currentProblemId}
-              onChange={(e) => handleProblemChange(e.target.value)}
-            >
-              {problemIds.map((pid) => (
-                <option key={pid} value={pid}>
-                  {allProblemsById[pid]?.title || pid}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={handleNextProblem}
-              disabled={currentIndex >= problemIds.length - 1}
-              className="btn btn-ghost btn-xs btn-circle"
-            >
-              <ChevronRightIcon className="size-4" />
-            </button>
-          </div>
+          
         </div>
 
         {/* Center: Run + Submit */}
@@ -1391,18 +1377,20 @@ function ProblemPage() {
             )}
             Run
           </button>
-          <button
-            className="btn btn-sm btn-primary gap-1.5"
-            onClick={handleCorrectCode}
-            disabled={isRunning || isSubmitting || isCorrecting}
-          >
-            {isCorrecting ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <WandSparklesIcon className="size-3.5" />
-            )}
-            Correct
-          </button>
+          {!isFreeTier && (
+            <button
+              className="btn btn-sm btn-primary gap-1.5"
+              onClick={handleCorrectCode}
+              disabled={isRunning || isSubmitting || isCorrecting}
+            >
+              {isCorrecting ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <WandSparklesIcon className="size-3.5" />
+              )}
+              Correct
+            </button>
+          )}
           <button
             className="btn btn-sm btn-success text-success-content gap-1.5"
             onClick={handleSubmit}
@@ -1687,13 +1675,15 @@ function ProblemPage() {
           ) : (
             /* ── NOT IN SESSION ── */
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                className="btn btn-xs btn-primary gap-1 shrink-0"
-                onClick={() => setCreateModalOpen(true)}
-              >
-                <PlusIcon className="size-3" />
-                New Session
-              </button>
+              {!isFreeTier && (
+                <button
+                  className="btn btn-xs btn-primary gap-1 shrink-0"
+                  onClick={() => setCreateModalOpen(true)}
+                >
+                  <PlusIcon className="size-3" />
+                  New Session
+                </button>
+              )}
 
               {/* active sessions chips */}
               {availableSessions.length > 0 && (
@@ -1801,10 +1791,11 @@ function ProblemPage() {
               isRunning={isRunning}
               readOnly={isInSession && currentUserPermission !== "editable"}
               languageLocked={
-                isInSession &&
-                currentUserRole !== "host" &&
-                currentUserRole !== "co-host" &&
-                !!sessionLanguageLock
+                isFreeTier ||
+                (isInSession &&
+                  currentUserRole !== "host" &&
+                  currentUserRole !== "co-host" &&
+                  !!sessionLanguageLock)
               }
               onLanguageChange={handleLanguageChange}
               onCodeChange={handleCodeChange}

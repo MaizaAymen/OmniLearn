@@ -403,13 +403,22 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
     }
 
     // ─── FILTRE PAR PLAN ───────────────────────────────────────────────────
-    // Étape 1 : si l'utilisateur n'est pas connecté → on le traite comme "free".
-    // Étape 2 : un admin ou un teacher voit TOUT (pour gérer la liste).
-    // Étape 3 : un user "free" voit UNIQUEMENT les problèmes marqués isFreeTier.
+    // Étape 1 : staff (admin / teacher) → voit tout pour pouvoir gérer.
+    // Étape 2 : sinon on filtre selon le plan :
+    //   free        → uniquement les problèmes "isFreeTier"
+    //   pro         → "isFreeTier" + "isProTier"  (Pro voit Free aussi)
+    //   institution → tous les problèmes (pas de filtre)
     const isStaff = req.user && (req.user.role === "admin" || req.user.role === "teacher");
-    const isFreePlan = !req.user || req.user.plan === "free";
-    if (isFreePlan && !isStaff) {
-      where.isFreeTier = true;
+    if (!isStaff) {
+      const plan = req.user?.plan || "free";
+      if (plan === "free") {
+        where.isFreeTier = true;
+      } else if (plan === "pro") {
+        where[Op.and] = [
+          { [Op.or]: [{ isFreeTier: true }, { isProTier: true }] },
+        ];
+      }
+      // institution → pas de filtre
     }
 
     const problems = await Problem.findAll({ where });

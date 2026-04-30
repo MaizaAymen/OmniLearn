@@ -212,14 +212,15 @@ User.hasMany(Message, { foreignKey: "senderId", as: "sentMessages" });
 Message.belongsTo(User, { foreignKey: "senderId", as: "sender" });
 
 // ─── Institution ↔ Users (1:N) ───────────────────────────────────────────────
-// Un user appartient à au plus une institution. Une institution a plusieurs users.
-Institution.hasMany(User, { foreignKey: "institutionId", as: "members" });
-User.belongsTo(Institution, { foreignKey: "institutionId", as: "institution" });
+// constraints: false → on garde le lien logique côté Sequelize, mais on n'ajoute
+// PAS de contrainte FK Postgres (sinon `sequelize.sync({alter:true})` génère un
+// ALTER TABLE invalide quand il essaie d'ajouter la colonne institutionId).
+Institution.hasMany(User, { foreignKey: "institutionId", as: "members", constraints: false });
+User.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
 
 // ─── Institution ↔ InviteLinks (1:N) ─────────────────────────────────────────
-// Une institution génère plusieurs liens d'invitation.
-Institution.hasMany(InviteLink, { foreignKey: "institutionId", as: "inviteLinks" });
-InviteLink.belongsTo(Institution, { foreignKey: "institutionId", as: "institution" });
+Institution.hasMany(InviteLink, { foreignKey: "institutionId", as: "inviteLinks", constraints: false });
+InviteLink.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
 
 module.exports = {
   User,

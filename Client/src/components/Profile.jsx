@@ -47,6 +47,8 @@ import { useNavigate } from "react-router-dom";
 import { BellOutlined, TeamOutlined, CheckOutlined } from "@ant-design/icons";
 import { Badge } from "antd";
 import CodingDashboard from "./CodingDashboard";
+import PlanSection from "./PlanSection";
+import Certificate from "./Certificate";
 import { api as msgApi, getSocket } from "../Messaging/api";
 
 const { Title, Text } = Typography;
@@ -157,7 +159,11 @@ export default function Profile() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [selectedKey, setSelectedKey] = useState("profile");
+  const [selectedKey, setSelectedKey] = useState(() => {
+    // Au retour de Stripe, on ouvre directement l'onglet "plan".
+    const p = new URLSearchParams(window.location.search);
+    return p.get("stripe_session") || p.get("stripe_cancelled") ? "plan" : "profile";
+  });
   const [classrooms, setClassrooms] = useState([]);
   const [classroomsLoading, setClassroomsLoading] = useState(false);
   const [submissions, setSubmissions] = useState([]);
@@ -711,6 +717,8 @@ export default function Profile() {
                     ? "Problem Progress"
                     : selectedKey === "notifications"
                     ? "Notifications"
+                    : selectedKey === "plan"
+                    ? "Plan & Usage"
                     : "Profile Information"}
                 </Title>
                 <Text type="secondary">
@@ -720,6 +728,8 @@ export default function Profile() {
                     ? "Your problem-solving history and stats."
                     : selectedKey === "notifications"
                     ? "Messages, group invites, and other activity from your account."
+                    : selectedKey === "plan"
+                    ? "See what's unlocked on your current plan."
                     : "Update your personal information and account details."}
                 </Text>
               </div>
@@ -731,7 +741,12 @@ export default function Profile() {
             </div>
             <Divider />
 
-            {selectedKey === "danger" ? (
+            {/* ─── Onglet "Plan & Usage" ────────────────────────────────────
+                Affiche le plan courant et le bouton d'upgrade.
+                Tout est géré dans PlanSection pour garder Profile.jsx propre. */}
+            {selectedKey === "plan" ? (
+              <PlanSection />
+            ) : selectedKey === "danger" ? (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 <Card size="small" style={{ borderColor: "#ffd591" }}>
                   <Row justify="space-between" align="middle" gutter={12}>
@@ -927,6 +942,15 @@ export default function Profile() {
                 </div>
               ) : (
                 <>
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                    <Certificate
+                      user={user}
+                      stats={submissionStats}
+                      difficulty={difficultyBreakdown}
+                      languages={languageBreakdown}
+                      submissions={submissions}
+                    />
+                  </div>
                   <CodingDashboard
                     activity={activity}
                     languageBreakdown={languageBreakdown}

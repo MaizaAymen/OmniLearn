@@ -24,6 +24,7 @@ import ClassroomView from "./Classroom/ClassroomView";
 import JoinClassroom from "./Classroom/JoinClassroom";
 import ProblemCreatePage from "./Problems/ProblemCreatePage";
 import Messages from "./Messaging/Messages";
+import JoinInstitution from "./Auth/JoinInstitution";
 
 const getRole = () => {
   try {
@@ -39,8 +40,10 @@ const Guard = ({ allow, children }) => {
   return children;
 };
 
-const ALL = ["admin", "teacher", "student"];
-const STAFF = ["admin", "teacher"];
+// On ajoute "institution_admin" partout où "teacher" ou "student" est admis,
+// car c'est un membre standard d'une institution.
+const ALL = ["admin", "institution_admin", "teacher", "student"];
+const STAFF = ["admin", "institution_admin", "teacher"];
 const ADMIN = ["admin"];
 
 function App() {
@@ -69,6 +72,8 @@ function App() {
       <Route path="/my-classrooms/:classId" element={<Guard allow={ALL}><ClassroomView /></Guard>} />
       <Route path="/join/:code" element={<Guard allow={ALL}><JoinClassroom /></Guard>} />
       <Route path="/messages" element={<Guard allow={ALL}><Messages /></Guard>} />
+      {/* Page publique : page d'acceptation d'un lien d'invitation. */}
+      <Route path="/join-institution/:token" element={<JoinInstitution />} />
     </Routes>
   );
 

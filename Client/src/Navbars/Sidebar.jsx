@@ -78,7 +78,7 @@ const ROLE_MENU = {
 // ─────────────────────────────────────────────────────────────────────────────
 const PLAN_REQUIRED = {
   '/pdf-assistant':   'pro',
-  '/classroom-pdf':   'institution',
+  '/classroom-pdf':   'pro',
   '/my-classrooms':   'institution',
   '/live-sessions':   'institution',
 };
@@ -313,7 +313,7 @@ const Sidebar = ({ children }) => {
       {
         key: '/classroom-pdf',
         icon: <ReadOutlined />,
-        label: 'Classroom PDFs',
+        label: 'My Workspace',
       },
       {
         key: '/my-classrooms',
@@ -331,11 +331,11 @@ const Sidebar = ({ children }) => {
         label: 'PDF Assistant',
       },
 
-      {
-        key: '/uml/problems',
-        icon: <ProjectOutlined />,
-        label: 'UML Problems',
-      },
+      // {
+      //   key: '/uml/problems',
+      //   icon: <ProjectOutlined />,
+      //   label: 'UML Problems',
+      // },
       {
         key: '/users',
         icon: <TeamOutlined />,

@@ -1148,7 +1148,7 @@ function setupSessionHub(httpServer) {
         exam:        publicExam(session.exam),
       });
       ack?.({ ok: true, type });
-    });
+    }); 
 
     // ── Advance turn ──────────────────────────────────────────────────────
     socket.on("session:turn:next", (_payload, ack) => {

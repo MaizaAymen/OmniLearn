@@ -5,7 +5,6 @@ import {
   Button,
   Typography,
   Divider,
-  Select,
   message,
 } from "antd";
 import {
@@ -82,7 +81,7 @@ Cookies.set("user", JSON.stringify(res.data.user), {
           lastname: values.lastName,
           email: values.email,
           password: values.password,
-          role: values.role,
+          role: "student",
         });
         message.success("Account created! Please sign in.");
         setIsLogin(true);
@@ -103,8 +102,8 @@ Cookies.set("user", JSON.stringify(res.data.user), {
       const res = await axios.post(`${API_URL}/google`, {
         credential: credentialResponse.credential,
       });
-      Cookies.set("token", res.data.token, { expires: 7 });
-      Cookies.set("user", JSON.stringify(res.data.user), { expires: 7 });
+      Cookies.set("token", res.data.token, { expires: 7, path: "/" });
+      Cookies.set("user", JSON.stringify(res.data.user), { expires: 7, path: "/" });
       message.success("Logged in with Google!");
       window.location.href = "/";
     } catch (err) {
@@ -224,15 +223,7 @@ Cookies.set("user", JSON.stringify(res.data.user), {
                   </Form.Item>
                 </div>
 
-                <Form.Item
-                  name="role"
-                  rules={[{ required: true, message: "Select your role" }]}
-                >
-                  <Select placeholder="I am a...">
-                    <Select.Option value="student">Student</Select.Option>
-                    <Select.Option value="teacher">Teacher</Select.Option>
-                  </Select>
-                </Form.Item>
+
               </>
             )}
 
