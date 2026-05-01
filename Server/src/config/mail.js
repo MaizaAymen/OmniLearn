@@ -1,21 +1,21 @@
 const nodeMailer = require("nodemailer");
-const dotenv = require("dotenv");
-dotenv.config();
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
 const transport = nodeMailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.SMTP_PORT || "587"),
     secure: false,
     auth: {
-        user:  process.env.user, 
-        pass: process.env.pass
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
     },
     tls: { rejectUnauthorized: false },
 });
 
 const sendEmail = async ({ to, subject, text, html }) => {
     const mailOptions = {
-        from: process.env.user,
+        from: `"OmniLearn" <${process.env.SMTP_USER}>`,
         to,
         subject,
         text,

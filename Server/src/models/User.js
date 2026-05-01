@@ -103,6 +103,15 @@ const User = sequelize.define(
       type: DataTypes.STRING(500),
       allowNull: true,
     },
+    // 2FA fields
+    twoFactorSecret: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    is2FAEnabled: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
   {
     tableName: "users",

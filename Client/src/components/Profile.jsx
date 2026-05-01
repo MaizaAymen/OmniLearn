@@ -36,6 +36,8 @@ import {
   LinkedinOutlined,
   LockOutlined,
   MailOutlined,
+  QrcodeOutlined,
+  SafetyCertificateOutlined,
   SaveOutlined,
   StopOutlined,
   UserOutlined,
@@ -176,6 +178,18 @@ export default function Profile() {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [dangerLoading, setDangerLoading] = useState(false);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  // ── 2FA state ─────────────────────────────────────────────────────────────
+  // Controls whether the "scan QR code" setup modal is visible
+  const [twoFASetupModal, setTwoFASetupModal] = useState(false);
+  // Controls whether the "confirm OTP to disable" modal is visible
+  const [twoFADisableModal, setTwoFADisableModal] = useState(false);
+  // Holds the base64 QR-code image returned by the server after /2fa/setup
+  const [twoFAQrCode, setTwoFAQrCode] = useState(null);
+  // Tracks what the user types into the 6-digit OTP input field
+  const [twoFAOtp, setTwoFAOtp] = useState("");
+  // Generic loading flag used while any 2FA API call is in-flight
+  const [twoFALoading, setTwoFALoading] = useState(false);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const navigate = useNavigate();
@@ -396,9 +410,12 @@ export default function Profile() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ password: values.newPassword }),
+        body: JSON.stringify({ password: values.newPassword, currentPassword: values.currentPassword }),
       });
-      if (!res.ok) throw new Error("Failed to update password");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update password");
+      }
       message.success("Password updated successfully");
       setChangingPassword(false);
       passwordForm.resetFields();
@@ -589,6 +606,128 @@ export default function Profile() {
     message.success("Data exported");
   };
 
+  const handleSendVerificationEmail = async () => {
+    setSendingVerification(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/send-verification-email`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send email");
+      message.success("Verification email sent — check your inbox!");
+    } catch (err) {
+      message.error(err.message || "Failed to send verification email");
+    } finally {
+      setSendingVerification(false);
+    }
+  };
+
+  // ── Step 1 of 3: Start 2FA setup ──────────────────────────────────────────
+  // Called when the user clicks "Enable 2FA".
+  // The server generates a fresh TOTP secret, stores it against the user
+  // (not yet active), and returns a base64 QR-code image the user scans
+  // with their authenticator app (Google Authenticator, Authy, etc.).
+  const handle2FASetup = async () => {
+    setTwoFALoading(true);
+    try {
+      // POST /api/auth/2fa/setup — auth header required so the server
+      // knows which user to attach the secret to.
+      const res = await fetch(`${API_BASE}/auth/2fa/setup`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to start 2FA setup");
+      const data = await res.json();
+
+      // Store the QR-code image so the modal can render it.
+      setTwoFAQrCode(data.qrCode);
+      // Reset any leftover OTP value from a previous attempt.
+      setTwoFAOtp("");
+      // Open the setup modal so the user can scan the QR code.
+      setTwoFASetupModal(true);
+    } catch (err) {
+      message.error(err.message || "Failed to setup 2FA");
+    } finally {
+      setTwoFALoading(false);
+    }
+  };
+
+  // ── Step 2 of 3: Verify the first OTP and permanently enable 2FA ──────────
+  // After the user scans the QR code they type the 6-digit code shown by
+  // their app. We send that code to the server which verifies it against
+  // the TOTP secret stored in Step 1. Only on success does the server set
+  // is2FAEnabled = true — this confirms the secret is correctly loaded in
+  // the app before locking the account behind 2FA.
+  const handle2FAEnable = async () => {
+    setTwoFALoading(true);
+    try {
+      // POST /api/auth/2fa/enable — sends the OTP the user typed.
+      // The server checks it with speakeasy.totp.verify() (±30 s window).
+      const res = await fetch(`${API_BASE}/auth/2fa/enable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ token: twoFAOtp }),
+      });
+      if (!res.ok) {
+        // Surface the server's error message (e.g. "Invalid OTP code")
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Invalid OTP code");
+      }
+
+      message.success("2FA enabled successfully");
+
+      // Close the setup modal and clean up temporary state.
+      setTwoFASetupModal(false);
+      setTwoFAQrCode(null);
+      setTwoFAOtp("");
+
+      // Update local user state so the UI immediately shows "Enabled"
+      // and switches the button to "Disable 2FA" without a page reload.
+      setUser((prev) => ({ ...prev, is2FAEnabled: true }));
+    } catch (err) {
+      message.error(err.message || "Failed to enable 2FA");
+    } finally {
+      setTwoFALoading(false);
+    }
+  };
+
+  // ── Step 3 of 3 (optional): Disable 2FA ───────────────────────────────────
+  // Requiring a valid OTP to *disable* 2FA prevents an attacker who has
+  // access to an unlocked browser session from silently turning off the
+  // protection. The server verifies the code, then clears both the secret
+  // and the enabled flag from the database.
+  const handle2FADisable = async () => {
+    setTwoFALoading(true);
+    try {
+      // POST /api/auth/2fa/disable — sends the OTP to prove the user still
+      // has their authenticator app. The server rejects any invalid code.
+      const res = await fetch(`${API_BASE}/auth/2fa/disable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ token: twoFAOtp }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Invalid OTP code");
+      }
+
+      message.success("2FA disabled successfully");
+
+      // Close the confirmation modal and clear the typed code.
+      setTwoFADisableModal(false);
+      setTwoFAOtp("");
+
+      // Reflect the change instantly in local state — the badge will
+      // switch to "Disabled" and the button back to "Enable 2FA".
+      setUser((prev) => ({ ...prev, is2FAEnabled: false }));
+    } catch (err) {
+      message.error(err.message || "Failed to disable 2FA");
+    } finally {
+      setTwoFALoading(false);
+    }
+  };
+
   const initials = user
     ? `${user.firstname?.[0] ?? ""}${user.lastname?.[0] ?? ""}`.toUpperCase()
     : "?";
@@ -719,6 +858,8 @@ export default function Profile() {
                     ? "Notifications"
                     : selectedKey === "plan"
                     ? "Plan & Usage"
+                    : selectedKey === "security"
+                    ? "Security"
                     : "Profile Information"}
                 </Title>
                 <Text type="secondary">
@@ -730,6 +871,8 @@ export default function Profile() {
                     ? "Messages, group invites, and other activity from your account."
                     : selectedKey === "plan"
                     ? "See what's unlocked on your current plan."
+                    : selectedKey === "security"
+                    ? "Manage your password and two-factor authentication."
                     : "Update your personal information and account details."}
                 </Text>
               </div>
@@ -1034,6 +1177,275 @@ export default function Profile() {
                   )}
                 />
               )
+            ) : selectedKey === "security" ? (
+              /*
+               * ─── SECURITY TAB ────────────────────────────────────────────────────────
+               * Rendered when the user clicks "Security" in the sidebar menu.
+               * Contains two independent sections:
+               *   1. Change Password  — update the account password
+               *   2. Two-Factor Authentication (2FA) — TOTP-based second factor
+               *
+               * Both sections share state declared at the top of the component
+               * (changingPassword / passwordForm for passwords;
+               *  twoFA* variables for 2FA).
+               */
+              <Space direction="vertical" size={24} style={{ width: "100%" }}>
+
+                {/* ── SECTION 1: Change Password ───────────────────────────────────────
+                    The header is always visible. The form itself is only mounted when
+                    `changingPassword` is true — toggled by "Change password" / "Cancel".
+                    handlePasswordChange() is defined earlier in the component and sends
+                    the old + new password to PUT /api/users/:id. */}
+                <div>
+                  <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
+                    <Col>
+                      <Title level={5} style={{ margin: 0 }}>
+                        <LockOutlined style={{ marginRight: 8, color: "#1677ff" }} />
+                        Change Password
+                      </Title>
+                      {/* Only show the subtitle when the form is hidden to avoid visual noise */}
+                      {!changingPassword && (
+                        <Text type="secondary" style={{ fontSize: 13, display: "block", marginTop: 4 }}>
+                          Ensure your account is secure with a strong password.
+                        </Text>
+                      )}
+                    </Col>
+                    <Col>
+                      {/* Toggle button: "Change password" expands the form;
+                          "Cancel" collapses it and resets all field values. */}
+                      {!changingPassword ? (
+                        <Button onClick={() => setChangingPassword(true)} style={{ borderRadius: 6 }}>
+                          Change password
+                        </Button>
+                      ) : (
+                        <Button
+                          type="text"
+                          danger
+                          icon={<CloseOutlined />}
+                          onClick={() => { setChangingPassword(false); passwordForm.resetFields(); }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </Col>
+                  </Row>
+
+                  {/* Password form — only mounted when the section is expanded */}
+                  {changingPassword && (
+                    <Card
+                      bordered={false}
+                      style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 12, marginTop: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}
+                    >
+                      <Form form={passwordForm} layout="vertical">
+                        {/* Field 1: Current password — proves the logged-in user
+                            knows the existing password before letting them change it. */}
+                        <Form.Item
+                          label={<Text strong style={{ color: "#595959" }}>Current Password</Text>}
+                          name="currentPassword"
+                          rules={[{ required: true, message: "Please enter your current password" }]}
+                          style={{ marginBottom: 16 }}
+                        >
+                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Enter your current password" style={{ borderRadius: 8 }} />
+                        </Form.Item>
+
+                        {/* Field 2: New password — minimum 6 characters enforced
+                            both here (client validation) and on the server. */}
+                        <Form.Item
+                          label={<Text strong style={{ color: "#595959" }}>New Password</Text>}
+                          name="newPassword"
+                          rules={[
+                            { required: true, message: "Please enter a new password" },
+                            { min: 6, message: "Password must be at least 6 characters" },
+                          ]}
+                          style={{ marginBottom: 16 }}
+                          extra={<Text type="secondary" style={{ fontSize: 12 }}>Password must be at least 6 characters long.</Text>}
+                        >
+                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Create a new strong password" style={{ borderRadius: 8 }} />
+                        </Form.Item>
+
+                        {/* Field 3: Confirm password — antd `dependencies` makes this
+                            field re-validate automatically whenever "newPassword" changes.
+                            The custom validator compares both values client-side. */}
+                        <Form.Item
+                          label={<Text strong style={{ color: "#595959" }}>Confirm New Password</Text>}
+                          name="confirmPassword"
+                          dependencies={["newPassword"]}
+                          rules={[
+                            { required: true, message: "Please confirm your new password" },
+                            ({ getFieldValue }) => ({
+                              validator(_, value) {
+                                if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
+                                return Promise.reject(new Error("The two passwords do not match!"));
+                              },
+                            }),
+                          ]}
+                          style={{ marginBottom: 24 }}
+                        >
+                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Re-enter your new password" style={{ borderRadius: 8 }} />
+                        </Form.Item>
+
+                        {/* Submit — calls handlePasswordChange which validates
+                            the form then PUTs to the server. */}
+                        <Button type="primary" icon={<SaveOutlined />} loading={saving} block onClick={handlePasswordChange} size="large" style={{ borderRadius: 8, fontWeight: 600 }}>
+                          Save New Password
+                        </Button>
+                      </Form>
+                    </Card>
+                  )}
+                </div>
+
+                <Divider />
+
+                {/* ── SECTION 2: Two-Factor Authentication (TOTP) ─────────────────────
+                    TOTP = Time-based One-Time Password (RFC 6238).
+                    Every 30 seconds the authenticator app derives a 6-digit code from
+                    a shared secret using HMAC-SHA1. The server (speakeasy library) does
+                    the same derivation and accepts codes within a ±30 s window.
+
+                    Flow:
+                      Enable  → handle2FASetup (get QR) → handle2FAEnable (verify code)
+                      Disable → handle2FADisable (verify code to confirm)          */}
+                <div>
+                  <Row justify="space-between" align="middle">
+                    <Col>
+                      <Title level={5} style={{ margin: 0 }}>
+                        <SafetyCertificateOutlined style={{ marginRight: 8, color: "#52c41a" }} />
+                        Two-Factor Authentication
+                      </Title>
+                      <Text type="secondary" style={{ fontSize: 13, display: "block", marginTop: 4 }}>
+                        Add an extra layer of security using an authenticator app (TOTP).
+                      </Text>
+                    </Col>
+                    <Col>
+                      <Space>
+                        {/* Live status badge — reads user.is2FAEnabled which is updated
+                            optimistically in state after a successful enable/disable call. */}
+                        <Tag color={user.is2FAEnabled ? "success" : "default"}>
+                          {user.is2FAEnabled ? "Enabled" : "Disabled"}
+                        </Tag>
+
+                        {/* Button switches based on current 2FA status:
+                            - Enabled  → show "Disable 2FA" (opens disable confirmation modal)
+                            - Disabled → show "Enable 2FA"  (calls handle2FASetup to get QR) */}
+                        {user.is2FAEnabled ? (
+                          <Button danger onClick={() => { setTwoFAOtp(""); setTwoFADisableModal(true); }}>
+                            Disable 2FA
+                          </Button>
+                        ) : (
+                          <Button type="primary" onClick={handle2FASetup} loading={twoFALoading}>
+                            Enable 2FA
+                          </Button>
+                        )}
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  {/* Success banner — only shown when 2FA is already active.
+                      Reminds the user which app to open at login. */}
+                  {user.is2FAEnabled && (
+                    <Card size="small" style={{ marginTop: 12, background: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 8 }}>
+                      <Space>
+                        <SafetyCertificateOutlined style={{ color: "#52c41a", fontSize: 18 }} />
+                        <Text style={{ color: "#389e0d" }}>
+                          Your account is protected with time-based one-time passwords (TOTP). Use an app like Google Authenticator or Authy to generate login codes.
+                        </Text>
+                      </Space>
+                    </Card>
+                  )}
+                </div>
+
+                {/* ── MODAL 1: Enable 2FA — scan QR + enter first OTP ─────────────────
+                    Opened by handle2FASetup after the server returns the QR image.
+                    destroyOnClose resets internal React state (inputs) each time
+                    the modal is closed so stale values never linger. */}
+                <Modal
+                  title={<Space><QrcodeOutlined /> Set up Two-Factor Authentication</Space>}
+                  open={twoFASetupModal}
+                  onCancel={() => setTwoFASetupModal(false)}
+                  footer={null}
+                  width={420}
+                  destroyOnClose
+                >
+                  <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                    <Text>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</Text>
+
+                    {/* The QR code is a base64 PNG returned by the server.
+                        It encodes an otpauth:// URI containing the TOTP secret. */}
+                    {twoFAQrCode && (
+                      <div style={{ textAlign: "center", padding: "16px 0" }}>
+                        <img src={twoFAQrCode} alt="2FA QR Code" style={{ width: 200, height: 200, border: "1px solid #f0f0f0", borderRadius: 8 }} />
+                      </div>
+                    )}
+
+                    <Text>Then enter the 6-digit code from your app to verify:</Text>
+
+                    {/* OTP input:
+                        - replace(/\D/g, "") strips any non-digit characters the user pastes
+                        - .slice(0, 6) hard-caps at 6 digits
+                        - monospace + letter-spacing makes the code easy to read */}
+                    <Input
+                      placeholder="000000"
+                      value={twoFAOtp}
+                      onChange={(e) => setTwoFAOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      maxLength={6}
+                      size="large"
+                      style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 22, fontFamily: "monospace" }}
+                    />
+
+                    {/* Verify button disabled until exactly 6 digits are entered
+                        to prevent sending obviously incomplete codes to the server. */}
+                    <Button
+                      type="primary"
+                      block
+                      size="large"
+                      loading={twoFALoading}
+                      disabled={twoFAOtp.length !== 6}
+                      onClick={handle2FAEnable}
+                    >
+                      Verify & Enable 2FA
+                    </Button>
+                  </Space>
+                </Modal>
+
+                {/* ── MODAL 2: Disable 2FA — confirm with OTP ─────────────────────────
+                    Requires the user to enter a valid OTP before the server will
+                    clear their 2FA secret. This stops an attacker with session
+                    access from silently turning off the second factor. */}
+                <Modal
+                  title="Disable Two-Factor Authentication"
+                  open={twoFADisableModal}
+                  onCancel={() => setTwoFADisableModal(false)}
+                  footer={null}
+                  destroyOnClose
+                >
+                  <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                    <Text>Enter the 6-digit code from your authenticator app to confirm disabling 2FA:</Text>
+
+                    {/* Same digit-only input as the setup modal */}
+                    <Input
+                      placeholder="000000"
+                      value={twoFAOtp}
+                      onChange={(e) => setTwoFAOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      maxLength={6}
+                      size="large"
+                      style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 22, fontFamily: "monospace" }}
+                    />
+
+                    {/* Styled red to communicate this is a destructive action */}
+                    <Button
+                      danger
+                      type="primary"
+                      block
+                      size="large"
+                      loading={twoFALoading}
+                      disabled={twoFAOtp.length !== 6}
+                      onClick={handle2FADisable}
+                    >
+                      Confirm & Disable 2FA
+                    </Button>
+                  </Space>
+                </Modal>
+              </Space>
             ) : (
             <>
             <Row gutter={24} align="middle">
@@ -1172,7 +1584,7 @@ export default function Profile() {
                     <Descriptions.Item label="Last Name">{user.lastname}</Descriptions.Item>
                     <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
                     <Descriptions.Item label="Role">
-                      <Tag color={roleColor[user.role]}>{user.role}</Tag>
+                      <Tag color={roleColor[user.role]}>{user.role.toUpperCase()}</Tag>
                     </Descriptions.Item>
                     <Descriptions.Item label="Bio">
                       {user.bio ? (
@@ -1294,70 +1706,6 @@ export default function Profile() {
                   </Form>
                 )}
 
-                <Divider />
-
-                <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
-                  <Col>
-                    <Title level={5} style={{ margin: 0 }}>
-                      Change Password
-                    </Title>
-                  </Col>
-                  <Col>
-                    {!changingPassword ? (
-                      <Button
-                        size="small"
-                        icon={<LockOutlined />}
-                        onClick={() => setChangingPassword(true)}
-                      >
-                        Change
-                      </Button>
-                    ) : (
-                      <Button
-                        size="small"
-                        icon={<CloseOutlined />}
-                        onClick={() => {
-                          setChangingPassword(false);
-                          passwordForm.resetFields();
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    )}
-                  </Col>
-                </Row>
-
-                {changingPassword ? (
-                  <Form form={passwordForm} layout="vertical">
-                    <Form.Item
-                      label="New Password"
-                      name="newPassword"
-                      rules={[
-                        { required: true, message: "Required" },
-                        { min: 6, message: "At least 6 characters" },
-                      ]}
-                    >
-                      <Input.Password prefix={<LockOutlined />} />
-                    </Form.Item>
-                    <Form.Item
-                      label="Confirm Password"
-                      name="confirmPassword"
-                      rules={[{ required: true, message: "Required" }]}
-                    >
-                      <Input.Password prefix={<LockOutlined />} />
-                    </Form.Item>
-                    <Button
-                      type="primary"
-                      icon={<SaveOutlined />}
-                      loading={saving}
-                      block
-                      onClick={handlePasswordChange}
-                    >
-                      Update Password
-                    </Button>
-                  </Form>
-                ) : (
-                  <Text type="secondary">Click "Change" to update your password.</Text>
-                )}
               </Col>
 
               <Col xs={24} md={10}>
@@ -1365,12 +1713,12 @@ export default function Profile() {
                   Account Details
                 </Title>
                 <Descriptions column={1} size="small">
-                  <Descriptions.Item label="User ID">
+                  <Descriptions.Item label="User PLAN">
                     <Text
                       copyable
-                      style={{ fontSize: 11, fontFamily: "monospace", color: "#8c8c8c" }}
+                      style={{ fontSize: 11, fontFamily: "monospace", color: "#ab04f9" }}
                     >
-                      {user.id}
+                      {user.plan.toUpperCase()}
                     </Text>
                   </Descriptions.Item>
                   <Descriptions.Item label="Status">
@@ -1379,9 +1727,21 @@ export default function Profile() {
                     </Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="Email Verified">
-                    <Tag color={user.isEmailVerified ? "success" : "warning"}>
-                      {user.isEmailVerified ? "Verified" : "Unverified"}
-                    </Tag>
+                    <Space>
+                      <Tag color={user.isEmailVerified ? "success" : "warning"}>
+                        {user.isEmailVerified ? "Verified" : "Unverified"}
+                      </Tag>
+                      {!user.isEmailVerified && (
+                        <Button
+                          size="small"
+                          icon={<MailOutlined />}
+                          loading={sendingVerification}
+                          onClick={handleSendVerificationEmail}
+                        >
+                          Send verification email
+                        </Button>
+                      )}
+                    </Space>
                   </Descriptions.Item>
                   <Descriptions.Item label="Last Login">
                     {user.lastLoginAt

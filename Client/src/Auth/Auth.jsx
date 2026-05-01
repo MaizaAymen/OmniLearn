@@ -45,11 +45,38 @@ const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  // 2FA state: when login returns require2FA=true, show OTP step
+  const [require2FA, setRequire2FA] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState(null);
+  const [otpValue, setOtpValue] = useState("");
 
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
     form.resetFields();
+  };
+
+  // Handle OTP submission during 2FA login step
+  const handle2FAVerify = async () => {
+    if (!otpValue || otpValue.length !== 6) {
+      return message.error("Please enter the 6-digit code");
+    }
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_URL}/2fa/verify`, {
+        userId: pendingUserId,
+        token: otpValue,
+      });
+      Cookies.set("token", res.data.token, { expires: 7, path: "/" });
+      Cookies.set("refreshToken", res.data.refreshToken, { expires: 7, path: "/" });
+      Cookies.set("user", JSON.stringify(res.data.user), { expires: 7, path: "/" });
+      message.success("Welcome back!");
+      window.location.href = "/problems";
+    } catch (err) {
+      message.error(err.response?.data?.error || "Invalid OTP code");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onFinish = async (values) => {
@@ -60,20 +87,19 @@ const Auth = () => {
           email: values.email,
           password: values.password,
         });
-        Cookies.set("token", res.data.token, {
-  expires: 7,
-  path: "/",
-});
-Cookies.set("refreshToken", res.data.refreshToken, {
-  expires: 7,
-  path: "/",
-});
-Cookies.set("user", JSON.stringify(res.data.user), {
-  expires: 7,
-  path: "/",
-});
+
+        // If 2FA is enabled, show the OTP step instead of logging in
+        if (res.data.require2FA) {
+          setRequire2FA(true);
+          setPendingUserId(res.data.userId);
+          setLoading(false);
+          return;
+        }
+
+        Cookies.set("token", res.data.token, { expires: 7, path: "/" });
+        Cookies.set("refreshToken", res.data.refreshToken, { expires: 7, path: "/" });
+        Cookies.set("user", JSON.stringify(res.data.user), { expires: 7, path: "/" });
         message.success("Welcome back!");
-        console.log(res.data);
         window.location.href = "/problems";
       } else {
         await axios.post(`${API_URL}/register`, {
@@ -163,6 +189,49 @@ Cookies.set("user", JSON.stringify(res.data.user), {
       {/* Right side — form */}
       <div className="auth-right">
         <div className="auth-form-wrapper">
+
+          {/* ── 2FA OTP Step ─────────────────────────────────────────────── */}
+          {require2FA ? (
+            <div style={{ textAlign: "center" }}>
+              <Title level={3} className="auth-title">Two-Factor Authentication</Title>
+              <Text type="secondary" className="auth-subtitle">
+                Open your authenticator app and enter the 6-digit code
+              </Text>
+              <div style={{ margin: "32px 0" }}>
+                <Input
+                  placeholder="000000"
+                  value={otpValue}
+                  onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
+                  maxLength={6}
+                  size="large"
+                  style={{ textAlign: "center", fontSize: 28, letterSpacing: 10, width: 220 }}
+                  onPressEnter={handle2FAVerify}
+                />
+              </div>
+              <Button
+                type="primary"
+                loading={loading}
+                block
+                className="auth-submit-btn"
+                onClick={handle2FAVerify}
+              >
+                Verify
+              </Button>
+              <Button
+                type="text"
+                style={{ marginTop: 12, width: "100%" }}
+                onClick={() => {
+                  setRequire2FA(false);
+                  setPendingUserId(null);
+                  setOtpValue("");
+                  form.resetFields();
+                }}
+              >
+                Back to login
+              </Button>
+            </div>
+          ) : (
+          <>
           <Title level={2} className="auth-title">
             {isLogin ? "Welcome Back" : "Create Account"}
           </Title>
@@ -298,6 +367,8 @@ Cookies.set("user", JSON.stringify(res.data.user), {
               {isLogin ? "Sign Up" : "Sign In"}
             </Link>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

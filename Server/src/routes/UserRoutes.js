@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
+const bcrypt = require("bcryptjs");
 const { User, Class, Enrollment, Grade, Speciality, Level, Course, Module, Lesson, Announcement } = require("../models");
 const { authenticate, requireAdmin } = require("../middleware/Authmiddleware");
 const config = require("../config");
@@ -81,7 +82,7 @@ router.put("/users/:id", async (req, res) => {
     if (req.user.role !== "admin" && req.user.id !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { firstname, lastname, email, password, role, bio, githubUrl, linkedinUrl, avatar, isActive } = req.body;
+    const { firstname, lastname, email, password, currentPassword, role, bio, githubUrl, linkedinUrl, avatar, isActive } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
       user.firstname = firstname ?? user.firstname;
@@ -101,6 +102,15 @@ router.put("/users/:id", async (req, res) => {
 
       // Update password only when explicitly provided.
       if (typeof password === "string" && password.trim().length > 0) {
+        if (req.user.role !== "admin" && req.user.id === req.params.id) {
+          if (!currentPassword) {
+            return res.status(400).json({ error: "Current password is required to change password." });
+          }
+          const isMatch = await bcrypt.compare(currentPassword, user.password);
+          if (!isMatch) {
+            return res.status(400).json({ error: "Incorrect current password." });
+          }
+        }
         user.password = password;
       }
 
@@ -271,7 +281,11 @@ router.get("/users/:id/classrooms", async (req, res) => {
 });
 
 
-
+//yifasa5 lkol 
+//
+//
+//
+//
 // ── Student classroom-view endpoints ────────────────────────────────────────
 // Enrolled students (and admin/teacher) can read classroom content.
 

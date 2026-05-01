@@ -25,6 +25,7 @@ import JoinClassroom from "./Classroom/JoinClassroom";
 import ProblemCreatePage from "./Problems/ProblemCreatePage";
 import Messages from "./Messaging/Messages";
 import JoinInstitution from "./Auth/JoinInstitution";
+import VerifyEmail from "./Auth/VerifyEmail";
 
 const getRole = () => {
   try {
@@ -50,6 +51,7 @@ function App() {
   const location = useLocation();
   const isAuthPage = location.pathname.startsWith("/auth");
   const isMeetingPage = location.pathname.startsWith("/meeting");
+  const isVerifyPage = location.pathname.startsWith("/verify-email");
 
   const appRoutes = (
     <Routes>
@@ -79,10 +81,11 @@ function App() {
 
   return (
     <TooltipProvider>
-      {isAuthPage || isMeetingPage ? (
+      {isAuthPage || isMeetingPage || isVerifyPage ? (
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/meeting/:roomId" element={<MeetingRoom />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
         </Routes>
       ) : (
         <Sidebar>{appRoutes}</Sidebar>
