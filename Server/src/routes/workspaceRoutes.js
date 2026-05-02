@@ -62,9 +62,18 @@ router.get("/list", function (req, res) {
 
 // 6. Upload a PDF file (multipart form).
 const upload = multer({ storage: multer.memoryStorage() });
+const FREE_LIMIT = 3;
 
 router.post("/pdf", upload.single("pdf"), async function (req, res) {
   if (!req.file) return res.status(400).json({ error: "No file" });
+
+  if (req.user.plan === "free" && req.user.role !== "admin") {
+    const all = readAll();
+    const count = all.filter(function (i) { return i.userId === req.user.id && i.type === "pdf"; }).length;
+    if (count >= FREE_LIMIT) {
+      return res.status(402).json({ error: "Free plan limit reached (3 PDFs). Upgrade to Pro for unlimited.", limitReached: true });
+    }
+  }
 
   const cloud = await uploadToCloudinary(
     req.file.buffer,
@@ -93,6 +102,14 @@ router.post("/code", express.json({ limit: "5mb" }), async function (req, res) {
   const content = req.body.content;
   if (!name || !content) return res.status(400).json({ error: "Name and content required" });
 
+  if (req.user.plan === "free" && req.user.role !== "admin") {
+    const all = readAll();
+    const count = all.filter(function (i) { return i.userId === req.user.id && i.type === "code"; }).length;
+    if (count >= FREE_LIMIT) {
+      return res.status(402).json({ error: "Free plan limit reached (3 code files). Upgrade to Pro for unlimited.", limitReached: true });
+    }
+  }
+
   const cloud = await uploadToCloudinary(
     Buffer.from(content, "utf8"),
     "workspace/" + req.user.id + "/code"
@@ -113,6 +130,30 @@ router.post("/code", express.json({ limit: "5mb" }), async function (req, res) {
   saveAll(all);
 
   res.json(item);
+});
+
+// 8. Delete a workspace item (PDF or code).
+router.delete("/item/:itemId", function (req, res) {
+  const all = readAll();
+  const itemId = req.params.itemId;
+
+  const itemIndex = all.findIndex(function (item) {
+    return item.id === itemId;
+  });
+
+  if (itemIndex === -1) {
+    return res.status(404).json({ error: "Item not found" });
+  }
+
+  const item = all[itemIndex];
+  if (item.userId !== req.user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  all.splice(itemIndex, 1);
+  saveAll(all);
+
+  res.status(200).json({ message: "Item deleted successfully" });
 });
 
 module.exports = router;

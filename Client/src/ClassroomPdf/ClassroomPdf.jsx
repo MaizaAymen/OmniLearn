@@ -4,12 +4,13 @@ import axios from "axios";
 import Cookies from "js-cookie";
 import {
   Layout, Menu, Button, Upload, Typography, Spin, Empty, Space,
-  message, Input, Tag, Modal,
+  message, Input, Tag, Modal, Popconfirm,
 } from "antd";
 import {
   FileTextOutlined, UploadOutlined, BookOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, CodeOutlined,
   PlusOutlined, BulbOutlined, RobotOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
@@ -117,6 +118,20 @@ export default function ClassroomPdf() {
     }
   }
 
+  async function handleDelete(itemId) {
+    try {
+      await axios.delete(`${API}/item/${itemId}`);
+      setItems((prev) => prev.filter((item) => item.id !== itemId));
+      if (selected && selected.id === itemId) {
+        const remainingItems = items.filter((item) => item.id !== itemId);
+        setSelected(remainingItems.length > 0 ? remainingItems[0] : null);
+      }
+      message.success("Item deleted successfully");
+    } catch (error) {
+      message.error("Failed to delete item");
+    }
+  }
+
   function updateNotes(value) {
     setNotes(value);
     localStorage.setItem(NOTES_KEY, value);
@@ -126,9 +141,30 @@ export default function ClassroomPdf() {
     key: it.id,
     icon: it.type === "pdf" ? <FileTextOutlined /> : <CodeOutlined />,
     label: (
-      <span style={{ fontSize: 12 }}>
-        {it.name.length > 22 ? it.name.slice(0, 22) + "…" : it.name}
-      </span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
+          {it.name}
+        </span>
+        <Popconfirm
+          title="Delete file?"
+          description="This cannot be undone."
+          onConfirm={(e) => {
+            e.stopPropagation(); // Prevent menu click
+            handleDelete(it.id);
+          }}
+          onCancel={(e) => e.stopPropagation()}
+          okText="Delete"
+          cancelText="Cancel"
+        >
+          <Button
+            type="text"
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Popconfirm>
+      </div>
     ),
   }));
 
@@ -145,7 +181,7 @@ export default function ClassroomPdf() {
             <Empty
               image={<BookOutlined className="empty-icon" />}
               description={
-                <Space direction="vertical" size={4}>
+                                <Space direction="vertical" size={4}>
                   <Text strong>Your workspace is empty</Text>
                   <Text type="secondary">Upload a PDF or add code from the sidebar</Text>
                 </Space>
@@ -269,7 +305,7 @@ export default function ClassroomPdf() {
               placeholder="Write a thought, a TODO, a snippet..."
               autoSize={{ minRows: 4, maxRows: 8 }}
               className="notes-textarea"
-              bordered={false}
+              variant="borderless"
             />
           </div>
         )}

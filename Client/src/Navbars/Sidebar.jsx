@@ -78,7 +78,6 @@ const ROLE_MENU = {
 // ─────────────────────────────────────────────────────────────────────────────
 const PLAN_REQUIRED = {
   '/pdf-assistant':   'pro',
-  '/classroom-pdf':   'pro',
   '/my-classrooms':   'institution',
   '/live-sessions':   'institution',
 };

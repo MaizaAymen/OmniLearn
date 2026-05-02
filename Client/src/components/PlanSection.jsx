@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Card, Col, Row, Tag, Typography, message } from "antd";
+import { Button, Card, Col, Progress, Row, Tag, Typography, message } from "antd";
 import {
   CheckOutlined,
   CloseOutlined,
@@ -25,8 +25,9 @@ const PLANS = [
     bgColor: "#fafafa",
     features: [
       { text: "Access to first 10 problems", ok: true },
+      { text: "Workspace (3 PDFs & 3 code files)", ok: true },
       { text: "AI code correction", ok: false },
-      { text: "PDF analyzer", ok: false },
+      { text: "PDF AI analyzer", ok: false },
       { text: "Classroom access", ok: false },
       { text: "Community support", ok: true },
     ],
@@ -128,6 +129,26 @@ const PlanSection = () => {
           plan. Compare plans below to see what's available.
         </Text>
       </div>
+
+      {currentPlan === "free" && info?.workspace && (
+        <Card style={{ marginBottom: 24, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
+          <Text strong style={{ display: "block", marginBottom: 12 }}>Workspace Usage</Text>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 13 }}>PDFs</Text>
+              <Text type="secondary" style={{ fontSize: 13 }}>{info.workspace.pdfs} / 3</Text>
+            </div>
+            <Progress percent={Math.round((info.workspace.pdfs / 3) * 100)} showInfo={false} strokeColor="#1677ff" size="small" />
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 13 }}>Code files</Text>
+              <Text type="secondary" style={{ fontSize: 13 }}>{info.workspace.code} / 3</Text>
+            </div>
+            <Progress percent={Math.round((info.workspace.code / 3) * 100)} showInfo={false} strokeColor="#52c41a" size="small" />
+          </div>
+        </Card>
+      )}
 
       <Row gutter={[16, 16]}>
         {PLANS.map((plan) => {

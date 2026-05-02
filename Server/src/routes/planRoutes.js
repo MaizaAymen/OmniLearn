@@ -1,8 +1,26 @@
 const express = require("express");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
 const { Op } = require("sequelize");
 const { User, Institution, InviteLink, Problem } = require("../models");
+
+const WORKSPACE_INDEX = path.join(__dirname, "..", "uploads", "workspace.json");
+const FREE_WORKSPACE_LIMIT = 3;
+
+function getWorkspaceUsage(userId) {
+  try {
+    const all = JSON.parse(fs.readFileSync(WORKSPACE_INDEX, "utf8"));
+    const mine = all.filter(function (i) { return i.userId === userId; });
+    return {
+      pdfs: mine.filter(function (i) { return i.type === "pdf"; }).length,
+      code: mine.filter(function (i) { return i.type === "code"; }).length,
+    };
+  } catch {
+    return { pdfs: 0, code: 0 };
+  }
+}
 const {
   authenticate,
   requireSuperAdmin,
@@ -56,18 +74,24 @@ router.use(authenticate);
 // débloqué (sidebar, bannière d'upgrade, etc.).
 router.get("/me/plan", async (req, res) => {
   try {
-    // Combien de problèmes "free-tier" existent en tout (pour afficher "X / 10").
     const freeTierTotal = await Problem.count({ where: { isFreeTier: true } });
+    const isFree = req.user.plan === "free" && req.user.role !== "admin";
+    const usage = getWorkspaceUsage(req.user.id);
     res.json({
       plan: req.user.plan,
       role: req.user.role,
       institutionId: req.user.institutionId,
-      // Limites visibles côté UI.
       limits: {
-        problemsVisible: req.user.plan === "free" ? freeTierTotal : null, // null = illimité
+        problemsVisible: req.user.plan === "free" ? freeTierTotal : null,
         canUseAI: req.user.plan !== "free" || req.user.role === "admin",
         canUsePdf: req.user.plan !== "free" || req.user.role === "admin",
         canJoinClassroom: req.user.plan === "institution" || req.user.role === "admin",
+      },
+      workspace: {
+        pdfs: usage.pdfs,
+        code: usage.code,
+        pdfLimit: isFree ? FREE_WORKSPACE_LIMIT : null,
+        codeLimit: isFree ? FREE_WORKSPACE_LIMIT : null,
       },
     });
   } catch (err) {

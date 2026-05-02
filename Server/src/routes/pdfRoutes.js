@@ -33,7 +33,7 @@ const embeddings = new HuggingFaceInferenceEmbeddings({
 
 // Initialize Groq AI
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY || "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",
+  apiKey: process.env.GROQ_API_KEY || "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",
 });
 
 const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
@@ -347,10 +347,11 @@ router.post("/summarize", async (req, res) => {
       ],
       temperature: 0.5,
       max_tokens: 500,
+
     });
-
+    
     const summary = completion.choices[0].message.content;
-
+    
     res.json({ summary });
   } catch (error) {
     console.error("Summarize error:", error);
@@ -628,5 +629,8 @@ function chunkText(text, maxWords = 800) {
 
 // NOTE: findRelevantChunks has been REMOVED
 // Replaced by vectorStore.similaritySearch() for semantic search
+
+
+
 
 module.exports = router;
