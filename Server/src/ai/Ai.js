@@ -391,7 +391,7 @@ Rules:
 
 router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, scope: scopeFilter } = req.query;
     let where = {};
     if (status === 'all') {
       where = {};
@@ -408,7 +408,7 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
     //   free        → uniquement les problèmes "isFreeTier"
     //   pro         → "isFreeTier" + "isProTier"  (Pro voit Free aussi)
     //   institution → tous les problèmes (pas de filtre)
-    const isStaff = req.user && (req.user.role === "admin" || req.user.role === "teacher");
+    const isStaff = req.user && (req.user.role === "admin" || req.user.role === "teacher" || req.user.role === "institution_admin");
     if (!isStaff) {
       const plan = req.user?.plan || "free";
       if (plan === "free") {
@@ -419,6 +419,28 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
         ];
       }
       // institution → pas de filtre
+    }
+
+    // ─── SCOPE INSTITUTION ────────────────────────────────────────────────
+    // Les problèmes "institution" sont privés. On ne les expose qu'aux
+    // membres de cette institution. Tout le monde voit les "global"/"module".
+    const userInstId = req.user?.institutionId || null;
+    if (scopeFilter === "institution") {
+      // L'admin demande explicitement la banque de son institution.
+      if (!userInstId) return res.json([]);
+      where.scope = "institution";
+      where.institutionId = userInstId;
+    } else {
+      // Vue par défaut : on cache les problèmes d'institution qui ne sont pas la nôtre.
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { scope: { [Op.ne]: "institution" } },
+            ...(userInstId ? [{ institutionId: userInstId }] : []),
+          ],
+        },
+      ];
     }
 
     const problems = await Problem.findAll({ where });
@@ -449,12 +471,17 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
 });
 
 // ─── Manual Problem Create ────────────────────────────────────────────────────
-router.post("/ai/problems", async (req, res) => {
+router.post("/ai/problems", optionalAuth, async (req, res) => {
   try {
-    const { title, difficulty, category, description, examples, constraints, hints, starterCode, expectedOutput, tags, scope, createdBy } = req.body;
+    const { title, difficulty, category, description, examples, constraints, hints, starterCode, expectedOutput, tags, scope, createdBy, institutionId } = req.body;
     if (!title || !difficulty || !category) {
       return res.status(400).json({ error: "title, difficulty, category are required" });
     }
+    // Si scope = institution, on attache l'id de l'institution (du body ou du user connecté).
+    const finalScope = scope || 'global';
+    const finalInstitutionId = finalScope === 'institution'
+      ? (institutionId || req.user?.institutionId || null)
+      : null;
     const id = slugify(title);
     const problem = await Problem.create({
       id, title, difficulty, category,
@@ -466,7 +493,8 @@ router.post("/ai/problems", async (req, res) => {
       expectedOutput: expectedOutput || { javascript: '', python: '', java: '' },
       roadmap: null,
       status: 'published',
-      scope: scope || 'global',
+      scope: finalScope,
+      institutionId: finalInstitutionId,
       tags: Array.isArray(tags) ? tags : [],
       version: 1,
       testCasesValidated: false,
@@ -694,10 +722,15 @@ router.patch("/ai/problems/:id", async (req, res) => {
 });
 
 // ─── Save AI Draft ────────────────────────────────────────────────────────────
-router.post("/ai/problems/save-draft", async (req, res) => {
+router.post("/ai/problems/save-draft", optionalAuth, async (req, res) => {
   try {
-    const { problem, createdBy } = req.body;
+    const { problem, createdBy, scope, institutionId } = req.body;
     if (!problem?.title) return res.status(400).json({ error: "problem with title is required" });
+
+    const finalScope = scope || 'global';
+    const finalInstitutionId = finalScope === 'institution'
+      ? (institutionId || req.user?.institutionId || null)
+      : null;
 
     const id = slugify(problem.title);
     const created = await Problem.create({
@@ -713,7 +746,8 @@ router.post("/ai/problems/save-draft", async (req, res) => {
       expectedOutput: problem.expectedOutput || { javascript: '', python: '', java: '' },
       roadmap: normalizeRoadmap(problem.roadmap),
       status: 'draft',
-      scope: 'global',
+      scope: finalScope,
+      institutionId: finalInstitutionId,
       tags: Array.isArray(problem.tags) ? problem.tags : [],
       version: 1,
       testCasesValidated: false,

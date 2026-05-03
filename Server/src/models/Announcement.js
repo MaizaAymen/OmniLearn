@@ -10,10 +10,26 @@ const Announcement = sequelize.define(
       primaryKey: true,
     },
     classId: {
+      // null = annonce institution-wide (pas liée à une classe précise)
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: { model: "classes", key: "id" },
       onDelete: "CASCADE",
+    },
+    institutionId: {
+      // Présent pour les annonces institution-wide.
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    targetRole: {
+      // "all" | "students" | "teachers" — pour cibler une audience.
+      type: DataTypes.ENUM("all", "students", "teachers"),
+      allowNull: false,
+      defaultValue: "all",
+    },
+    pinned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     authorId: {
       type: DataTypes.UUID,

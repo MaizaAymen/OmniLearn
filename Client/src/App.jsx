@@ -25,6 +25,7 @@ import JoinClassroom from "./Classroom/JoinClassroom";
 import ProblemCreatePage from "./Problems/ProblemCreatePage";
 import Messages from "./Messaging/Messages";
 import JoinInstitution from "./Auth/JoinInstitution";
+import OnboardInstitution from "./Auth/OnboardInstitution";
 import VerifyEmail from "./Auth/VerifyEmail";
 
 const getRole = () => {
@@ -76,6 +77,8 @@ function App() {
       <Route path="/messages" element={<Guard allow={ALL}><Messages /></Guard>} />
       {/* Page publique : page d'acceptation d'un lien d'invitation. */}
       <Route path="/join-institution/:token" element={<JoinInstitution />} />
+      {/* Onboarding après l'upgrade au plan Institution. */}
+      <Route path="/onboarding/institution" element={<Guard allow={ALL}><OnboardInstitution /></Guard>} />
     </Routes>
   );
 

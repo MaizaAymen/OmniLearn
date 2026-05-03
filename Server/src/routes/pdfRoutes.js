@@ -325,13 +325,23 @@ router.post("/summarize", async (req, res) => {
   try {
     const { pdfId } = req.body;
 
-    const pdfData = await loadPdfData(pdfId);
+    if (!pdfId) {
+      return res.status(400).json({ error: "PDF ID required" });
+    }
+
+    // Use text-only loader (no Chroma dependency) — summary doesn't need vector search
+    const pdfData = await loadPdfTextOnly(pdfId);
     if (!pdfData) {
       return res.status(404).json({ error: "PDF not found" });
     }
 
+    const chunks = pdfData.chunks || [];
+    if (!chunks.length) {
+      return res.status(400).json({ error: "PDF has no extractable text to summarize" });
+    }
+
     // Use first few chunks for summary (to avoid token limits)
-    const textToSummarize = pdfData.chunks.slice(0, 5).join("\n\n");
+    const textToSummarize = chunks.slice(0, 5).join("\n\n");
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -347,15 +357,18 @@ router.post("/summarize", async (req, res) => {
       ],
       temperature: 0.5,
       max_tokens: 500,
-
     });
-    
-    const summary = completion.choices[0].message.content;
-    
+
+    const summary = completion?.choices?.[0]?.message?.content;
+    if (!summary) {
+      return res.status(502).json({ error: "AI returned an empty summary" });
+    }
+
     res.json({ summary });
   } catch (error) {
-    console.error("Summarize error:", error);
-    res.status(500).json({ error: "Failed to summarize PDF" });
+    console.error("Summarize error:", error?.response?.data || error?.message || error);
+    const detail = error?.response?.data?.error?.message || error?.message || "Failed to summarize PDF";
+    res.status(500).json({ error: detail });
   }
 });
 

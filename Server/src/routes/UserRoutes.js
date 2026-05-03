@@ -269,6 +269,21 @@ router.get("/users/:id/classrooms", async (req, res) => {
         include: [{ model: Class, as: "class", include }],
       });
       classrooms = enrollments.map((e) => e.class).filter(Boolean);
+    } else if (user.role === "institution_admin") {
+      // Un institution_admin ne voit QUE les classrooms dont le prof
+      // appartient à son institution.
+      const teachers = await User.findAll({
+        where: { institutionId: user.institutionId, role: "teacher" },
+        attributes: ["id"],
+      });
+      const teacherIds = teachers.map((t) => t.id);
+      classrooms = teacherIds.length
+        ? await Class.findAll({
+            where: { teacherId: teacherIds },
+            include,
+            order: [["createdAt", "DESC"]],
+          })
+        : [];
     } else {
       classrooms = await Class.findAll({ include, order: [["createdAt", "DESC"]] });
     }

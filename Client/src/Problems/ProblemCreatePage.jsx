@@ -263,6 +263,7 @@ export default function ProblemCreatePage() {
   const editId   = searchParams.get("edit");
   const sourceId = searchParams.get("source");
   const presetModuleId = searchParams.get("moduleId") || "";
+  const presetScope = searchParams.get("scope") || "";
   const isEditMode = !!editId;
 
   const [tab, setTab] = useState("manual");

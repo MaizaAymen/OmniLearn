@@ -40,12 +40,24 @@ export const fetchUsersByPlan = (plan) =>
 export const createInstitution = (body) =>
   call(`/plan/institutions`, { method: "POST", body: JSON.stringify(body) });
 
+// Onboarding : créer sa propre institution après paiement
+export const selfCreateInstitution = (body) =>
+  call(`/plan/institutions/self-create`, { method: "POST", body: JSON.stringify(body) });
+
+// Institution admin : profil + édition
+export const fetchInstitution = (id) => call(`/plan/institutions/${id}`);
+export const updateInstitution = (id, body) =>
+  call(`/plan/institutions/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
 // Institution admin
 export const fetchInviteLinks = (id) => call(`/plan/institutions/${id}/invite-links`);
 export const createInviteLink = (id, body) =>
   call(`/plan/institutions/${id}/invite-links`, { method: "POST", body: JSON.stringify(body) });
 export const revokeInviteLink = (token) =>
   call(`/plan/invite-links/${token}`, { method: "DELETE" });
+export const inviteUserByEmail = (id, body) =>
+  call(`/plan/institutions/${id}/invite-user`, { method: "POST", body: JSON.stringify(body) });
+export const searchUsers = (q) => call(`/plan/users/search?q=${encodeURIComponent(q)}`);
 export const fetchInstitutionMembers = (id) => call(`/plan/institutions/${id}/members`);
 
 // Invite (public preview / accept)
@@ -59,3 +71,35 @@ export const setProblemFreeTier = (id, isFreeTier) =>
   call(`/ai/ai/problems/${id}`, { method: "PATCH", body: JSON.stringify({ isFreeTier }) });
 export const setProblemProTier = (id, isProTier) =>
   call(`/ai/ai/problems/${id}`, { method: "PATCH", body: JSON.stringify({ isProTier }) });
+
+// Command center / Stats / Classrooms / Members / Announcements / Analytics
+export const fetchInstitutionStats = (id) => call(`/plan/institutions/${id}/stats`);
+export const fetchInstitutionClassrooms = (id, filters = {}) => {
+  const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
+  return call(`/plan/institutions/${id}/classrooms${q ? `?${q}` : ""}`);
+};
+export const fetchClassroomAudit = (id, classId) =>
+  call(`/plan/institutions/${id}/classrooms/${classId}/audit`);
+export const setClassroomActive = (id, classId, isActive) =>
+  call(`/plan/institutions/${id}/classrooms/${classId}`, {
+    method: "PATCH", body: JSON.stringify({ isActive }),
+  });
+export const removeMember = (id, userId) =>
+  call(`/plan/institutions/${id}/members/${userId}`, { method: "DELETE" });
+export const fetchAnnouncements = (id) => call(`/plan/institutions/${id}/announcements`);
+export const createAnnouncement = (id, body) =>
+  call(`/plan/institutions/${id}/announcements`, { method: "POST", body: JSON.stringify(body) });
+export const deleteAnnouncement = (id, annId) =>
+  call(`/plan/institutions/${id}/announcements/${annId}`, { method: "DELETE" });
+export const fetchAnalytics = (id) => call(`/plan/institutions/${id}/analytics`);
+
+// Banque de problèmes propres à l'institution
+export const fetchInstitutionProblems = () =>
+  call(`/ai/ai/getallproblems?status=all&scope=institution`);
+export const createInstitutionProblem = (body) =>
+  call(`/ai/ai/problems`, {
+    method: "POST",
+    body: JSON.stringify({ ...body, scope: "institution" }),
+  });
+export const deleteInstitutionProblem = (id) =>
+  call(`/ai/ai/deletepromblem/${id}`, { method: "DELETE" });

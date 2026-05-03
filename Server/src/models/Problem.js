@@ -61,9 +61,18 @@ const Problem = sequelize.define(
       defaultValue: 'published',
     },
     scope: {
-      type: DataTypes.ENUM('global', 'module'),
+      type: DataTypes.ENUM('global', 'module', 'institution'),
       allowNull: false,
       defaultValue: 'global',
+    },
+    // ── INSTITUTION ────────────────────────────────────────────────────────
+    // Si non null, ce problème est privé à une institution.
+    // Visible uniquement par les membres (étudiants/profs) de cette institution
+    // et par leur institution_admin.
+    institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
     },
     forkedFrom: {
       type: DataTypes.STRING,

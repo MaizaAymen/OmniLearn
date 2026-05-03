@@ -63,6 +63,7 @@ router.get("/list", function (req, res) {
 // 6. Upload a PDF file (multipart form).
 const upload = multer({ storage: multer.memoryStorage() });
 const FREE_LIMIT = 3;
+const PRO_LIMIT = 200; // Arbitrary large number for Pro users
 
 router.post("/pdf", upload.single("pdf"), async function (req, res) {
   if (!req.file) return res.status(400).json({ error: "No file" });
@@ -72,6 +73,13 @@ router.post("/pdf", upload.single("pdf"), async function (req, res) {
     const count = all.filter(function (i) { return i.userId === req.user.id && i.type === "pdf"; }).length;
     if (count >= FREE_LIMIT) {
       return res.status(402).json({ error: "Free plan limit reached (3 PDFs). Upgrade to Pro for unlimited.", limitReached: true });
+    }
+  }
+    if (req.user.plan === "Pro" && req.user.role !== "admin") {
+    const all = readAll();
+    const count = all.filter(function (i) { return i.userId === req.user.id && i.type === "pdf"; }).length;
+    if (count >= PRO_LIMIT) {
+      return res.status(402).json({ error: "Pro plan limit reached (200 PDFs).", limitReached: true });
     }
   }
 

@@ -37,6 +37,25 @@ const Institution = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    // ── PROFIL INSTITUTION ────────────────────────────────────────────────
+    // Métadonnées affichées sur la page profil et utiles pour l'onboarding.
+    type: {
+      type: DataTypes.ENUM("school", "university", "training_center", "company"),
+      allowNull: false,
+      defaultValue: "school",
+    },
+    logo: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    contactEmail: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
   },
   {
     tableName: "institutions",

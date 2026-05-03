@@ -55,6 +55,13 @@ const InviteLink = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // ÉTAPE 9 : si non null → invitation personnelle (un seul utilisateur ciblé).
+    // L'utilisateur reçoit aussi une notification in-app avec ce lien.
+    targetUserId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "invite_links",

@@ -95,6 +95,11 @@ const PlanSection = () => {
           Cookies.set("user", JSON.stringify({ ...user, plan: res.plan }));
           message.success(`Welcome to ${res.plan}!`);
           window.history.replaceState({}, "", window.location.pathname);
+          // Si plan Institution et pas encore d'institution → onboarding.
+          if (res.plan === "institution" && !user.institutionId) {
+            window.location.href = "/onboarding/institution";
+            return;
+          }
           load();
           setTimeout(() => window.location.reload(), 800);
         })
@@ -129,6 +134,8 @@ const PlanSection = () => {
           plan. Compare plans below to see what's available.
         </Text>
       </div>
+      
+
 
       {currentPlan === "free" && info?.workspace && (
         <Card style={{ marginBottom: 24, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
@@ -147,6 +154,26 @@ const PlanSection = () => {
             </div>
             <Progress percent={Math.round((info.workspace.code / 3) * 100)} showInfo={false} strokeColor="#52c41a" size="small" />
           </div>
+        </Card>
+      )}
+           {currentPlan === "pro" && info?.workspace && (
+        <Card style={{ marginBottom: 24, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
+          <Text strong style={{ display: "block", marginBottom: 12 }}>Workspace Usage</Text>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 13 }}>PDFs</Text>
+              <Text type="secondary" style={{ fontSize: 13 }}>{info.workspace.pdfs} / 200</Text>
+            </div>
+            <Progress percent={Math.round((info.workspace.pdfs / 200) * 100)} showInfo={false} strokeColor="#1677ff" size="small" />
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 13 }}>Code files</Text>
+              <Text type="secondary" style={{ fontSize: 13 }}>{info.workspace.code} / 200</Text>
+            </div>
+            <Progress percent={Math.round((info.workspace.code / 200) * 100)} showInfo={false} strokeColor="#52c41a" size="small" />
+          </div>
+          
         </Card>
       )}
 

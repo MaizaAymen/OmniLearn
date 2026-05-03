@@ -5,6 +5,7 @@ import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 import axios from "axios";
+import Cookies from "js-cookie";
 import {
   Layout,
   Upload,
@@ -46,6 +47,22 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 const API_URL = "http://localhost:5000/api/pdf";
+
+// Axios instance that auto-attaches the auth token for every request to /api/pdf.
+// The PDF routes are gated behind authenticate + requirePro on the server.
+const api = axios.create();
+api.interceptors.request.use((config) => {
+  const token =
+    Cookies.get("token") ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token");
+  console.log("[PdfAssistant] interceptor →", config.url, "token?", !!token);
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 export default function PdfAssistant() {
   const location = useLocation();
@@ -103,21 +120,27 @@ export default function PdfAssistant() {
   // Load PDF from navigation state (e.g., Classroom PDFs)
   useEffect(() => {
     const state = location.state;
-    if (state?.pdfId && state?.pdfFile) {
-      setPdfId(state.pdfId);
-      setPdfFile(state.pdfFile);
-      setPageNumber(1);
-      setInitialPage(0);
-      setViewerKey((k) => k + 1);
-      setSelectedText("");
-      setExplanation("");
-      setMessages([
-        {
-          role: "system",
-          content: `PDF loaded: ${state.filename || "Selected PDF"}`,
-        },
-      ]);
-    }
+    if (!state?.pdfFile) return;
+
+    setPdfFile(state.pdfFile);
+    setViewerKey((k) => k + 1);
+    setMessages([{ role: "system", content: `PDF loaded: ${state.filename || "Selected PDF"}` }]);
+
+    // The pdfId from classroom navigation isn't registered with the PDF backend.
+    // Fetch the file (use plain axios — Cloudinary rejects the Authorization header)
+    // and upload it via /upload so summarize/chat/quiz work.
+    setUploading(true);
+    (async () => {
+      const blob = (await axios.get(state.pdfFile, { responseType: "blob" })).data;
+      const file = new File([blob], state.filename || "document.pdf", { type: "application/pdf" });
+      const fd = new FormData();
+      fd.append("pdf", file);
+      const { data } = await api.post(`${API_URL}/upload`, fd);
+      setPdfId(data.pdfId);
+      message.success("Ready for AI features");
+    })()
+      .catch((e) => message.error(`AI prep failed: ${e?.response?.data?.error || e.message}`))
+      .finally(() => setUploading(false));
   }, [location.state]);
 
   // Resize sidebar functionality
@@ -162,7 +185,7 @@ export default function PdfAssistant() {
 
     try {
       setUploading(true);
-      const response = await axios.post(`${API_URL}/upload`, formData);
+      const response = await api.post(`${API_URL}/upload`, formData);
       setPdfId(response.data.pdfId);
       setPdfFile(file);
       setInitialPage(0);
@@ -200,7 +223,7 @@ export default function PdfAssistant() {
 
     try {
       setLoading(true);
-      const response = await axios.post(`${API_URL}/explain`, {
+      const response = await api.post(`${API_URL}/explain`, {
         text: selectedText,
       });
       setExplanation(response.data.explanation);
@@ -222,7 +245,7 @@ export default function PdfAssistant() {
 
     try {
       setLoading(true);
-      const response = await axios.post(`${API_URL}/chat`, {
+      const response = await api.post(`${API_URL}/chat`, {
         pdfId,
         question: userMessage.content,
       });
@@ -246,13 +269,14 @@ export default function PdfAssistant() {
 
     try {
       setLoading(true);
-      const response = await axios.post(`${API_URL}/summarize`, { pdfId });
+      const response = await api.post(`${API_URL}/summarize`, { pdfId });
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: response.data.summary },
       ]);
     } catch (error) {
-      message.error("Failed to summarize");
+      const detail = error?.response?.data?.error || error?.message || "Failed to summarize";
+      message.error(`Failed to summarize: ${detail}`);
     } finally {
       setLoading(false);
     }
@@ -261,13 +285,13 @@ export default function PdfAssistant() {
   // ─── Highlights + Notes ───────────────────────────────────────────
   const fetchHighlights = async () => {
     if (!pdfId) return;
-    const res = await axios.get(`${API_URL}/highlights/${pdfId}`);
+    const res = await api.get(`${API_URL}/highlights/${pdfId}`);
     setHighlights(res.data.highlights);
   };
 
   const saveHighlight = async () => {
     if (!selectedText || !pdfId) return;
-    await axios.post(`${API_URL}/highlights`, {
+    await api.post(`${API_URL}/highlights`, {
       pdfId,
       text: selectedText,
       note: currentNote,
@@ -281,20 +305,20 @@ export default function PdfAssistant() {
   };
 
   const deleteHighlight = async (id) => {
-    await axios.delete(`${API_URL}/highlights/${pdfId}/${id}`);
+    await api.delete(`${API_URL}/highlights/${pdfId}/${id}`);
     fetchHighlights();
   };
 
   // ─── Bookmarks ────────────────────────────────────────────────────
   const fetchBookmarks = async () => {
     if (!pdfId) return;
-    const res = await axios.get(`${API_URL}/bookmarks/${pdfId}`);
+    const res = await api.get(`${API_URL}/bookmarks/${pdfId}`);
     setBookmarks(res.data.bookmarks);
   };
 
   const addBookmark = async () => {
     if (!pdfId) return;
-    await axios.post(`${API_URL}/bookmarks`, {
+    await api.post(`${API_URL}/bookmarks`, {
       pdfId,
       page: pageNumber,
       title: `Page ${pageNumber}`,
@@ -304,7 +328,7 @@ export default function PdfAssistant() {
   };
 
   const deleteBookmark = async (id) => {
-    await axios.delete(`${API_URL}/bookmarks/${pdfId}/${id}`);
+    await api.delete(`${API_URL}/bookmarks/${pdfId}/${id}`);
     fetchBookmarks();
   };
 
@@ -319,7 +343,7 @@ export default function PdfAssistant() {
     if (!searchQuery.trim() || !pdfId) return;
     setSearching(true);
     try {
-      const res = await axios.post(`${API_URL}/smart-search`, {
+      const res = await api.post(`${API_URL}/smart-search`, {
         pdfId,
         query: searchQuery,
       });
@@ -346,7 +370,7 @@ export default function PdfAssistant() {
     setQuizCount(count);
     setQuizLoading(true);
     try {
-      const res = await axios.post(`${API_URL}/quiz`, {
+      const res = await api.post(`${API_URL}/quiz`, {
         pdfId,
         count,
         pageFrom: Number(quizPageFrom) || 1,
@@ -551,8 +575,8 @@ export default function PdfAssistant() {
                 children: (
                   <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)" }}>
                     <div style={{ padding: 12 }}>
-                      <Button block icon={<ReadOutlined />} onClick={summarizePdf} disabled={!pdfId || loading}>
-                        Summarize PDF
+                      <Button block icon={<ReadOutlined />} onClick={summarizePdf} loading={uploading} disabled={!pdfId || loading || uploading}>
+                        {uploading ? "Preparing PDF for AI…" : "Summarize PDF"}
                       </Button>
                     </div>
                     <Divider style={{ margin: 0 }} />
