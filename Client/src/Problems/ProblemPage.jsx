@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { io } from "socket.io-client";
+import { createLiveSocket, fetchSessionList } from "../lib/liveblocks";
 import { Tldraw, createTLStore } from "tldraw";
 import "tldraw/tldraw.css";
 
@@ -334,10 +334,7 @@ function ProblemPage() {
   }, []);
 
   useEffect(() => {
-    const socket = io("http://localhost:5000", {
-      transports: ["websocket", "polling"],
-    });
-
+    const socket = createLiveSocket();
     socketRef.current = socket;
 
     socket.on("session:list", ({ sessions }) => {
@@ -455,12 +452,10 @@ function ProblemPage() {
       setSessionLanguageLock(null);
     });
 
-    // Host receives hand raise / lower notifications
-    socket.on("session:hand:raised", ({ socketId: sid, name }) => {
-      setRaisedHands((prev) => prev.some((h) => h.socketId === sid) ? prev : [...prev, { socketId: sid, name }]);
-    });
-    socket.on("session:hand:lowered", ({ socketId: sid }) => {
-      setRaisedHands((prev) => prev.filter((h) => h.socketId !== sid));
+    // Liveblocks shim resyncs the full hand-raise list on every change (CRDT-driven).
+    socket.on("session:hands:resync", (hands) => {
+      setRaisedHands(hands || []);
+      setHandRaised((hands || []).some((h) => h.socketId === socketRef.current?.id));
     });
 
     // #2 Playlist: host advanced to the next problem.
@@ -637,10 +632,15 @@ function ProblemPage() {
 
     socketRef.current.emit("session:leave");
 
-    // Keep lobby list synced to current problem only.
-    socketRef.current.emit("session:list:subscribe", {
-      problemId: currentProblemId,
-    });
+    // Liveblocks has no per-problem socket-pushed list; poll REST instead.
+    let cancelled = false;
+    const refreshList = async () => {
+      const list = await fetchSessionList();
+      if (cancelled) return;
+      setAvailableSessions(list.filter((s) => s.problemId === currentProblemId));
+    };
+    refreshList();
+    const listInterval = setInterval(refreshList, 5000);
 
     setActiveSession(null);
     setExam(null);
@@ -651,6 +651,8 @@ function ProblemPage() {
     setTldrawInitialStore({});
     setParticipantHistory([]);
     prevParticipantsRef.current = [];
+
+    return () => { cancelled = true; clearInterval(listInterval); };
   }, [currentProblemId]);
 
   // Countdown ticker — derives remaining ms from server-provided endsAt.

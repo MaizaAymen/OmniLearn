@@ -15,6 +15,7 @@
     "@langchain/community": "^1.1.25",
     "@langchain/core": "^1.1.36",
     "@langchain/openai": "^1.2.12",
+    "@liveblocks/node": "^3.18.5",
     "@stream-io/node-sdk": "^0.7.44",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",

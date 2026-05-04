@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";
 import toast from "react-hot-toast";
+import { fetchSessionList } from "../lib/liveblocks";
 import {
   Button,
   Card,
@@ -52,14 +52,14 @@ function LiveSessionsPage() {
 
 
   useEffect(() => {
-    const socket = io("http://localhost:5000", {
-      transports: ["websocket", "polling"],
-    });
-    socket.emit("session:global:list:subscribe");
-    socket.on("session:global:list", ({ sessions: nextSessions }) => {
-      setSessions(nextSessions || []);
-    });
-    return () => socket.disconnect();
+    let cancelled = false;
+    const refresh = async () => {
+      const list = await fetchSessionList();
+      if (!cancelled) setSessions(list);
+    };
+    refresh();
+    const interval = setInterval(refresh, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const sessionById = useMemo(() => {

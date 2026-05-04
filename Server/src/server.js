@@ -22,8 +22,10 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const planRoutes = require("./routes/planRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
-const { setupSessionHub } = require("./realtime/sessionHub");
+const { Server } = require("socket.io");
 const { setupMessageHub } = require("./realtime/messageHub");
+const liveblocksApp = require('./realtime/sessionHub'); // your new Liveblocks file
+
 // Import models/index.js to register all models and associations
 const models = require("./models");
 
@@ -32,10 +34,15 @@ const app = express();
 const server = http.createServer(app);
 
 // Middleware
-app.use(cors({ origin: "*" }));
+app.use(cors({
+  origin: "*", // Or be more specific: "http://localhost:5173"
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  allowedHeaders: "Content-Type,Authorization",
+}));
 app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use('/liveblocks', liveblocksApp);  // prefix all routes under /liveblocks
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -132,7 +139,11 @@ app.get("/", (req, res) => {
       console.warn("[pro-tier seed] skipped:", e.message);
     }
 
-    const io = setupSessionHub(server);
+    const io = new Server(server, {
+      cors: {
+        origin: "*",
+      },
+    });
     setupMessageHub(io);
     app.set("io", io);
     server.listen(PORT, () => {
