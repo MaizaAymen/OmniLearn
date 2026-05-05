@@ -26,6 +26,7 @@ const PLANS = [
     features: [
       { text: "Access to first 10 problems", ok: true },
       { text: "Workspace (3 PDFs & 3 code files)", ok: true },
+      { text: "3 private messages", ok: true },
       { text: "AI code correction", ok: false },
       { text: "PDF AI analyzer", ok: false },
       { text: "Classroom access", ok: false },
@@ -147,13 +148,45 @@ const PlanSection = () => {
             </div>
             <Progress percent={Math.round((info.workspace.pdfs / 3) * 100)} showInfo={false} strokeColor="#1677ff" size="small" />
           </div>
-          <div>
+          <div style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <Text style={{ fontSize: 13 }}>Code files</Text>
               <Text type="secondary" style={{ fontSize: 13 }}>{info.workspace.code} / 3</Text>
             </div>
             <Progress percent={Math.round((info.workspace.code / 3) * 100)} showInfo={false} strokeColor="#52c41a" size="small" />
           </div>
+          {info?.messaging && (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 13 }}>Direct message contacts</Text>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {info.messaging.privateContacts ?? 0} / {info.messaging.privateContactLimit ?? 3}
+                  </Text>
+                </div>
+                <Progress
+                  percent={Math.min(100, Math.round(((info.messaging.privateContacts ?? 0) / (info.messaging.privateContactLimit ?? 3)) * 100))}
+                  showInfo={false}
+                  strokeColor="#fa8c16"
+                  size="small"
+                />
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 13 }}>Groups created</Text>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {info.messaging.groupsOwned ?? 0} / {info.messaging.groupLimit ?? 3}
+                  </Text>
+                </div>
+                <Progress
+                  percent={Math.min(100, Math.round(((info.messaging.groupsOwned ?? 0) / (info.messaging.groupLimit ?? 3)) * 100))}
+                  showInfo={false}
+                  strokeColor="#722ed1"
+                  size="small"
+                />
+              </div>
+            </>
+          )}
         </Card>
       )}
            {currentPlan === "pro" && info?.workspace && (

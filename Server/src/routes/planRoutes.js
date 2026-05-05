@@ -4,11 +4,46 @@ const fs = require("fs");
 const path = require("path");
 const router = express.Router();
 const { Op } = require("sequelize");
-const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification } = require("../models");
+const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification, Message, Conversation } = require("../models");
 const { emitNotification } = require("../realtime/messageHub");
 
 const WORKSPACE_INDEX = path.join(__dirname, "..", "uploads", "workspace.json");
 const FREE_WORKSPACE_LIMIT = 3;
+const FREE_PRIVATE_CONTACT_LIMIT = 3;
+const FREE_GROUP_LIMIT = 3;
+
+// Count distinct other-users this user has private conversations with.
+async function getPrivateContactCount(userId) {
+  try {
+    const convs = await Conversation.findAll({
+      where: {
+        type: "private",
+        members: { [Op.contains]: [userId] },
+      },
+      attributes: ["members"],
+    });
+    const others = new Set();
+    for (const c of convs) {
+      for (const m of c.members) if (m !== userId) others.add(m);
+    }
+    return others.size;
+  } catch (err) {
+    console.error("getPrivateContactCount:", err);
+    return 0;
+  }
+}
+
+// Count groups owned by this user.
+async function getOwnedGroupCount(userId) {
+  try {
+    return await Conversation.count({
+      where: { type: "group", ownerId: userId },
+    });
+  } catch (err) {
+    console.error("getOwnedGroupCount:", err);
+    return 0;
+  }
+}
 
 function getWorkspaceUsage(userId) {
   try {
@@ -78,6 +113,8 @@ router.get("/me/plan", async (req, res) => {
     const freeTierTotal = await Problem.count({ where: { isFreeTier: true } });
     const isFree = req.user.plan === "free" && req.user.role !== "admin";
     const usage = getWorkspaceUsage(req.user.id);
+    const privateContacts = await getPrivateContactCount(req.user.id);
+    const groupsOwned = await getOwnedGroupCount(req.user.id);
     res.json({
       plan: req.user.plan,
       role: req.user.role,
@@ -93,6 +130,12 @@ router.get("/me/plan", async (req, res) => {
         code: usage.code,
         pdfLimit: isFree ? FREE_WORKSPACE_LIMIT : null,
         codeLimit: isFree ? FREE_WORKSPACE_LIMIT : null,
+      },
+      messaging: {
+        privateContacts,
+        privateContactLimit: isFree ? FREE_PRIVATE_CONTACT_LIMIT : null,
+        groupsOwned,
+        groupLimit: isFree ? FREE_GROUP_LIMIT : null,
       },
     });
   } catch (err) {

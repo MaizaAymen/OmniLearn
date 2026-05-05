@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 
 const API_BASE = "http://localhost:5000/api";
 const SOCKET_URL = "http://localhost:5000";
+const FILE_BASE = "http://localhost:5000";
 
 const authHeaders = () => ({
   Authorization: `Bearer ${Cookies.get("token")}`,
@@ -44,11 +45,22 @@ export const api = {
   banUser: (conversationId, userId) =>
     axios.post(`${API_BASE}/conversations/${conversationId}/ban`, { userId }, { headers: authHeaders() }).then((r) => r.data),
 
-  sendMessage: (conversationId, content) =>
-    axios.post(`${API_BASE}/messages/send`, { conversationId, content }, { headers: authHeaders() }).then((r) => r.data),
+  sendMessage: (conversationId, content, attachment = null) =>
+    axios.post(`${API_BASE}/messages/send`, { conversationId, content, attachment }, { headers: authHeaders() }).then((r) => r.data),
 
-  sendPrivate: (recipientId, content) =>
-    axios.post(`${API_BASE}/messages/private`, { recipientId, content }, { headers: authHeaders() }).then((r) => r.data),
+  sendPrivate: (recipientId, content, attachment = null) =>
+    axios.post(`${API_BASE}/messages/private`, { recipientId, content, attachment }, { headers: authHeaders() }).then((r) => r.data),
+
+  uploadAttachment: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return axios
+      .post(`${API_BASE}/messages/upload`, fd, { headers: authHeaders() })
+      .then((r) => r.data);
+  },
+
+  fileUrl: (urlOrPath) =>
+    !urlOrPath ? "" : urlOrPath.startsWith("http") ? urlOrPath : `${FILE_BASE}${urlOrPath}`,
 
   searchUsers: (q = "") =>
     axios.get(`${API_BASE}/users-search`, { params: { q }, headers: authHeaders() }).then((r) => r.data),

@@ -71,16 +71,34 @@ const loadPdfData = async (pdfId) => {
   if (!fs.existsSync(filePath)) return null;
 
   const pdfBuffer = fs.readFileSync(filePath);
-  const pdfData = await pdfParse(pdfBuffer);
-  const fullText = pdfData.text;
+  let pdfData = { text: "", numpages: 0 };
+  try {
+    pdfData = await pdfParse(pdfBuffer);
+  } catch (e) {
+    console.warn(`pdf-parse failed for cached PDF ${pdfId}: ${e.message}`);
+  }
+  const fullText = pdfData.text || "";
   const chunks = chunkText(fullText, 800);
 
   const collectionName = item.collectionName || `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-  const vectorStore = await Chroma.fromExistingCollection(embeddings, {
-    collectionName: collectionName,
-    persistDirectory: CHROMA_PERSIST_DIR,
-    url: CHROMA_URL,
-  });
+
+  let vectorStore = null;
+  if (chunks.length > 0) {
+    try {
+      vectorStore = await Promise.race([
+        Chroma.fromExistingCollection(embeddings, {
+          collectionName: collectionName,
+          persistDirectory: CHROMA_PERSIST_DIR,
+          url: CHROMA_URL,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Chroma timed out after 5s")), 5000)
+        ),
+      ]);
+    } catch (e) {
+      console.warn("Chroma unavailable, falling back to keyword search:", e.message);
+    }
+  }
 
   const loaded = {
     filename: item.filename || storedName,
@@ -111,7 +129,12 @@ const loadPdfTextOnly = async (pdfId) => {
   if (!fs.existsSync(filePath)) return null;
 
   const pdfBuffer = fs.readFileSync(filePath);
-  const parsed = await pdfParse(pdfBuffer);
+  let parsed = { text: "", numpages: 0 };
+  try {
+    parsed = await pdfParse(pdfBuffer);
+  } catch (e) {
+    console.warn(`pdf-parse failed for cached PDF ${pdfId}: ${e.message}`);
+  }
   const fullText = parsed.text || "";
   const chunks = chunkText(fullText, 800);
 
@@ -141,7 +164,15 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ok = file.mimetype === "application/pdf" ||
+      (file.originalname || "").toLowerCase().endsWith(".pdf");
+    cb(null, ok);
+  },
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
 
 // Store PDF data in memory (simple cache)
 const pdfCache = new Map();
@@ -152,19 +183,38 @@ const bookmarksStore = new Map();  // pdfId -> [{ id, page, title, createdAt }]
 
 // ─── 1. Upload PDF & Extract Text ────────────────────────────────────
 router.post("/upload", upload.single("pdf"), async (req, res) => {
+  let savedPath = null;
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "No PDF file uploaded" });
+      return res.status(400).json({ error: "No PDF file uploaded (must be a .pdf file under 50MB)" });
     }
 
     const pdfId = req.pdfId || req.file.filename;
     const filePath = req.file.path;
+    savedPath = filePath;
     const fileUrl = `/uploads/${req.file.filename}`;
 
-    // Extract text from PDF
+    // Verify the file is actually a PDF (must start with %PDF header)
     const pdfBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdfParse(pdfBuffer);
-    const fullText = pdfData.text;
+    if (pdfBuffer.length < 5 || pdfBuffer.slice(0, 4).toString() !== "%PDF") {
+      fs.unlinkSync(filePath);
+      savedPath = null;
+      return res.status(400).json({ error: "Uploaded file is not a valid PDF (missing %PDF header)" });
+    }
+
+    // pdf-parse is strict — many real-world PDFs (modern versions, unusual
+    // xref tables, etc.) trip it with "Invalid PDF structure". Don't block
+    // the upload on that: keep the file so the user can still view it, and
+    // surface a clear flag so AI text features can degrade gracefully.
+    let pdfData = { text: "", numpages: 0 };
+    let parseWarning = null;
+    try {
+      pdfData = await pdfParse(pdfBuffer);
+    } catch (parseError) {
+      parseWarning = parseError.message || "Invalid PDF structure";
+      console.warn(`pdf-parse failed for ${req.file.originalname}: ${parseWarning}`);
+    }
+    const fullText = pdfData.text || "";
 
     // Split text into chunks (500-1000 words each)
     const chunks = chunkText(fullText, 800);
@@ -181,22 +231,35 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       }
     }));
 
-    // Create Chroma vector store from documents
-    // This embeds each chunk using OllamaEmbeddings and stores vectors in Chroma
+    // Try to create Chroma vector store. The HuggingFace embeddings call and
+    // Chroma server can both hang indefinitely (bad API key, server down, etc.)
+    // — race against a hard timeout so the upload always responds quickly.
     const collectionName = `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-    const vectorStore = await Chroma.fromDocuments(documents, embeddings, {
-      collectionName: collectionName,
-      persistDirectory: CHROMA_PERSIST_DIR,
-      url: CHROMA_URL,
-    });
+    let vectorStore = null;
+    if (chunks.length > 0) {
+      try {
+        vectorStore = await Promise.race([
+          Chroma.fromDocuments(documents, embeddings, {
+            collectionName: collectionName,
+            persistDirectory: CHROMA_PERSIST_DIR,
+            url: CHROMA_URL,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Chroma/embeddings timed out after 8s")), 8000)
+          ),
+        ]);
+      } catch (chromaErr) {
+        console.warn("Chroma/embeddings unavailable, vector search disabled for this PDF:", chromaErr.message);
+      }
+    }
 
-    // Store in cache (now includes vectorStore for semantic search)
+    // Store in cache
     pdfCache.set(pdfId, {
       filename: req.file.originalname,
       fullText: fullText,
       chunks: chunks,
       totalPages: pdfData.numpages || 0,
-      vectorStore: vectorStore, // NEW: Store vector store for similarity search
+      vectorStore: vectorStore,
       collectionName: collectionName,
       filePath: filePath,
       fileUrl: fileUrl,
@@ -218,13 +281,18 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       success: true,
       pdfId: pdfId,
       filename: req.file.originalname,
-      totalPages: pdfData.numpages,
+      totalPages: pdfData.numpages || 0,
       chunksCount: chunks.length,
       fileUrl: fileUrl,
+      textExtracted: chunks.length > 0,
+      warning: parseWarning,
     });
   } catch (error) {
     console.error("PDF upload error:", error);
-    res.status(500).json({ error: "Failed to process PDF" });
+    if (savedPath && fs.existsSync(savedPath)) {
+      try { fs.unlinkSync(savedPath); } catch (_) {}
+    }
+    res.status(500).json({ error: error?.message || "Failed to process PDF" });
   }
 });
 
@@ -284,15 +352,20 @@ router.post("/chat", async (req, res) => {
       return res.status(404).json({ error: "PDF not found. Please upload again." });
     }
 
-    // ─── Semantic Similarity Search ────────────────────────────────
-    // Use vector store to find semantically relevant chunks
-    // This compares the question's embedding with stored chunk embeddings
-    // Returns top 3 most similar chunks based on cosine similarity
-    const results = await pdfData.vectorStore.similaritySearch(question, 3);
-
-    // Build context from search results
-    // Each result has pageContent (the chunk text) and metadata
-    const context = results.map(r => r.pageContent).join("\n\n");
+    // Use vector store when available, otherwise fall back to keyword matching
+    let context;
+    if (pdfData.vectorStore) {
+      const results = await pdfData.vectorStore.similaritySearch(question, 3);
+      context = results.map(r => r.pageContent).join("\n\n");
+    } else {
+      const words = question.toLowerCase().split(/\s+/);
+      const scored = (pdfData.chunks || []).map(chunk => ({
+        chunk,
+        score: words.filter(w => chunk.toLowerCase().includes(w)).length,
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      context = scored.slice(0, 3).map(s => s.chunk).join("\n\n");
+    }
 
     // Ask AI with context (Groq completion unchanged)
     const completion = await groq.chat.completions.create({
@@ -581,10 +654,20 @@ router.post("/smart-search", async (req, res) => {
       return res.status(404).json({ error: "PDF not found" });
     }
 
-    // ─── Use Vector Store for Semantic Search ─────────────────────
-    // First, find semantically relevant sections using embeddings
-    const semanticResults = await pdfData.vectorStore.similaritySearch(query, 5);
-    const relevantText = semanticResults.map(r => r.pageContent).join("\n\n");
+    // Use vector store when available, otherwise fall back to keyword matching
+    let relevantText;
+    if (pdfData.vectorStore) {
+      const semanticResults = await pdfData.vectorStore.similaritySearch(query, 5);
+      relevantText = semanticResults.map(r => r.pageContent).join("\n\n");
+    } else {
+      const words = query.toLowerCase().split(/\s+/);
+      const scored = (pdfData.chunks || []).map(chunk => ({
+        chunk,
+        score: words.filter(w => chunk.toLowerCase().includes(w)).length,
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      relevantText = scored.slice(0, 5).map(s => s.chunk).join("\n\n");
+    }
 
     // Use AI to analyze and format the semantically relevant sections
     const completion = await groq.chat.completions.create({

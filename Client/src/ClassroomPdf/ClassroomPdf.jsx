@@ -23,6 +23,15 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 const API = "http://localhost:5000/api/workspace";
+const SERVER_URL = "http://localhost:5000";
+
+// Prefix relative /uploads paths with the backend origin so the PDF viewer
+// (and any plain fetch) hits Express instead of Vite's dev server.
+const resolvePdfUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${SERVER_URL}${url}`;
+};
 
 // Pick the current user id from the cookie so notes are per-user.
 function getUserId() {
@@ -75,7 +84,10 @@ export default function ClassroomPdf() {
   }
 
   async function handlePdfUpload({ file }) {
-    if (file.type !== "application/pdf") {
+    const isPdf =
+      file.type === "application/pdf" ||
+      (file.name || "").toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
       message.error("PDF files only");
       return;
     }
@@ -87,8 +99,9 @@ export default function ClassroomPdf() {
       setItems((prev) => [res.data, ...prev]);
       setSelected(res.data);
       message.success("PDF uploaded to your workspace");
-    } catch {
-      message.error("Upload failed");
+    } catch (err) {
+      const detail = err?.response?.data?.error || err?.message || "Upload failed";
+      message.error(`Upload failed: ${detail}`);
     } finally {
       setUploading(false);
     }
@@ -201,7 +214,7 @@ export default function ClassroomPdf() {
                 onClick={() => navigate("/pdf-assistant", {
                   state: {
                     pdfId: selected.id,
-                    pdfFile: selected.fileUrl,
+                    pdfFile: resolvePdfUrl(selected.fileUrl),
                     filename: selected.name,
                   },
                 })}
@@ -212,7 +225,7 @@ export default function ClassroomPdf() {
             </div>
             <div className="pdf-viewer-container">
               <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
-                <Viewer fileUrl={selected.fileUrl} plugins={[layoutPlugin]} />
+                <Viewer fileUrl={resolvePdfUrl(selected.fileUrl)} plugins={[layoutPlugin]} />
               </Worker>
             </div>
           </div>

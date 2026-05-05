@@ -86,7 +86,19 @@ const PLAN_RANK = { free: 0, pro: 1, institution: 2 };
 const hasPlan = (userPlan, requiredPlan) =>
   PLAN_RANK[userPlan ?? 'free'] >= PLAN_RANK[requiredPlan];
 
-const Sidebar = ({ children }) => {
+const isProfileComplete = (user) => {
+  if (!user) return false;
+  const checks = [
+    !!user.avatar,
+    !!user.bio?.trim(),
+    !!user.githubUrl?.trim(),
+    !!user.linkedinUrl?.trim(),
+    !!user.isEmailVerified,
+  ];
+  return checks.every(Boolean);
+};
+
+const Sidebar = ({ children, profileStatus }) => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -361,6 +373,9 @@ const Sidebar = ({ children }) => {
       if (!role) return allowed.includes('anon');
       if (!allowed.includes(role)) return false;
 
+      // ÉTAPE 1.5 : forcer le passage par le profil si incomplet.
+      if (it.key !== '/profile' && profileStatus && !profileStatus.complete) return false;
+
       // ÉTAPE 2 : l'admin de plateforme passe toujours les filtres de plan.
       if (role === 'admin') return true;
 
@@ -370,7 +385,7 @@ const Sidebar = ({ children }) => {
       if (!required) return true;
       return hasPlan(plan, required);
     }),
-    [role, plan]
+    [role, plan, profileStatus]
   );
 
   const selectedKey = useMemo(() => {
@@ -399,7 +414,14 @@ const Sidebar = ({ children }) => {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={items}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (key !== '/profile' && profileStatus && !profileStatus.complete) {
+              message.info('Please complete your profile first.');
+              navigate('/profile');
+              return;
+            }
+            navigate(key);
+          }}
         />
       </Sider>
       <Layout>

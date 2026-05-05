@@ -47,6 +47,7 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 const API_URL = "http://localhost:5000/api/pdf";
+const SERVER_URL = "http://localhost:5000";
 
 // Axios instance that auto-attaches the auth token for every request to /api/pdf.
 // The PDF routes are gated behind authenticate + requirePro on the server.
@@ -56,13 +57,17 @@ api.interceptors.request.use((config) => {
     Cookies.get("token") ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("token");
-  console.log("[PdfAssistant] interceptor →", config.url, "token?", !!token);
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
+
+// Plain axios instance with NO interceptors — used for downloading PDF blobs
+// from external URLs (Cloudinary) or static /uploads where adding the global
+// Authorization header can interfere or cause stale-token redirects.
+const plainAxios = axios.create();
 
 export default function PdfAssistant() {
   const location = useLocation();
@@ -122,22 +127,50 @@ export default function PdfAssistant() {
     const state = location.state;
     if (!state?.pdfFile) return;
 
-    setPdfFile(state.pdfFile);
+    // Local paths (/uploads/...) must be prefixed with the backend origin —
+    // both for the viewer below and for the AI prep fetch.
+    const resolvedUrl = state.pdfFile.startsWith("/")
+      ? `${SERVER_URL}${state.pdfFile}`
+      : state.pdfFile;
+
+    setPdfFile(resolvedUrl);
     setViewerKey((k) => k + 1);
     setMessages([{ role: "system", content: `PDF loaded: ${state.filename || "Selected PDF"}` }]);
 
     // The pdfId from classroom navigation isn't registered with the PDF backend.
-    // Fetch the file (use plain axios — Cloudinary rejects the Authorization header)
-    // and upload it via /upload so summarize/chat/quiz work.
+    // Upload it via /upload so summarize/chat/quiz work.
     setUploading(true);
     (async () => {
-      const blob = (await axios.get(state.pdfFile, { responseType: "blob" })).data;
+      const fetchUrl = resolvedUrl;
+
+      // Use plainAxios (no auth interceptor) — sending Bearer to Cloudinary or
+      // letting the global 401 interceptor fire on a stale token would break this.
+      const resp = await plainAxios.get(fetchUrl, { responseType: "blob" });
+      const blob = resp.data;
+
+      if (!blob || blob.size === 0) {
+        throw new Error("Downloaded file is empty");
+      }
+      // The blob's mime can be wrong if the URL returned an HTML error page;
+      // guard against it by checking the magic bytes before sending upstream.
+      const head = await blob.slice(0, 4).text();
+      if (head !== "%PDF") {
+        throw new Error("Source URL did not return a PDF (got " + (blob.type || "unknown") + ")");
+      }
+
       const file = new File([blob], state.filename || "document.pdf", { type: "application/pdf" });
       const fd = new FormData();
       fd.append("pdf", file);
-      const { data } = await api.post(`${API_URL}/upload`, fd);
+      const { data } = await api.post(`${API_URL}/upload`, fd, { timeout: 90000 });
       setPdfId(data.pdfId);
-      message.success("Ready for AI features");
+      if (data.warning) {
+        message.warning(
+          `PDF loaded, but text extraction failed (${data.warning}). You can view it, but Chat / Summarize / Quiz won't work.`,
+          8
+        );
+      } else {
+        message.success("Ready for AI features");
+      }
     })()
       .catch((e) => message.error(`AI prep failed: ${e?.response?.data?.error || e.message}`))
       .finally(() => setUploading(false));
@@ -185,20 +218,30 @@ export default function PdfAssistant() {
 
     try {
       setUploading(true);
-      const response = await api.post(`${API_URL}/upload`, formData);
+      const response = await api.post(`${API_URL}/upload`, formData, { timeout: 90000 });
       setPdfId(response.data.pdfId);
       setPdfFile(file);
       setInitialPage(0);
       setViewerKey((k) => k + 1);
-      message.success(`${response.data.filename} uploaded successfully!`);
+      if (response.data.warning) {
+        message.warning(
+          `PDF uploaded, but text extraction failed (${response.data.warning}). You can view it, but Chat / Summarize / Quiz won't work for this file.`,
+          8
+        );
+      } else {
+        message.success(`${response.data.filename} uploaded successfully!`);
+      }
       setMessages([
         {
           role: "system",
-          content: `PDF loaded: ${response.data.filename} (${response.data.totalPages} pages)`,
+          content: response.data.warning
+            ? `PDF loaded: ${response.data.filename} — text extraction unavailable for this file.`
+            : `PDF loaded: ${response.data.filename} (${response.data.totalPages} pages)`,
         },
       ]);
     } catch (error) {
-      message.error("Failed to upload PDF");
+      const detail = error?.response?.data?.error || error?.message || "Failed to upload PDF";
+      message.error(`Upload failed: ${detail}`);
     } finally {
       setUploading(false);
     }

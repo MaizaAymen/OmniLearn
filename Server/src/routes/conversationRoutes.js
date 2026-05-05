@@ -9,6 +9,8 @@ router.use(authenticate);
 
 const io = (req) => req.app.get("io");
 
+const FREE_GROUP_LIMIT = 3;
+
 // Case-insensitive uniqueness check for group names.
 async function isGroupNameTaken(name, excludeId = null) {
   const where = {
@@ -31,6 +33,23 @@ router.post("/create-group", async (req, res) => {
     if (!trimmedName) {
       return res.status(400).json({ error: "Group name is required" });
     }
+
+    // Free tier: cap groups owned by this user at FREE_GROUP_LIMIT.
+    if (req.user.plan === "free" && req.user.role !== "admin") {
+      const owned = await Conversation.count({
+        where: { type: "group", ownerId: creatorId },
+      });
+      if (owned >= FREE_GROUP_LIMIT) {
+        return res.status(402).json({
+          error: `Free tier limit reached: you can only create ${FREE_GROUP_LIMIT} groups. Upgrade to Pro to create more.`,
+          limitReached: true,
+          scope: "groups",
+          owned,
+          limit: FREE_GROUP_LIMIT,
+        });
+      }
+    }
+
     if (await isGroupNameTaken(trimmedName)) {
       return res.status(409).json({ error: "A group with this name already exists" });
     }

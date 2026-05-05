@@ -24,6 +24,13 @@ const Message = sequelize.define(
     content: {
       type: DataTypes.TEXT,
       allowNull: false,
+      defaultValue: "",
+    },
+    // Optional file/gif/code attachment.
+    // Shape: { url, name, mime, size, kind } where kind is "image" | "file".
+    attachment: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
   },
   {

@@ -380,6 +380,7 @@ export default function Profile() {
       setUser(updated);
       const roleChanged = updated.role !== storedUser.role;
       Cookies.set("user", JSON.stringify({ ...storedUser, ...updated }), { expires: 7 });
+      window.dispatchEvent(new CustomEvent("profile-updated", { detail: updated }));
       message.success("Profile updated successfully");
       setEditing(false);
       setIsDirty(false);

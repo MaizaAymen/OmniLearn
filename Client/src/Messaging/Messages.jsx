@@ -15,11 +15,15 @@ import {
   message as antdMessage,
 } from "antd";
 import {
+  CloseOutlined,
   CrownOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
+  FileOutlined,
   FormOutlined,
   LogoutOutlined,
+  PaperClipOutlined,
   PlusOutlined,
   SearchOutlined,
   SendOutlined,
@@ -60,6 +64,71 @@ const formatTime = (d) => {
   return day.format("MMM D");
 };
 
+const formatBytes = (n = 0) => {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const AttachmentPreview = ({ attachment, mine }) => {
+  if (!attachment) return null;
+  const url = api.fileUrl(attachment.url);
+  if (attachment.kind === "image") {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer">
+        <img
+          src={url}
+          alt={attachment.name}
+          style={{
+            display: "block",
+            maxWidth: 280,
+            maxHeight: 280,
+            borderRadius: 12,
+            marginBottom: 4,
+          }}
+        />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={attachment.name}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 12px",
+        borderRadius: 12,
+        background: mine ? "rgba(255,255,255,0.18)" : "#F3F4F6",
+        color: mine ? "#fff" : "#1F2937",
+        textDecoration: "none",
+        marginBottom: 4,
+        maxWidth: 280,
+      }}
+    >
+      <FileOutlined style={{ fontSize: 22 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          {attachment.name}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.8 }}>{formatBytes(attachment.size)}</div>
+      </div>
+      <DownloadOutlined />
+    </a>
+  );
+};
+
 const Messages = () => {
   const me = getCurrentUser();
   const [conversations, setConversations] = useState([]);
@@ -68,6 +137,9 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [draft, setDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState("");
   const [usersById, setUsersById] = useState({});
@@ -185,16 +257,42 @@ const Messages = () => {
 
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || !activeId || sending) return;
+    if ((!text && !pendingAttachment) || !activeId || sending) return;
     setSending(true);
     try {
-      const msg = await api.sendMessage(activeId, text);
+      const msg = await api.sendMessage(activeId, text, pendingAttachment);
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       setDraft("");
-    } catch {
-      antdMessage.error("Failed to send");
+      setPendingAttachment(null);
+    } catch (err) {
+      if (err?.response?.status === 402) {
+        antdMessage.warning(err.response.data?.error || "Free tier message limit reached. Upgrade to Pro to send more.");
+      } else {
+        antdMessage.error("Failed to send");
+      }
     } finally {
       setSending(false);
+    }
+  };
+
+  const handlePickFile = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      antdMessage.warning("File too large (25 MB max)");
+      return;
+    }
+    setUploading(true);
+    try {
+      const meta = await api.uploadAttachment(file);
+      setPendingAttachment(meta);
+    } catch {
+      antdMessage.error("Upload failed");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -205,13 +303,22 @@ const Messages = () => {
   };
 
   const onStartPrivate = async ({ recipientId, content }) => {
-    const { conversation, message: msg } = await api.sendPrivate(recipientId, content);
-    setConversations((prev) => {
-      const exists = prev.some((c) => c.id === conversation.id);
-      return exists ? prev : [conversation, ...prev];
-    });
-    setActiveId(conversation.id);
-    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    try {
+      const { conversation, message: msg } = await api.sendPrivate(recipientId, content);
+      setConversations((prev) => {
+        const exists = prev.some((c) => c.id === conversation.id);
+        return exists ? prev : [conversation, ...prev];
+      });
+      setActiveId(conversation.id);
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    } catch (err) {
+      if (err?.response?.status === 402) {
+        antdMessage.warning(err.response.data?.error || "Free tier message limit reached. Upgrade to Pro to send more.");
+      } else {
+        antdMessage.error(err?.response?.data?.error || "Failed to send private message");
+      }
+      throw err;
+    }
   };
 
   const onInvite = async (userId) => {
@@ -633,11 +740,21 @@ const Messages = () => {
                           )}
                           <div
                             style={{
-                              padding: "10px 14px",
+                              padding: msg.attachment && !msg.content ? 4 : "10px 14px",
                               borderRadius: 16,
-                              background: mine ? PALETTE.bubbleMine : PALETTE.surface,
+                              background:
+                                msg.attachment?.kind === "image" && !msg.content
+                                  ? "transparent"
+                                  : mine
+                                    ? PALETTE.bubbleMine
+                                    : PALETTE.surface,
                               color: mine ? "#fff" : PALETTE.text,
-                              border: mine ? "none" : `1px solid ${PALETTE.border}`,
+                              border:
+                                msg.attachment?.kind === "image" && !msg.content
+                                  ? "none"
+                                  : mine
+                                    ? "none"
+                                    : `1px solid ${PALETTE.border}`,
                               borderBottomRightRadius: mine ? 4 : 16,
                               borderBottomLeftRadius: mine ? 16 : 4,
                               fontSize: 14,
@@ -646,6 +763,7 @@ const Messages = () => {
                               wordBreak: "break-word",
                             }}
                           >
+                            <AttachmentPreview attachment={msg.attachment} mine={mine} />
                             {msg.content}
                           </div>
                           <Text
@@ -674,46 +792,100 @@ const Messages = () => {
                   padding: "12px 16px",
                   borderTop: `1px solid ${PALETTE.borderSoft}`,
                   display: "flex",
+                  flexDirection: "column",
                   gap: 8,
-                  alignItems: "flex-end",
                   background: PALETTE.surface,
                 }}
               >
-                <Input.TextArea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onPressEnter={(e) => {
-                    if (!e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder="Write a message…"
-                  autoSize={{ minRows: 1, maxRows: 5 }}
-                  style={{
-                    flex: 1,
-                    background: PALETTE.bg,
-                    border: `1px solid ${PALETTE.borderSoft}`,
-                    borderRadius: 12,
-                    padding: "10px 14px",
-                    fontSize: 14,
-                    resize: "none",
-                  }}
-                />
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleSend}
-                  loading={sending}
-                  disabled={!draft.trim()}
-                  style={{
-                    background: PALETTE.accent,
-                    border: "none",
-                    height: 40,
-                    width: 40,
-                    borderRadius: 12,
-                  }}
-                />
+                {pendingAttachment && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "6px 10px",
+                      background: PALETTE.bg,
+                      border: `1px solid ${PALETTE.borderSoft}`,
+                      borderRadius: 10,
+                      maxWidth: 360,
+                    }}
+                  >
+                    {pendingAttachment.kind === "image" ? (
+                      <img
+                        src={api.fileUrl(pendingAttachment.url)}
+                        alt=""
+                        style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 6 }}
+                      />
+                    ) : (
+                      <FileOutlined style={{ fontSize: 22, color: PALETTE.accent }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text strong ellipsis style={{ display: "block", fontSize: 13 }}>
+                        {pendingAttachment.name}
+                      </Text>
+                      <Text style={{ color: PALETTE.textSoft, fontSize: 11 }}>
+                        {formatBytes(pendingAttachment.size)}
+                      </Text>
+                    </div>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CloseOutlined />}
+                      onClick={() => setPendingAttachment(null)}
+                    />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileChange}
+                    style={{ display: "none" }}
+                  />
+                  <Tooltip title="Attach file, image, gif or code">
+                    <Button
+                      icon={<PaperClipOutlined />}
+                      onClick={handlePickFile}
+                      loading={uploading}
+                      style={{ height: 40, width: 40, borderRadius: 12 }}
+                    />
+                  </Tooltip>
+                  <Input.TextArea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onPressEnter={(e) => {
+                      if (!e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Write a message…"
+                    autoSize={{ minRows: 1, maxRows: 5 }}
+                    style={{
+                      flex: 1,
+                      background: PALETTE.bg,
+                      border: `1px solid ${PALETTE.borderSoft}`,
+                      borderRadius: 12,
+                      padding: "10px 14px",
+                      fontSize: 14,
+                      resize: "none",
+                    }}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<SendOutlined />}
+                    onClick={handleSend}
+                    loading={sending}
+                    disabled={!draft.trim() && !pendingAttachment}
+                    style={{
+                      background: PALETTE.accent,
+                      border: "none",
+                      height: 40,
+                      width: 40,
+                      borderRadius: 12,
+                    }}
+                  />
+                </div>
               </div>
             </>
           )}
