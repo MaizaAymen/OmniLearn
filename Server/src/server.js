@@ -22,6 +22,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const planRoutes = require("./routes/planRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
+const institutionCurriculumRoutes = require("./routes/institutionCurriculumRoutes");
 const { Server } = require("socket.io");
 const { setupMessageHub } = require("./realtime/messageHub");
 const liveblocksApp = require('./realtime/sessionHub'); // your new Liveblocks file
@@ -61,6 +62,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/plan", planRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/stripe", stripeRoutes);
+// Per-institution Grades / Specialities / Levels (managed by institution_admin).
+app.use("/api/institution-curriculum", institutionCurriculumRoutes);
 
 
 app.get("/", (req, res) => {

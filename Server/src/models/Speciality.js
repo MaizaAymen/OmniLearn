@@ -15,6 +15,12 @@ const Speciality = sequelize.define(
       references: { model: "grades", key: "id" },
       onDelete: "CASCADE",
     },
+    // Mirrors the parent grade's institutionId so institution-scoped queries
+    // can filter directly without joining grades.
+    institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     name: {
       type: DataTypes.STRING(150),
       allowNull: false, // e.g., "Web Development", "AI", "Cybersecurity"

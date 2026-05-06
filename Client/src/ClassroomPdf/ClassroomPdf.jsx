@@ -10,7 +10,7 @@ import {
   FileTextOutlined, UploadOutlined, BookOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, CodeOutlined,
   PlusOutlined, BulbOutlined, RobotOutlined,
-  DeleteOutlined,
+  DeleteOutlined, InboxOutlined,
 } from "@ant-design/icons";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
@@ -107,6 +107,26 @@ export default function ClassroomPdf() {
     }
   }
 
+  // Read a code file client-side and fill the name + content fields.
+  // Returning false prevents Upload from actually POSTing — we use the existing
+  // /code endpoint when the user hits Save.
+  function handleCodeFilePick(file) {
+    const MAX_BYTES = 2 * 1024 * 1024; // 2MB — keeps us well under server JSON limit
+    if (file.size > MAX_BYTES) {
+      message.error("File too large (max 2MB)");
+      return false;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setCodeContent(String(e.target?.result || ""));
+      if (!codeName.trim()) setCodeName(file.name);
+      message.success(`Loaded ${file.name}`);
+    };
+    reader.onerror = () => message.error("Could not read file");
+    reader.readAsText(file);
+    return false;
+  }
+
   async function saveCode() {
     if (!codeName.trim() || !codeContent.trim()) {
       message.error("Filename and code are both required");
@@ -148,6 +168,18 @@ export default function ClassroomPdf() {
   function updateNotes(value) {
     setNotes(value);
     localStorage.setItem(NOTES_KEY, value);
+  }
+
+  // Open the AI Assistant page in "code mode" with this snippet pre-loaded.
+  function openCodeAssistant() {
+    if (!selected || selected.type !== "code") return;
+    navigate("/pdf-assistant", {
+      state: {
+        codeId: selected.id,
+        codeContent: selected.content,
+        codeName: selected.name,
+      },
+    });
   }
 
   const menuItems = items.map((it) => ({
@@ -236,6 +268,14 @@ export default function ClassroomPdf() {
                 <Title level={4} className="course-title">{selected.name}</Title>
                 <Tag color="blue" style={{ marginTop: 4 }}>Code</Tag>
               </div>
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                onClick={openCodeAssistant}
+                className="primary-btn"
+              >
+                AI Assistant
+              </Button>
             </div>
             <div className="code-viewer-container">
               <pre className="code-content">{selected.content}</pre>
@@ -339,6 +379,28 @@ export default function ClassroomPdf() {
         width={720}
       >
         <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <Upload.Dragger
+            beforeUpload={handleCodeFilePick}
+            showUploadList={false}
+            multiple={false}
+            accept=".js,.jsx,.ts,.tsx,.py,.java,.c,.h,.cpp,.hpp,.cs,.go,.rs,.rb,.php,.html,.css,.scss,.json,.xml,.yml,.yaml,.sh,.bat,.ps1,.sql,.md,.txt,.kt,.swift,.dart,.lua,.r,.pl,.vue,.svelte"
+            style={{ padding: "8px 0" }}
+          >
+            <p className="ant-upload-drag-icon" style={{ marginBottom: 4 }}>
+              <InboxOutlined style={{ fontSize: 28, color: "#1677ff" }} />
+            </p>
+            <p className="ant-upload-text" style={{ fontSize: 14, marginBottom: 2 }}>
+              Drop a code file here, or click to browse
+            </p>
+            <p className="ant-upload-hint" style={{ fontSize: 12 }}>
+              Up to 2MB — .js, .py, .java, .cpp, .ts, and more
+            </p>
+          </Upload.Dragger>
+
+          <div style={{ textAlign: "center", color: "#999", fontSize: 12 }}>
+            — or paste below —
+          </div>
+
           <Input
             placeholder="Filename (e.g. solution.js)"
             value={codeName}

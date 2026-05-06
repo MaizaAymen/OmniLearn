@@ -222,6 +222,18 @@ User.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", co
 Institution.hasMany(InviteLink, { foreignKey: "institutionId", as: "inviteLinks", constraints: false });
 InviteLink.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
 
+// ─── Institution ↔ Curriculum (1:N each) ─────────────────────────────────────
+// Per-institution Grades / Specialities / Levels. institutionId is nullable on
+// the curriculum tables — null rows are global templates owned by the super admin.
+Institution.hasMany(Grade, { foreignKey: "institutionId", as: "grades", constraints: false });
+Grade.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
+
+Institution.hasMany(Speciality, { foreignKey: "institutionId", as: "specialities", constraints: false });
+Speciality.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
+
+Institution.hasMany(Level, { foreignKey: "institutionId", as: "levels", constraints: false });
+Level.belongsTo(Institution, { foreignKey: "institutionId", as: "institution", constraints: false });
+
 module.exports = {
   User,
   Profile,

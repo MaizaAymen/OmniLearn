@@ -9,10 +9,15 @@ const Grade = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    // institutionId = null  → global / template grade (managed by super admin)
+    // institutionId = <id>  → owned by that institution (managed by its admin)
+    institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     name: {
       type: DataTypes.STRING(100),
-      allowNull: false,
-      unique: true, // e.g., "L1", "L2", "L3", "Master 1"
+      allowNull: false, // unique per institution — enforced at the route layer
     },
     displayName: {
       type: DataTypes.STRING(150),

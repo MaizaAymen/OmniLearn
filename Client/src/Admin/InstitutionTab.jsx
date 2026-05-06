@@ -11,6 +11,10 @@ import {
   fetchInstitutionStats, fetchInstitutionClassrooms, fetchClassroomAudit,
   setClassroomActive, removeMember,
   fetchAnnouncements, createAnnouncement, deleteAnnouncement, fetchAnalytics,
+  fetchInstitutionGrades, createInstitutionGrade, updateInstitutionGrade, deleteInstitutionGrade,
+  fetchInstitutionSpecialities, createInstitutionSpeciality, updateInstitutionSpeciality, deleteInstitutionSpeciality,
+  fetchInstitutionLevels, createInstitutionLevel, updateInstitutionLevel, deleteInstitutionLevel,
+  seedInstitutionCurriculum,
 } from "./planApi";
 
 // Vue institution_admin : command center complet pour gérer son école.
@@ -36,6 +40,7 @@ const InstitutionTab = () => {
         { key: "invites", label: "Invites", children: <InvitesPanel id={id} /> },
         { key: "announcements", label: "Announcements", children: <AnnouncementsPanel id={id} /> },
         { key: "analytics", label: "Analytics", children: <AnalyticsPanel id={id} /> },
+        { key: "curriculum", label: "Curriculum", children: <CurriculumPanel institutionId={id} /> },
         { key: "problems", label: "Problem Bank", children: <InstitutionProblemsPanel institutionId={id} /> },
         { key: "settings", label: "Settings", children: <SettingsPanel institutionId={id} /> },
       ]}
@@ -681,6 +686,314 @@ const InstitutionProblemsPanel = ({ institutionId }) => {
         </Form>
       </Modal>
     </Card>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CURRICULUM : per-institution Grades / Specialities / Levels
+// The institution_admin manages their own curriculum tree here. A "Seed from
+// defaults" action clones the global templates as a starting point.
+// ─────────────────────────────────────────────────────────────────────────────
+const CurriculumPanel = ({ institutionId }) => {
+  const [grades, setGrades] = useState([]);
+  const [specialities, setSpecialities] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [selectedGradeId, setSelectedGradeId] = useState(null);
+  const [selectedSpecialityId, setSelectedSpecialityId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  const [editing, setEditing] = useState(null); // { entity, mode, record }
+  const [form] = Form.useForm();
+
+  const refreshGrades = async () => {
+    const g = await fetchInstitutionGrades(institutionId);
+    setGrades(g);
+    return g;
+  };
+  const refreshSpecialities = async (gradeId) => {
+    if (!gradeId) { setSpecialities([]); return []; }
+    const s = await fetchInstitutionSpecialities(institutionId, gradeId);
+    setSpecialities(s);
+    return s;
+  };
+  const refreshLevels = async (specialityId) => {
+    if (!specialityId) { setLevels([]); return []; }
+    const lv = await fetchInstitutionLevels(institutionId, specialityId);
+    setLevels(lv);
+    return lv;
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    refreshGrades()
+      .catch((e) => message.error(e.message))
+      .finally(() => setLoading(false));
+  }, [institutionId]);
+
+  useEffect(() => {
+    refreshSpecialities(selectedGradeId).catch((e) => message.error(e.message));
+    setSelectedSpecialityId(null);
+  }, [selectedGradeId]);
+
+  useEffect(() => {
+    refreshLevels(selectedSpecialityId).catch((e) => message.error(e.message));
+  }, [selectedSpecialityId]);
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    try {
+      const r = await seedInstitutionCurriculum(institutionId);
+      message.success(
+        `Seeded: ${r.createdGrades} grades, ${r.createdSpecialities} specialities, ${r.createdLevels} levels`
+      );
+      await refreshGrades();
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const openEditor = (entity, mode, record) => {
+    setEditing({ entity, mode, record });
+    form.resetFields();
+    if (mode === "edit" && record) form.setFieldsValue(record);
+  };
+
+  const closeEditor = () => { setEditing(null); form.resetFields(); };
+
+  const submit = async () => {
+    const values = await form.validateFields();
+    const { entity, mode, record } = editing;
+    try {
+      if (entity === "grade") {
+        if (mode === "create") await createInstitutionGrade(institutionId, values);
+        else await updateInstitutionGrade(institutionId, record.id, values);
+        await refreshGrades();
+      } else if (entity === "speciality") {
+        const body = { ...values, gradeId: selectedGradeId };
+        if (mode === "create") await createInstitutionSpeciality(institutionId, body);
+        else await updateInstitutionSpeciality(institutionId, record.id, values);
+        await refreshSpecialities(selectedGradeId);
+      } else if (entity === "level") {
+        const body = { ...values, specialityId: selectedSpecialityId };
+        if (mode === "create") await createInstitutionLevel(institutionId, body);
+        else await updateInstitutionLevel(institutionId, record.id, values);
+        await refreshLevels(selectedSpecialityId);
+      }
+      message.success(mode === "create" ? "Created" : "Updated");
+      closeEditor();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const removeRow = async (entity, record) => {
+    try {
+      if (entity === "grade") {
+        await deleteInstitutionGrade(institutionId, record.id);
+        if (selectedGradeId === record.id) setSelectedGradeId(null);
+        await refreshGrades();
+      } else if (entity === "speciality") {
+        await deleteInstitutionSpeciality(institutionId, record.id);
+        if (selectedSpecialityId === record.id) setSelectedSpecialityId(null);
+        await refreshSpecialities(selectedGradeId);
+      } else if (entity === "level") {
+        await deleteInstitutionLevel(institutionId, record.id);
+        await refreshLevels(selectedSpecialityId);
+      }
+      message.success("Deleted");
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const baseColumns = (entity) => [
+    { title: "Name", dataIndex: "name" },
+    { title: "Display name", dataIndex: "displayName" },
+    { title: "Order", dataIndex: "order", width: 80 },
+    {
+      title: "Active", dataIndex: "isActive", width: 80,
+      render: (v) => <Tag color={v ? "green" : "default"}>{v ? "Yes" : "No"}</Tag>,
+    },
+    {
+      title: "Actions", width: 180,
+      render: (_, record) => (
+        <Space>
+          <Button size="small" onClick={() => openEditor(entity, "edit", record)}>Edit</Button>
+          <Popconfirm title="Delete this entry?" onConfirm={() => removeRow(entity, record)}>
+            <Button size="small" danger>Delete</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const editorTitle = editing
+    ? `${editing.mode === "create" ? "New" : "Edit"} ${editing.entity}`
+    : "";
+
+  return (
+    <div>
+      <Card style={{ marginBottom: 16 }}>
+        <Space wrap>
+          <Popconfirm
+            title="Clone the platform's default grades, specialities and levels into this institution?"
+            onConfirm={handleSeed}
+          >
+            <Button loading={seeding}>Seed from defaults</Button>
+          </Popconfirm>
+          <span style={{ color: "#888" }}>
+            Each institution has its own Grades, Specialities and Levels.
+            Pick a row to drill down.
+          </span>
+        </Space>
+      </Card>
+
+      {/* Grades */}
+      <Card
+        title="Grades"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Button type="primary" onClick={() => openEditor("grade", "create")}>
+            New grade
+          </Button>
+        }
+      >
+        <Table
+          rowKey="id"
+          size="small"
+          loading={loading}
+          dataSource={grades}
+          columns={baseColumns("grade")}
+          pagination={false}
+          onRow={(record) => ({
+            onClick: () => setSelectedGradeId(record.id),
+            style: {
+              cursor: "pointer",
+              background: selectedGradeId === record.id ? "#e6f4ff" : undefined,
+            },
+          })}
+          locale={{ emptyText: "No grades yet — create one or seed from defaults." }}
+        />
+      </Card>
+
+      {/* Specialities */}
+      <Card
+        title={
+          selectedGradeId
+            ? `Specialities — ${grades.find((g) => g.id === selectedGradeId)?.displayName || ""}`
+            : "Specialities"
+        }
+        style={{ marginBottom: 16 }}
+        extra={
+          <Button
+            type="primary"
+            disabled={!selectedGradeId}
+            onClick={() => openEditor("speciality", "create")}
+          >
+            New speciality
+          </Button>
+        }
+      >
+        {!selectedGradeId ? (
+          <Empty description="Select a grade to manage its specialities." />
+        ) : (
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={specialities}
+            columns={baseColumns("speciality")}
+            pagination={false}
+            onRow={(record) => ({
+              onClick: () => setSelectedSpecialityId(record.id),
+              style: {
+                cursor: "pointer",
+                background: selectedSpecialityId === record.id ? "#e6f4ff" : undefined,
+              },
+            })}
+            locale={{ emptyText: "No specialities for this grade yet." }}
+          />
+        )}
+      </Card>
+
+      {/* Levels */}
+      <Card
+        title={
+          selectedSpecialityId
+            ? `Levels — ${specialities.find((s) => s.id === selectedSpecialityId)?.displayName || ""}`
+            : "Levels"
+        }
+        extra={
+          <Button
+            type="primary"
+            disabled={!selectedSpecialityId}
+            onClick={() => openEditor("level", "create")}
+          >
+            New level
+          </Button>
+        }
+      >
+        {!selectedSpecialityId ? (
+          <Empty description="Select a speciality to manage its levels." />
+        ) : (
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={levels}
+            columns={baseColumns("level")}
+            pagination={false}
+            locale={{ emptyText: "No levels for this speciality yet." }}
+          />
+        )}
+      </Card>
+
+      <Modal
+        open={!!editing}
+        title={editorTitle}
+        onCancel={closeEditor}
+        onOk={submit}
+        okText={editing?.mode === "create" ? "Create" : "Save"}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" preserve={false}>
+          <Form.Item
+            name="name"
+            label="Name (short identifier, e.g. L1)"
+            rules={[{ required: true, message: "Name is required" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="displayName"
+            label="Display name"
+            rules={[{ required: true, message: "Display name is required" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          {editing?.entity === "speciality" && (
+            <Form.Item name="icon" label="Icon (optional)">
+              <Input />
+            </Form.Item>
+          )}
+          <Form.Item name="order" label="Order" initialValue={0}>
+            <InputNumber min={0} />
+          </Form.Item>
+          <Form.Item name="isActive" label="Active" initialValue={true}>
+            <Select
+              options={[
+                { value: true, label: "Yes" },
+                { value: false, label: "No" },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
   );
 };
 

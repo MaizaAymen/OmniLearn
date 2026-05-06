@@ -54,6 +54,7 @@ const ROLE_MENU = {
   '/problems':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/live-sessions': ['admin', 'institution_admin', 'teacher'],
   '/classroom-pdf': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/learning-dashboard': ['admin', 'institution_admin', 'teacher', 'student'],
   '/my-classrooms': ['admin', 'institution_admin', 'teacher', 'student'],
   '/messages':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/pdf-assistant': ['admin', 'institution_admin', 'teacher', 'student'],
@@ -392,6 +393,7 @@ const Sidebar = ({ children, profileStatus }) => {
     if (location.pathname.startsWith('/problems')) return '/problems';
     if (location.pathname.startsWith('/live-sessions')) return '/live-sessions';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
+    if (location.pathname.startsWith('/learning-dashboard')) return '/learning-dashboard';
     if (location.pathname.startsWith('/my-classrooms')) return '/my-classrooms';
     if (location.pathname.startsWith('/messages')) return '/messages';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';

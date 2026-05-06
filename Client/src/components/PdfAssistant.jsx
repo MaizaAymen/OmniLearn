@@ -25,6 +25,7 @@ import {
   Tag,
   Radio,
   InputNumber,
+  Badge,
 } from "antd";
 import {
   UploadOutlined,
@@ -40,6 +41,9 @@ import {
   DeleteOutlined,
   HighlightOutlined,
   QuestionCircleOutlined,
+  HistoryOutlined,
+  TrophyOutlined,
+  RedoOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -47,6 +51,7 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 const API_URL = "http://localhost:5000/api/pdf";
+const WORKSPACE_API = "http://localhost:5000/api/workspace";
 const SERVER_URL = "http://localhost:5000";
 
 // Axios instance that auto-attaches the auth token for every request to /api/pdf.
@@ -86,6 +91,9 @@ export default function PdfAssistant() {
   const [isResizing, setIsResizing] = useState(false);
   const pdfContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  // Refs for code viewer scroll-to-highlight ("Go" button in code mode).
+  const codeViewerRef = useRef(null);
+  const codePreRef = useRef(null);
 
   
 
@@ -114,13 +122,95 @@ export default function PdfAssistant() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
 
+  // Study History — stored on the server via /api/workspace/history
+  const [studyHistory, setStudyHistory] = useState([]);
+
+  const fetchStudyHistory = async () => {
+    try {
+      const res = await api.get(`${WORKSPACE_API}/history`);
+      setStudyHistory(res.data.history || []);
+    } catch (err) {
+      // Silent — history is non-critical.
+    }
+  };
+
+  const saveToHistory = async (entry) => {
+    try {
+      const res = await api.post(`${WORKSPACE_API}/history`, entry);
+      setStudyHistory((prev) => [res.data, ...prev]);
+    } catch (err) {
+      message.warning("Couldn't save to history");
+    }
+  };
+
+  const deleteHistoryEntry = async (id) => {
+    try {
+      await api.delete(`${WORKSPACE_API}/history/${id}`);
+      setStudyHistory((prev) => prev.filter((h) => h.id !== id));
+    } catch (err) {
+      message.error("Failed to delete entry");
+    }
+  };
+
+  const clearAllHistory = async () => {
+    try {
+      await api.delete(`${WORKSPACE_API}/history`);
+      setStudyHistory([]);
+    } catch (err) {
+      message.error("Failed to clear history");
+    }
+  };
+
+  useEffect(() => {
+    fetchStudyHistory();
+  }, []);
+
   // Sidebar tab
   const [activeTab, setActiveTab] = useState("chat");
+
+  // ─── Code mode (when navigated from My Workspace with a code snippet) ───
+  // When set, the left panel shows the code instead of the PDF viewer, and
+  // the chat is routed through /api/workspace/code/analyze.
+  const [codeMode, setCodeMode] = useState(false);
+  const [codeContent, setCodeContent] = useState("");
+  const [codeName, setCodeName] = useState("");
+  const [codeId, setCodeId] = useState(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Load CODE from navigation state (My Workspace → AI Assistant on a code file).
+  // We bypass the whole PDF upload flow and kick off an overview ask.
+  useEffect(() => {
+    const state = location.state;
+    if (!state?.codeContent) return;
+
+    const id = state.codeId || null;
+    setCodeMode(true);
+    setCodeContent(state.codeContent);
+    setCodeName(state.codeName || "snippet");
+    setCodeId(id);
+    setMessages([{ role: "system", content: `Code loaded: ${state.codeName || "snippet"}` }]);
+
+
+    // Kick off an initial overview through the workspace endpoint.
+    setLoading(true);
+    api.post(`${WORKSPACE_API}/code/analyze`, {
+      itemId: state.codeId,
+      content: state.codeContent,
+      name: state.codeName,
+    })
+      .then((res) => {
+        setMessages((prev) => [...prev, { role: "assistant", content: res.data.answer || "" }]);
+      })
+      .catch((e) => {
+        const detail = e?.response?.data?.error || e?.message || "Failed to analyze";
+        message.error(`AI error: ${detail}`);
+      })
+      .finally(() => setLoading(false));
+  }, [location.state]);
 
   // Load PDF from navigation state (e.g., Classroom PDFs)
   useEffect(() => {
@@ -257,7 +347,8 @@ export default function PdfAssistant() {
     }
   };
 
-  // Explain selected text
+  // Explain selected text — uses workspace /code/analyze in code mode (since the
+  // PDF /explain endpoint is requirePro), otherwise the original PDF endpoint.
   const explainText = async () => {
     if (!selectedText) {
       message.warning("Select some text first");
@@ -266,10 +357,26 @@ export default function PdfAssistant() {
 
     try {
       setLoading(true);
-      const response = await api.post(`${API_URL}/explain`, {
-        text: selectedText,
+      let explanationText;
+      if (codeMode) {
+        const response = await api.post(`${WORKSPACE_API}/code/analyze`, {
+          itemId: codeId,
+          content: codeContent,
+          name: codeName,
+          question: `Explain this snippet from the file in simple terms:\n\n${selectedText}`,
+        });
+        explanationText = response.data.answer;
+      } else {
+        const response = await api.post(`${API_URL}/explain`, { text: selectedText });
+        explanationText = response.data.explanation;
+      }
+      setExplanation(explanationText);
+      saveToHistory({
+        type: "explanation",
+        documentName: codeMode ? codeName : (pdfFile?.name || "PDF"),
+        selectedText: selectedText.slice(0, 120),
+        explanation: explanationText,
       });
-      setExplanation(response.data.explanation);
       setSelectedText("");
     } catch (error) {
       message.error("Failed to explain text");
@@ -278,9 +385,10 @@ export default function PdfAssistant() {
     }
   };
 
-  // Chat Q&A
+  // Chat Q&A — routes to workspace endpoint in code mode, PDF endpoint otherwise.
   const askQuestion = async () => {
-    if (!question.trim() || !pdfId) return;
+    if (!question.trim()) return;
+    if (!codeMode && !pdfId) return;
 
     const userMessage = { role: "user", content: question };
     setMessages((prev) => [...prev, userMessage]);
@@ -288,14 +396,26 @@ export default function PdfAssistant() {
 
     try {
       setLoading(true);
-      const response = await api.post(`${API_URL}/chat`, {
-        pdfId,
-        question: userMessage.content,
-      });
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response.data.answer },
-      ]);
+      let answer;
+      if (codeMode) {
+        // Replay only user/assistant turns as history (skip the system intro line).
+        const history = messages.filter((m) => m.role === "user" || m.role === "assistant");
+        const response = await api.post(`${WORKSPACE_API}/code/analyze`, {
+          itemId: codeId,
+          content: codeContent,
+          name: codeName,
+          question: userMessage.content,
+          history,
+        });
+        answer = response.data.answer;
+      } else {
+        const response = await api.post(`${API_URL}/chat`, {
+          pdfId,
+          question: userMessage.content,
+        });
+        answer = response.data.answer;
+      }
+      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
     } catch (error) {
       setMessages((prev) => [
         ...prev,
@@ -306,17 +426,25 @@ export default function PdfAssistant() {
     }
   };
 
-  // Summarize PDF
+  // Summarize — routes to the right endpoint based on mode.
   const summarizePdf = async () => {
-    if (!pdfId) return;
+    if (!codeMode && !pdfId) return;
 
     try {
       setLoading(true);
-      const response = await api.post(`${API_URL}/summarize`, { pdfId });
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response.data.summary },
-      ]);
+      let summary;
+      if (codeMode) {
+        const response = await api.post(`${WORKSPACE_API}/code/summarize`, {
+          itemId: codeId,
+          content: codeContent,
+          name: codeName,
+        });
+        summary = response.data.summary;
+      } else {
+        const response = await api.post(`${API_URL}/summarize`, { pdfId });
+        summary = response.data.summary;
+      }
+      setMessages((prev) => [...prev, { role: "assistant", content: summary }]);
     } catch (error) {
       const detail = error?.response?.data?.error || error?.message || "Failed to summarize";
       message.error(`Failed to summarize: ${detail}`);
@@ -326,28 +454,62 @@ export default function PdfAssistant() {
   };
 
   // ─── Highlights + Notes ───────────────────────────────────────────
+  // In code mode we persist to localStorage (no pages, no Pro gate).
+  const codeHighlightsKey = (id) => `code-highlights-${id}`;
+
   const fetchHighlights = async () => {
+    if (codeMode) {
+      if (!codeId) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(codeHighlightsKey(codeId)) || "[]");
+        setHighlights(Array.isArray(saved) ? saved : []);
+      } catch { setHighlights([]); }
+      return;
+    }
     if (!pdfId) return;
     const res = await api.get(`${API_URL}/highlights/${pdfId}`);
     setHighlights(res.data.highlights);
   };
 
   const saveHighlight = async () => {
-    if (!selectedText || !pdfId) return;
-    await api.post(`${API_URL}/highlights`, {
-      pdfId,
-      text: selectedText,
-      note: currentNote,
-      page: pageNumber,
-    });
+    if (!selectedText) return;
+
+    if (codeMode) {
+      if (!codeId) return;
+      const item = {
+        id: String(Date.now()),
+        text: selectedText,
+        note: currentNote,
+        createdAt: new Date().toISOString(),
+      };
+      const next = [item, ...(highlights || [])];
+      setHighlights(next);
+      localStorage.setItem(codeHighlightsKey(codeId), JSON.stringify(next));
+    } else {
+      if (!pdfId) return;
+      await api.post(`${API_URL}/highlights`, {
+        pdfId,
+        text: selectedText,
+        note: currentNote,
+        page: pageNumber,
+      });
+      fetchHighlights();
+    }
+
     message.success("Highlight saved!");
     setSelectedText("");
     setCurrentNote("");
     setNoteModalOpen(false);
-    fetchHighlights();
   };
 
   const deleteHighlight = async (id) => {
+    if (codeMode) {
+      if (!codeId) return;
+      const next = (highlights || []).filter((h) => h.id !== id);
+      setHighlights(next);
+      localStorage.setItem(codeHighlightsKey(codeId), JSON.stringify(next));
+      return;
+    }
     await api.delete(`${API_URL}/highlights/${pdfId}/${id}`);
     fetchHighlights();
   };
@@ -381,6 +543,35 @@ export default function PdfAssistant() {
     setPageNumber(page);
   };
 
+  // "Go" for code highlights: finds the snippet in the rendered <pre>, scrolls
+  // it into view and selects it briefly so the user can see exactly where it lives.
+  const goToCodeHighlight = (text) => {
+    if (!text || !codePreRef.current || !codeViewerRef.current) return;
+    const idx = (codeContent || "").indexOf(text);
+    if (idx === -1) {
+      message.warning("Couldn't find this snippet in the code");
+      return;
+    }
+    const textNode = codePreRef.current.firstChild;
+    if (!textNode || textNode.nodeType !== 3) return;
+
+    try {
+      const range = document.createRange();
+      range.setStart(textNode, idx);
+      range.setEnd(textNode, idx + text.length);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      // Scroll the viewer so the snippet lands ~60px from the top.
+      const rangeRect = range.getBoundingClientRect();
+      const containerRect = codeViewerRef.current.getBoundingClientRect();
+      codeViewerRef.current.scrollTop += rangeRect.top - containerRect.top - 60;
+    } catch (err) {
+      // Range API can throw if indices fall outside the text node — fail quietly.
+    }
+  };
+
   // ─── Smart Search ─────────────────────────────────────────────────
   const smartSearch = async () => {
     if (!searchQuery.trim() || !pdfId) return;
@@ -400,26 +591,44 @@ export default function PdfAssistant() {
 
   // ─── Quiz Generation ─────────────────────────────────────────────
   const generateQuiz = async (count) => {
-    if (!pdfId) {
-      message.warning("Upload a PDF first");
-      return;
-    }
-
-    if (Number(quizPageTo) < Number(quizPageFrom)) {
-      message.warning("'To page' must be greater than or equal to 'From page'");
-      return;
+    if (codeMode) {
+      if (!codeContent) {
+        message.warning("No code loaded");
+        return;
+      }
+    } else {
+      if (!pdfId) {
+        message.warning("Upload a PDF first");
+        return;
+      }
+      if (Number(quizPageTo) < Number(quizPageFrom)) {
+        message.warning("'To page' must be greater than or equal to 'From page'");
+        return;
+      }
     }
 
     setQuizCount(count);
     setQuizLoading(true);
     try {
-      const res = await api.post(`${API_URL}/quiz`, {
-        pdfId,
-        count,
-        pageFrom: Number(quizPageFrom) || 1,
-        pageTo: Number(quizPageTo) || Number(quizPageFrom) || 1,
-      });
-      setQuizQuestions(res.data.questions || []);
+      let questions;
+      if (codeMode) {
+        const res = await api.post(`${WORKSPACE_API}/code/quiz`, {
+          itemId: codeId,
+          content: codeContent,
+          name: codeName,
+          count,
+        });
+        questions = res.data.questions || [];
+      } else {
+        const res = await api.post(`${API_URL}/quiz`, {
+          pdfId,
+          count,
+          pageFrom: Number(quizPageFrom) || 1,
+          pageTo: Number(quizPageTo) || Number(quizPageFrom) || 1,
+        });
+        questions = res.data.questions || [];
+      }
+      setQuizQuestions(questions);
       setQuizAnswers({});
       setQuizSubmitted(false);
       setQuizScore(0);
@@ -462,15 +671,27 @@ export default function PdfAssistant() {
 
     setQuizScore(score);
     setQuizSubmitted(true);
+    saveToHistory({
+      type: "quiz",
+      documentName: codeMode ? codeName : (pdfFile?.name || "PDF"),
+      score,
+      total: quizQuestions.length,
+      questions: quizQuestions,
+    });
   };
 
-  // Load highlights & bookmarks when PDF loads
+  // Load highlights & bookmarks when PDF loads — or highlights from localStorage
+  // when entering code mode.
   useEffect(() => {
+    if (codeMode && codeId) {
+      fetchHighlights();
+      return;
+    }
     if (pdfId) {
       fetchHighlights();
       fetchBookmarks();
     }
-  }, [pdfId]);
+  }, [pdfId, codeMode, codeId]);
 
   return (
     <Layout style={{ height: "100vh", background: "#f0f2f5" }}>
@@ -480,24 +701,72 @@ export default function PdfAssistant() {
           title={
             <Space>
               <FileTextOutlined />
-              <span>PDF Viewer</span>
+              <span>{codeMode ? `Code — ${codeName}` : "PDF Viewer"}</span>
             </Space>
           }
           extra={
-            <Upload
-              beforeUpload={handleUpload}
-              showUploadList={false}
-              accept=".pdf"
-            >
-              <Button icon={<UploadOutlined />} loading={uploading}>
-                Upload PDF
-              </Button>
-            </Upload>
+            codeMode ? null : (
+              <Upload
+                beforeUpload={handleUpload}
+                showUploadList={false}
+                accept=".pdf"
+              >
+                <Button icon={<UploadOutlined />} loading={uploading}>
+                  Upload PDF
+                </Button>
+              </Upload>
+            )
           }
           style={{ height: "100%", borderRadius: 12 }}
           bodyStyle={{ height: "calc(100% - 57px)", overflow: "hidden", padding: 0 }}
         >
-          {!pdfFile ? (
+          {codeMode ? (
+            <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <div
+                ref={codeViewerRef}
+                onMouseUp={handleTextSelection}
+                style={{ flex: 1, overflow: "auto", background: "#0d1117", padding: 16 }}
+              >
+                <pre
+                  ref={codePreRef}
+                  style={{
+                    margin: 0,
+                    color: "#c9d1d9",
+                    fontFamily: "Menlo, Consolas, monospace",
+                    fontSize: 13,
+                    lineHeight: 1.55,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {codeContent}
+                </pre>
+              </div>
+
+              {/* Explanation card — pinned at the bottom, same look as PDF flow. */}
+              {explanation && (
+                <Card
+                  size="small"
+                  title={
+                    <Space>
+                      <BulbOutlined style={{ color: "#faad14" }} />
+                      <span>AI Explanation</span>
+                    </Space>
+                  }
+                  extra={
+                    <Button size="small" onClick={() => setExplanation("")}>Close</Button>
+                  }
+                  style={{
+                    margin: 12,
+                    background: "#fffbe6",
+                    border: "1px solid #ffe58f",
+                  }}
+                >
+                  <Text style={{ whiteSpace: "pre-wrap" }}>{explanation}</Text>
+                </Card>
+              )}
+            </div>
+          ) : !pdfFile ? (
             <Empty
               image={<FileTextOutlined style={{ fontSize: 64, color: "#bfbfbf" }} />}
               description="Upload a PDF to get started"
@@ -611,21 +880,27 @@ export default function PdfAssistant() {
             onChange={setActiveTab}
             centered
             style={{ flex: 1, display: "flex", flexDirection: "column" }}
-            items={[
+            items={([
               {
                 key: "chat",
                 label: <span><RobotOutlined /> Chat</span>,
                 children: (
                   <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)" }}>
                     <div style={{ padding: 12 }}>
-                      <Button block icon={<ReadOutlined />} onClick={summarizePdf} loading={uploading} disabled={!pdfId || loading || uploading}>
-                        {uploading ? "Preparing PDF for AI…" : "Summarize PDF"}
+                      <Button
+                        block
+                        icon={<ReadOutlined />}
+                        onClick={summarizePdf}
+                        loading={!codeMode && uploading}
+                        disabled={(!codeMode && (!pdfId || uploading)) || loading}
+                      >
+                        {codeMode ? "Summarize Code" : (uploading ? "Preparing PDF for AI…" : "Summarize PDF")}
                       </Button>
                     </div>
                     <Divider style={{ margin: 0 }} />
                     <div style={{ flex: 1, overflowY: "auto", padding: 16, background: "#fafafa" }}>
                       {messages.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ask anything about your PDF" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={codeMode ? "Ask anything about your code" : "Ask anything about your PDF"} />
                       ) : (
                         <Space direction="vertical" style={{ width: "100%" }} size={12}>
                           {messages.map((msg, idx) => (
@@ -663,11 +938,11 @@ export default function PdfAssistant() {
                           value={question}
                           onChange={(e) => setQuestion(e.target.value)}
                           onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); askQuestion(); } }}
-                          placeholder="Ask about the PDF..."
-                          disabled={!pdfId || loading}
+                          placeholder={codeMode ? "Ask about the code..." : "Ask about the PDF..."}
+                          disabled={(!codeMode && !pdfId) || loading}
                           autoSize={{ minRows: 1, maxRows: 3 }}
                         />
-                        <Button type="primary" icon={<SendOutlined />} onClick={askQuestion} disabled={!pdfId || loading || !question.trim()} />
+                        <Button type="primary" icon={<SendOutlined />} onClick={askQuestion} disabled={(!codeMode && !pdfId) || loading || !question.trim()} />
                       </Space.Compact>
                     </div>
                   </div>
@@ -680,16 +955,33 @@ export default function PdfAssistant() {
                   <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
                     <List
                       dataSource={highlights}
-                      locale={{ emptyText: "Select text and save highlights with notes" }}
+                      locale={{
+                        emptyText: codeMode
+                          ? "Select code and save highlights with notes"
+                          : "Select text and save highlights with notes",
+                      }}
                       renderItem={(item) => (
                         <List.Item
-                          actions={[
-                            <Button size="small" onClick={() => goToPage(item.page)}>Go</Button>,
-                            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHighlight(item.id)} />,
-                          ]}
+                          actions={
+                            codeMode
+                              ? [
+                                  <Button size="small" onClick={() => goToCodeHighlight(item.text)}>Go</Button>,
+                                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHighlight(item.id)} />,
+                                ]
+                              : [
+                                  <Button size="small" onClick={() => goToPage(item.page)}>Go</Button>,
+                                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHighlight(item.id)} />,
+                                ]
+                          }
                         >
                           <List.Item.Meta
-                            title={<><Tag color="gold">P{item.page}</Tag> {item.text.slice(0, 50)}...</>}
+                            title={
+                              codeMode ? (
+                                <Text code style={{ fontSize: 12 }}>{(item.text || "").slice(0, 60)}{(item.text || "").length > 60 ? "..." : ""}</Text>
+                              ) : (
+                                <><Tag color="gold">P{item.page}</Tag> {item.text.slice(0, 50)}...</>
+                              )
+                            }
                             description={item.note || "No note"}
                           />
                         </List.Item>
@@ -758,34 +1050,36 @@ export default function PdfAssistant() {
                 label: <span><QuestionCircleOutlined /> Quiz</span>,
                 children: (
                   <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
-                    <div style={{ marginBottom: 12 }}>
-                      <Text type="secondary">Pages to use</Text>
-                      <Space style={{ width: "100%", marginTop: 6 }}>
-                        <InputNumber
-                          min={1}
-                          value={quizPageFrom}
-                          onChange={(value) => setQuizPageFrom(value || 1)}
-                          disabled={!pdfId || quizLoading}
-                          style={{ width: "100%" }}
-                          placeholder="From"
-                        />
-                        <InputNumber
-                          min={1}
-                          value={quizPageTo}
-                          onChange={(value) => setQuizPageTo(value || 1)}
-                          disabled={!pdfId || quizLoading}
-                          style={{ width: "100%" }}
-                          placeholder="To"
-                        />
-                      </Space>
-                    </div>
+                    {!codeMode && (
+                      <div style={{ marginBottom: 12 }}>
+                        <Text type="secondary">Pages to use</Text>
+                        <Space style={{ width: "100%", marginTop: 6 }}>
+                          <InputNumber
+                            min={1}
+                            value={quizPageFrom}
+                            onChange={(value) => setQuizPageFrom(value || 1)}
+                            disabled={!pdfId || quizLoading}
+                            style={{ width: "100%" }}
+                            placeholder="From"
+                          />
+                          <InputNumber
+                            min={1}
+                            value={quizPageTo}
+                            onChange={(value) => setQuizPageTo(value || 1)}
+                            disabled={!pdfId || quizLoading}
+                            style={{ width: "100%" }}
+                            placeholder="To"
+                          />
+                        </Space>
+                      </div>
+                    )}
 
                     <Space style={{ width: "100%", marginBottom: 16 }}>
                       <Button
                         type={quizCount === 10 ? "primary" : "default"}
                         onClick={() => generateQuiz(10)}
                         loading={quizLoading && quizCount === 10}
-                        disabled={!pdfId || quizLoading}
+                        disabled={(!codeMode && !pdfId) || quizLoading}
                       >
                         10 Questions
                       </Button>
@@ -793,7 +1087,7 @@ export default function PdfAssistant() {
                         type={quizCount === 20 ? "primary" : "default"}
                         onClick={() => generateQuiz(20)}
                         loading={quizLoading && quizCount === 20}
-                        disabled={!pdfId || quizLoading}
+                        disabled={(!codeMode && !pdfId) || quizLoading}
                       >
                         20 Questions
                       </Button>
@@ -802,7 +1096,7 @@ export default function PdfAssistant() {
                     <List
                       dataSource={quizQuestions}
                       loading={quizLoading}
-                      locale={{ emptyText: "Generate a quiz from your PDF" }}
+                      locale={{ emptyText: codeMode ? "Generate a quiz from your code" : "Generate a quiz from your PDF" }}
                       renderItem={(item, index) => (
                         <List.Item>
                           <Card size="small" style={{ width: "100%" }}>
@@ -880,7 +1174,106 @@ export default function PdfAssistant() {
                   </div>
                 ),
               },
-            ]}
+              {
+                key: "history",
+                label: (
+                  <span>
+                    <HistoryOutlined />
+                    {" History"}
+                    {studyHistory.length > 0 && (
+                      <Badge count={studyHistory.length} size="small" style={{ marginLeft: 4 }} />
+                    )}
+                  </span>
+                ),
+                children: (
+                  <div style={{ padding: 16, height: "calc(100vh - 120px)", overflowY: "auto" }}>
+                    {studyHistory.length === 0 ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="No study sessions yet. Explain text or take a quiz to start tracking."
+                      />
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                          <Button
+                            size="small"
+                            danger
+                            onClick={clearAllHistory}
+                          >
+                            Clear All
+                          </Button>
+                        </div>
+                        <List
+                          dataSource={studyHistory}
+                          renderItem={(item) => (
+                            <List.Item style={{ padding: "8px 0" }}>
+                              <Card
+                                size="small"
+                                style={{ width: "100%", borderRadius: 8 }}
+                                bodyStyle={{ padding: "10px 12px" }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                  <Tag color={item.type === "quiz" ? "blue" : "orange"}>
+                                    {item.type === "quiz" ? <><TrophyOutlined /> Quiz</> : <><BulbOutlined /> Explanation</>}
+                                  </Tag>
+                                  <Space size={6}>
+                                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                                      {new Date(item.date).toLocaleString()}
+                                    </Typography.Text>
+                                    <Button
+                                      size="small"
+                                      type="text"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => deleteHistoryEntry(item.id)}
+                                    />
+                                  </Space>
+                                </div>
+
+                                <Typography.Text strong style={{ fontSize: 13 }}>
+                                  {item.documentName}
+                                </Typography.Text>
+
+                                {item.type === "quiz" && (
+                                  <div style={{ marginTop: 6 }}>
+                                    <Tag color={item.score / item.total >= 0.7 ? "green" : item.score / item.total >= 0.4 ? "gold" : "red"}>
+                                      {item.score} / {item.total}
+                                      {" "}({Math.round((item.score / item.total) * 100)}%)
+                                    </Tag>
+                                    <Button
+                                      size="small"
+                                      icon={<RedoOutlined />}
+                                      style={{ marginLeft: 6 }}
+                                      onClick={() => {
+                                        setQuizQuestions(item.questions);
+                                        setQuizAnswers({});
+                                        setQuizSubmitted(false);
+                                        setQuizScore(0);
+                                        setActiveTab("quiz");
+                                      }}
+                                    >
+                                      Retake
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {item.type === "explanation" && (
+                                  <div style={{ marginTop: 6 }}>
+                                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                      "{item.selectedText}{item.selectedText?.length >= 120 ? "..." : ""}"
+                                    </Typography.Text>
+                                  </div>
+                                )}
+                              </Card>
+                            </List.Item>
+                          )}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]).filter((tab) => !codeMode || ["chat", "quiz", "highlights", "history"].includes(tab.key))}
           />
         </div>
       </Sider>

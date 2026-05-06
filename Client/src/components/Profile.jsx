@@ -51,6 +51,7 @@ import { Badge } from "antd";
 import CodingDashboard from "./CodingDashboard";
 import PlanSection from "./PlanSection";
 import Certificate from "./Certificate";
+import LearningDashboard from "../Dashbord/LearningDashboard";
 import { api as msgApi, getSocket } from "../Messaging/api";
 
 const { Title, Text } = Typography;
@@ -139,6 +140,15 @@ const ProblemsSvg = (
     <svg {...svgProps}>
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />
+    </svg>
+  </span>
+);
+
+const LearningSvg = (
+  <span role="img" style={{ display: "inline-flex", alignItems: "center" }}>
+    <svg {...svgProps}>
+      <path d="M3 3v18h18" />
+      <path d="M7 14l4-4 4 4 6-6" />
     </svg>
   </span>
 );
@@ -757,6 +767,7 @@ export default function Profile() {
         { key: "profile", icon: ProfileSvg, label: "Profile" },
         { key: "classroom", icon: ClassroomSvg, label: "Classroom" },
         { key: "problems", icon: ProblemsSvg, label: "Problems" },
+        { key: "learning", icon: LearningSvg, label: "Learning" },
         { key: "security", icon: SecuritySvg, label: "Security" },
         {
           key: "notifications",
@@ -855,6 +866,8 @@ export default function Profile() {
                     ? "My Classrooms"
                     : selectedKey === "problems"
                     ? "Problem Progress"
+                    : selectedKey === "learning"
+                    ? "Learning Dashboard"
                     : selectedKey === "notifications"
                     ? "Notifications"
                     : selectedKey === "plan"
@@ -868,6 +881,8 @@ export default function Profile() {
                     ? "Classrooms you are currently enrolled in or teaching."
                     : selectedKey === "problems"
                     ? "Your problem-solving history and stats."
+                    : selectedKey === "learning"
+                    ? "Your study activity, progress, and topic mastery."
                     : selectedKey === "notifications"
                     ? "Messages, group invites, and other activity from your account."
                     : selectedKey === "plan"
@@ -888,7 +903,9 @@ export default function Profile() {
             {/* ─── Onglet "Plan & Usage" ────────────────────────────────────
                 Affiche le plan courant et le bouton d'upgrade.
                 Tout est géré dans PlanSection pour garder Profile.jsx propre. */}
-            {selectedKey === "plan" ? (
+            {selectedKey === "learning" ? (
+              <LearningDashboard embedded />
+            ) : selectedKey === "plan" ? (
               <PlanSection />
             ) : selectedKey === "danger" ? (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>

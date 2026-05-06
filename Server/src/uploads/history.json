@@ -1,0 +1,113 @@
+[
+  {
+    "id": "hist_1778076036100_399645",
+    "userId": "a6c3d9ce-77c7-4627-ae22-73b65f44c3ff",
+    "type": "quiz",
+    "documentName": "omnilearn-maizaaymena",
+    "date": "2026-05-06T14:00:36.100Z",
+    "score": 1,
+    "total": 10,
+    "questions": [
+      {
+        "question": "What is the data type of the 'profile' property in the given JSON object?",
+        "options": [
+          "Array",
+          "Object",
+          "String",
+          "Number"
+        ],
+        "answer": "B"
+      },
+      {
+        "question": "What is the value of the 'role' property in the 'profile' object?",
+        "options": [
+          "admin",
+          "user",
+          "guest",
+          "moderator"
+        ],
+        "answer": "A"
+      },
+      {
+        "question": "How many submissions are there in the given JSON object?",
+        "options": [
+          "5",
+          "6",
+          "7",
+          "8"
+        ],
+        "answer": "D"
+      },
+      {
+        "question": "What is the 'exerciseTitle' of the first submission in the 'submissions' array?",
+        "options": [
+          "java-linked-list-cycle-detection",
+          "linked-list",
+          "python-dictionary-filter",
+          "add-two-large-numbers"
+        ],
+        "answer": "A"
+      },
+      {
+        "question": "What is the 'language' property value for all submissions in the 'submissions' array?",
+        "options": [
+          "javascript",
+          "python",
+          "java",
+          "c++"
+        ],
+        "answer": "A"
+      },
+      {
+        "question": "What is the 'status' of the last submission in the 'submissions' array?",
+        "options": [
+          "passed",
+          "failed",
+          "pending",
+          "skipped"
+        ],
+        "answer": "B"
+      },
+      {
+        "question": "What is the purpose of the 'userCode' property in each submission object?",
+        "options": [
+          "To store the user's profile information",
+          "To store the user's submission code",
+          "To store the exercise problem statement",
+          "To store the exercise solution"
+        ],
+        "answer": "B"
+      },
+      {
+        "question": "What is the 'score' property value for the first submission in the 'submissions' array?",
+        "options": [
+          "0",
+          "50",
+          "100",
+          "200"
+        ],
+        "answer": "C"
+      },
+      {
+        "question": "What is the 'isCorrect' property value for the first submission in the 'submissions' array?",
+        "options": [
+          "true",
+          "false",
+          "null",
+          "undefined"
+        ],
+        "answer": "A"
+      },
+      {
+        "question": "What is the 'attemptNumber' property value for the last submission in the 'submissions' array?",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "5"
+        ],
+        "answer": "D"
+      }
+    ]
+  }
+]

@@ -15,6 +15,11 @@ const Level = sequelize.define(
       references: { model: "specialities", key: "id" },
       onDelete: "CASCADE",
     },
+    // Mirrors the parent speciality/grade institutionId for direct filtering.
+    institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     name: {
       type: DataTypes.STRING(100),
       allowNull: false, // e.g., "Level 1", "Level 2", "Beginner"

@@ -93,6 +93,38 @@ export const deleteAnnouncement = (id, annId) =>
   call(`/plan/institutions/${id}/announcements/${annId}`, { method: "DELETE" });
 export const fetchAnalytics = (id) => call(`/plan/institutions/${id}/analytics`);
 
+// ─── Curriculum propre à l'institution (Grades / Specialities / Levels) ─────
+const CURR = (id) => `/institution-curriculum/${id}`;
+
+export const fetchInstitutionGrades = (id) => call(`${CURR(id)}/grades`);
+export const createInstitutionGrade = (id, body) =>
+  call(`${CURR(id)}/grades`, { method: "POST", body: JSON.stringify(body) });
+export const updateInstitutionGrade = (id, gradeId, body) =>
+  call(`${CURR(id)}/grades/${gradeId}`, { method: "PUT", body: JSON.stringify(body) });
+export const deleteInstitutionGrade = (id, gradeId) =>
+  call(`${CURR(id)}/grades/${gradeId}`, { method: "DELETE" });
+
+export const fetchInstitutionSpecialities = (id, gradeId) =>
+  call(`${CURR(id)}/specialities${gradeId ? `?gradeId=${gradeId}` : ""}`);
+export const createInstitutionSpeciality = (id, body) =>
+  call(`${CURR(id)}/specialities`, { method: "POST", body: JSON.stringify(body) });
+export const updateInstitutionSpeciality = (id, specId, body) =>
+  call(`${CURR(id)}/specialities/${specId}`, { method: "PUT", body: JSON.stringify(body) });
+export const deleteInstitutionSpeciality = (id, specId) =>
+  call(`${CURR(id)}/specialities/${specId}`, { method: "DELETE" });
+
+export const fetchInstitutionLevels = (id, specialityId) =>
+  call(`${CURR(id)}/levels${specialityId ? `?specialityId=${specialityId}` : ""}`);
+export const createInstitutionLevel = (id, body) =>
+  call(`${CURR(id)}/levels`, { method: "POST", body: JSON.stringify(body) });
+export const updateInstitutionLevel = (id, levelId, body) =>
+  call(`${CURR(id)}/levels/${levelId}`, { method: "PUT", body: JSON.stringify(body) });
+export const deleteInstitutionLevel = (id, levelId) =>
+  call(`${CURR(id)}/levels/${levelId}`, { method: "DELETE" });
+
+export const seedInstitutionCurriculum = (id) =>
+  call(`${CURR(id)}/seed-from-defaults`, { method: "POST" });
+
 // Banque de problèmes propres à l'institution
 export const fetchInstitutionProblems = () =>
   call(`/ai/ai/getallproblems?status=all&scope=institution`);
