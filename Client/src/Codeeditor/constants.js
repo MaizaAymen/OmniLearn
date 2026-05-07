@@ -11,37 +11,37 @@ export const JUDGE0_LANGUAGE_IDS = {
 export const LANGUAGE_CONFIG = {
   javascript: {
     name: "JavaScript",
-    monacoLang: "javascript",
+    cmLang: "javascript",
     badge: "JS",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg",
   },
   typescript: {
     name: "TypeScript",
-    monacoLang: "typescript",
+    cmLang: "typescript",
     badge: "TS",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg",
   },
   python: {
     name: "Python",
-    monacoLang: "python",
+    cmLang: "python",
     badge: "PY",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg",
   },
   java: {
     name: "Java",
-    monacoLang: "java",
+    cmLang: "java",
     badge: "JV",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg",
   },
   csharp: {
     name: "C#",
-    monacoLang: "csharp",
+    cmLang: "csharp",
     badge: "C#",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/csharp/csharp-original.svg",
   },
   php: {
     name: "PHP",
-    monacoLang: "php",
+    cmLang: "php",
     badge: "PHP",
     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/php/php-original.svg",
   },

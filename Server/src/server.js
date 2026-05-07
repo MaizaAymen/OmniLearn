@@ -25,7 +25,7 @@ const stripeRoutes = require("./routes/stripeRoutes");
 const institutionCurriculumRoutes = require("./routes/institutionCurriculumRoutes");
 const { Server } = require("socket.io");
 const { setupMessageHub } = require("./realtime/messageHub");
-const liveblocksApp = require('./realtime/sessionHub'); // your new Liveblocks file
+const { router: roomsRouter, setupSessionHub } = require("./realtime/sessionHub");
 
 // Import models/index.js to register all models and associations
 const models = require("./models");
@@ -43,7 +43,7 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use('/liveblocks', liveblocksApp);  // prefix all routes under /liveblocks
+app.use("/api/rooms", roomsRouter);
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -148,6 +148,7 @@ app.get("/", (req, res) => {
       },
     });
     setupMessageHub(io);
+    setupSessionHub(io);
     app.set("io", io);
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

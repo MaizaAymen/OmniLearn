@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { fetchSessionList } from "../lib/liveblocks";
+import { fetchSessionList, getMySessionIds, forgetSession } from "../lib/roomClient";
 import {
   Button,
   Card,
@@ -39,6 +39,8 @@ function LiveSessionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [passwordModal, setPasswordModal] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
+  const [showAll, setShowAll] = useState(false); // false = only sessions I created/joined
+  const [myIds, setMyIds] = useState(() => new Set(getMySessionIds()));
 
   useEffect(() => {
     const savedName = localStorage.getItem("collabDisplayName");
@@ -55,7 +57,15 @@ function LiveSessionsPage() {
     let cancelled = false;
     const refresh = async () => {
       const list = await fetchSessionList();
-      if (!cancelled) setSessions(list);
+      if (cancelled) return;
+      setSessions(list);
+      // Prune locally-remembered IDs that no longer exist on the server, then
+      // resync myIds from localStorage so newly-created sessions in other tabs
+      // also appear in the "Mine" filter.
+      const live = new Set(list.map((s) => s.id));
+      const remembered = new Set(getMySessionIds());
+      remembered.forEach((id) => { if (!live.has(id)) forgetSession(id); });
+      setMyIds(new Set(getMySessionIds()));
     };
     refresh();
     const interval = setInterval(refresh, 5000);
@@ -68,16 +78,21 @@ function LiveSessionsPage() {
     return map;
   }, [sessions]);
 
+  const visibleSessions = useMemo(
+    () => (showAll ? sessions : sessions.filter((s) => myIds.has(s.id))),
+    [sessions, showAll, myIds]
+  );
+
   const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
+    if (!searchQuery.trim()) return visibleSessions;
     const q = searchQuery.toLowerCase();
-    return sessions.filter(
+    return visibleSessions.filter(
       (s) =>
         s.name?.toLowerCase().includes(q) ||
         s.id?.toLowerCase().includes(q) ||
         s.hostName?.toLowerCase().includes(q)
     );
-  }, [sessions, searchQuery]);
+  }, [visibleSessions, searchQuery]);
 
   const totalParticipants = useMemo(
     () => sessions.reduce((sum, s) => sum + (s.participantCount || 0), 0),
@@ -278,6 +293,22 @@ function LiveSessionsPage() {
             marginBottom: 16,
           }}
         >
+          <Button.Group size="small">
+            <Button
+              type={showAll ? "default" : "primary"}
+              onClick={() => setShowAll(false)}
+              style={!showAll ? { background: "#111827", borderColor: "#111827" } : undefined}
+            >
+              Mine ({myIds.size})
+            </Button>
+            <Button
+              type={showAll ? "primary" : "default"}
+              onClick={() => setShowAll(true)}
+              style={showAll ? { background: "#111827", borderColor: "#111827" } : undefined}
+            >
+              All ({sessions.length})
+            </Button>
+          </Button.Group>
           <Input
             size="small"
             prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}

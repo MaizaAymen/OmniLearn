@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { createLiveSocket, fetchSessionList } from "../lib/liveblocks";
+import { createLiveSocket, fetchSessionList } from "../lib/roomClient";
 import { Tldraw, createTLStore } from "tldraw";
 import "tldraw/tldraw.css";
 
@@ -54,9 +54,20 @@ const outputsMatch = (actual, expected) => {
 };
 
 const SESSION_TYPES = [
-  { key: "practice",  icon: "📚", label: "Practice",  desc: "Free collaboration, open to anyone" },
-  { key: "classroom", icon: "🎓", label: "Classroom", desc: "Teacher-led — toggle exam timer when ready" },
-  { key: "interview", icon: "🤝", label: "Interview", desc: "Two people, turn-based editing" },
+  {
+    key: "practice",
+    icon: "📚",
+    label: "Practice Mode",
+    desc: "Open collaboration",
+    bullets: ["Everyone can edit", "No restrictions", "No exam", "Public by default"],
+  },
+  {
+    key: "classroom",
+    icon: "🎓",
+    label: "Classroom Mode",
+    desc: "Teacher-controlled",
+    bullets: ["Waiting room ON", "Host / student roles", "Optional exam timer", "Can lock editing"],
+  },
 ];
 
 function TagAutocomplete({ label, note, tags, setTags, users, badgeClass = "" }) {
@@ -452,7 +463,7 @@ function ProblemPage() {
       setSessionLanguageLock(null);
     });
 
-    // Liveblocks shim resyncs the full hand-raise list on every change (CRDT-driven).
+    // Hand-raise list is full-resynced on every change.
     socket.on("session:hands:resync", (hands) => {
       setRaisedHands(hands || []);
       setHandRaised((hands || []).some((h) => h.socketId === socketRef.current?.id));
@@ -541,11 +552,10 @@ function ProblemPage() {
   const TYPE_DEFAULTS = {
     practice:  { visibility:"public",  allowAnonymous:true,  requireJoinApproval:false, teacherMode:false, maxParticipants:10, defaultRole:"editor", collabMode:"free",       autoLock:false },
     classroom: { visibility:"private", allowAnonymous:false, requireJoinApproval:true,  teacherMode:true,  maxParticipants:30, defaultRole:"viewer", collabMode:"controlled", autoLock:false },
-    interview: { visibility:"private", allowAnonymous:false, requireJoinApproval:false, teacherMode:false, maxParticipants:2,  defaultRole:"editor", collabMode:"turn-based", autoLock:true  },
   };
 
   // Map the chosen session type to a sensible default access model.
-  const ACCESS_BY_TYPE = { practice: "anyone", classroom: "classroom", interview: "link" };
+  const ACCESS_BY_TYPE = { practice: "anyone", classroom: "classroom" };
 
   // Changing the access-model dropdown derives the underlying visibility/whitelist/password fields.
   const changeAccessModel = (model) => {
@@ -632,7 +642,7 @@ function ProblemPage() {
 
     socketRef.current.emit("session:leave");
 
-    // Liveblocks has no per-problem socket-pushed list; poll REST instead.
+    // No socket-pushed list; poll REST instead.
     let cancelled = false;
     const refreshList = async () => {
       const list = await fetchSessionList();
@@ -706,7 +716,7 @@ function ProblemPage() {
     });
   };
 
-  // Host switches session type live (practice ↔ classroom ↔ interview).
+  // Host switches session type live (practice ↔ classroom).
   // For classroom, optionally arm the exam timer in the same call.
   const handleModeUpdate = (type, opts = {}) => {
     if (!type || !socketRef.current) return;
@@ -916,6 +926,7 @@ function ProblemPage() {
         hostName:    displayName || "Host",
         language:    selectedLanguage,
         starterCode: code,
+        mode:        sessionType,   // "practice" | "classroom"
         // Access (user-facing)
         visibility:          sessionVisibility,
         password:            sessionPassword,
@@ -1519,7 +1530,6 @@ function ProblemPage() {
                   <option value="practice">Practice</option>
                   <option value="classroom">Classroom</option>
                   <option value="classroom-exam">Classroom + Exam timer</option>
-                  <option value="interview">Interview</option>
                 </select>
               )}
 
@@ -1910,15 +1920,18 @@ function ProblemPage() {
             {/* ── STEP 1: type picker ── */}
             {!sessionType && (
               <div className="grid grid-cols-2 gap-3 mb-2">
-                {SESSION_TYPES.map(({ key, icon, label, desc }) => (
+                {SESSION_TYPES.map(({ key, icon, label, desc, bullets }) => (
                   <button
                     key={key}
-                    className="flex flex-col items-start gap-1 p-3 rounded-xl border-2 border-base-300 hover:border-primary text-left transition-colors"
+                    className="flex flex-col items-start gap-2 p-4 rounded-xl border-2 border-base-300 hover:border-primary hover:bg-base-200/40 text-left transition-colors"
                     onClick={() => applySessionType(key)}
                   >
                     <span className="text-2xl">{icon}</span>
                     <span className="font-semibold text-sm">{label}</span>
                     <span className="text-xs text-base-content/60">{desc}</span>
+                    <ul className="mt-1 space-y-0.5 text-[11px] text-base-content/60 list-disc list-inside">
+                      {bullets.map((b) => <li key={b}>{b}</li>)}
+                    </ul>
                   </button>
                 ))}
               </div>
@@ -1964,11 +1977,18 @@ function ProblemPage() {
                   value={accessModel}
                   onChange={(e) => changeAccessModel(e.target.value)}
                 >
-                  <option value="anyone">Anyone (public)</option>
-                  <option value="link">Anyone with the link</option>
-                  <option value="invited">People I invite</option>
-                  <option value="classroom">My classroom</option>
-                  <option value="password">Password-protected</option>
+                  {sessionType === "practice" ? (
+                    <>
+                      <option value="anyone">Anyone (public)</option>
+                      <option value="link">Anyone with the link</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="classroom">My classroom</option>
+                      <option value="invited">People I invite</option>
+                      <option value="password">Password-protected</option>
+                    </>
+                  )}
                 </select>
 
                 {accessModel === "invited" && (

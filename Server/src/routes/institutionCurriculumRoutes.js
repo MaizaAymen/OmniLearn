@@ -15,14 +15,13 @@ router.use(authenticate);
 router.use(requireInstitutionAdmin);
 
 // Verify the caller is acting on their own institution (super admin bypasses).
-const sameInstitution = (req, res, next) => {
+// Uses router.param so it fires for every route that captures :institutionId,
+// without relying on path-to-regexp wildcard syntax.
+router.param("institutionId", (req, res, next, institutionId) => {
   if (req.user.role === "admin") return next();
-  if (req.user.institutionId === req.params.institutionId) return next();
+  if (req.user.institutionId === institutionId) return next();
   return res.status(403).json({ error: "Forbidden" });
-};
-
-router.use("/:institutionId/*", sameInstitution);
-router.use("/:institutionId", sameInstitution);
+});
 
 // ─── GRADES ──────────────────────────────────────────────────────────────────
 router.get("/:institutionId/grades", async (req, res) => {
