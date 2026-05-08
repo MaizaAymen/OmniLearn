@@ -37,6 +37,9 @@ export const verifyStripeSession = (sessionId) =>
 // Super admin
 export const fetchUsersByPlan = (plan) =>
   call(`/plan/super-admin/users-by-plan${plan ? `?plan=${plan}` : ""}`);
+// Vue riche : détails complets de chaque user + stats globales pour les charts.
+export const fetchUsersOverview = () =>
+  call(`/plan/super-admin/users-overview`);
 export const createInstitution = (body) =>
   call(`/plan/institutions`, { method: "POST", body: JSON.stringify(body) });
 

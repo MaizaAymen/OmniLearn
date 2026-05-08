@@ -64,6 +64,43 @@ const formatTime = (d) => {
   return day.format("MMM D");
 };
 
+// ── /stackoverflow slash-command helper ───────────────────────────────────
+// Calls the public Stack Exchange API and returns the top 3-5 questions
+// sorted by votes. Returns a plain string ready to drop into a chat bubble.
+// We DO NOT summarize, rewrite titles, or add advice — only real results.
+const searchStackOverflow = async (query) => {
+  // Build the API URL: search Stack Overflow, ordered by votes desc.
+  const url =
+    "https://api.stackexchange.com/2.3/search/advanced" +
+    "?order=desc&sort=votes" +
+    "&q=" + encodeURIComponent(query) +
+    "&site=stackoverflow";
+
+  // Fetch the JSON response from Stack Exchange.
+  const res = await fetch(url);
+  const data = await res.json();
+  const items = (data.items || []).slice(0, 5); // keep top 5 max
+
+  // No results → exact required string.
+  if (items.length === 0) return "No relevant Stack Overflow questions found.";
+
+  // Build the strict output format requested by the spec.
+  let out = "🔎 Stack Overflow Results\n";
+  items.forEach((it, i) => {
+    // it.title comes HTML-encoded (e.g. &quot;) → decode for readability.
+    const title = it.title
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
+    out += `${i + 1}. ${title}\n`;
+    out += `⭐ ${it.score} votes\n`;
+    out += `${it.link}\n`;
+  });
+  return out.trim();
+};
+
 const formatBytes = (n = 0) => {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;

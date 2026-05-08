@@ -82,7 +82,7 @@ router.put("/users/:id", async (req, res) => {
     if (req.user.role !== "admin" && req.user.id !== req.params.id) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { firstname, lastname, email, password, currentPassword, role, bio, githubUrl, linkedinUrl, avatar, isActive } = req.body;
+    const { firstname, lastname, email, password, currentPassword, role, bio, githubUrl, linkedinUrl, avatar, isActive, plan } = req.body;
     const user = await User.findByPk(req.params.id);
     if (user) {
       user.firstname = firstname ?? user.firstname;
@@ -99,6 +99,16 @@ router.put("/users/:id", async (req, res) => {
         }
       }
       if (req.user.role === "admin") user.role = role ?? user.role;
+
+      // Seul un admin peut changer le plan d'un autre user (free / pro / institution).
+      // Quand le plan change vraiment on met aussi à jour planJoinedAt pour
+      // garder une trace de la date de promotion.
+      if (req.user.role === "admin" && plan && ["free", "pro", "institution"].includes(plan)) {
+        if (user.plan !== plan) {
+          user.plan = plan;
+          user.planJoinedAt = new Date();
+        }
+      }
 
       // Update password only when explicitly provided.
       if (typeof password === "string" && password.trim().length > 0) {

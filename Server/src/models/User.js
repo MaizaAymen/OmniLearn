@@ -49,6 +49,13 @@ const User = sequelize.define(
       allowNull: false,
       defaultValue: "free",
     },
+    // Date à laquelle l'utilisateur a rejoint son plan actuel (utile pour
+    // afficher "joined Pro on …" dans le dashboard admin).
+    planJoinedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
+    },
     // ── ÉTAPE 3 : lien vers l'institution (null si solo / super admin) ─────
     institutionId: {
       type: DataTypes.UUID,
@@ -112,6 +119,43 @@ const User = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+
+    //roadmap fields
+
+careerGoal: {
+  type: DataTypes.STRING(255),
+  allowNull: true,
+},
+
+interests: {
+  type: DataTypes.JSON,
+  allowNull: true,
+  defaultValue: [],
+},
+
+programmingLanguages: {
+  type: DataTypes.JSON,
+  allowNull: true,
+  defaultValue: [],
+},
+
+problems: {
+  type: DataTypes.JSON,
+  allowNull: true,
+  defaultValue: [],
+},
+
+roadmap: {
+  type: DataTypes.JSON,
+  allowNull: true,
+  defaultValue: [],
+},
+
+roadmapProgress: {
+  type: DataTypes.INTEGER,
+  defaultValue: 0,
+},
+    
   },
   {
     tableName: "users",

@@ -5,11 +5,8 @@ import {
   BankOutlined,
   ClusterOutlined,
   CodeOutlined,
-  CrownOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  StarOutlined,
-  ThunderboltOutlined,
   TeamOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
@@ -27,10 +24,9 @@ const allSections = [
   { key: "levels",       label: "Levels",        icon: <AppstoreOutlined />, roles: ["admin"] },
   { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined />, roles: ["admin", "teacher"] },
   { key: "problems",     label: "Problem Bank",  icon: <CodeOutlined />, roles: ["admin", "teacher"] },
-  // Nouveaux : gestion des plans, du free-tier, et des institutions.
-  { key: "free-tier",    label: "Free Tier",     icon: <StarOutlined />, roles: ["admin"] },
-  { key: "pro-tier",     label: "Pro Tier",      icon: <ThunderboltOutlined />, roles: ["admin"] },
-  { key: "users-plan",   label: "Users by Plan", icon: <CrownOutlined />, roles: ["admin"] },
+  // NOTE : "Free Tier", "Pro Tier" et "Users by Plan" sont maintenant
+  // regroupés dans le dashboard /users pour rassembler tout ce qui touche
+  // aux utilisateurs et aux plans en un seul endroit.
   { key: "institution",  label: "My Institution", icon: <BankOutlined />, roles: ["admin", "institution_admin"] },
 ];
 

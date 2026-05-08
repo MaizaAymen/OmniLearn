@@ -150,7 +150,7 @@ router.post("/upgrade/pro", async (req, res) => {
     if (req.user.plan === "institution") {
       return res.status(400).json({ error: "You already have an institution plan" });
     }
-    await User.update({ plan: "pro" }, { where: { id: req.user.id } });
+    await User.update({ plan: "pro", planJoinedAt: new Date() }, { where: { id: req.user.id } });
     res.json({ message: "Upgraded to Pro", plan: "pro" });
   } catch (err) {
     console.error("upgrade pro:", err);
@@ -171,7 +171,7 @@ router.post("/upgrade/institution", async (req, res) => {
         error: "You already belong to another institution. Leave it before creating your own.",
       });
     }
-    await User.update({ plan: "institution" }, { where: { id: req.user.id } });
+    await User.update({ plan: "institution", planJoinedAt: new Date() }, { where: { id: req.user.id } });
     res.json({ message: "Upgraded to Institution", plan: "institution" });
   } catch (err) {
     console.error("upgrade institution:", err);
@@ -221,7 +221,7 @@ router.post("/institutions/self-create", async (req, res) => {
     // ÉTAPE 2 : promouvoir l'utilisateur (sauf super admin qui garde son rôle).
     const newRole = req.user.role === "admin" ? "admin" : "institution_admin";
     await User.update(
-      { role: newRole, institutionId: institution.id },
+      { role: newRole, institutionId: institution.id, planJoinedAt: new Date() },
       { where: { id: req.user.id } }
     );
 
@@ -336,6 +336,7 @@ router.post("/institutions", requireSuperAdmin, async (req, res) => {
       role: "institution_admin",
       plan: "institution",
       institutionId: institution.id,
+      planJoinedAt: new Date(),
     });
 
     res.status(201).json(institution);
@@ -525,6 +526,7 @@ router.post("/invite/:token/accept", async (req, res) => {
         role: link.role,
         plan: "institution",
         institutionId: link.institutionId,
+        planJoinedAt: new Date(),
       },
       { where: { id: req.user.id } }
     );
@@ -888,6 +890,126 @@ router.get("/institutions/:id/analytics", requireInstitutionAdmin, async (req, r
   } catch (err) {
     console.error("analytics:", err);
     res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN : VUE RICHE DES UTILISATEURS POUR LE DASHBOARD /users
+// Retourne, pour CHAQUE utilisateur :
+//   - infos de base (nom, email, role, plan, createdAt, planJoinedAt)
+//   - le nom de son institution (s'il en a une)
+//   - le nombre de soumissions et de problèmes résolus
+//   - si institution_admin : nb d'utilisateurs / classrooms / profs de son école
+// Et des stats globales (totaux + langages les plus utilisés) pour les charts.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/super-admin/users-overview", requireSuperAdmin, async (req, res) => {
+  try {
+    // ÉTAPE 1 : on charge tous les users + leur institution liée (left join).
+    const users = await User.findAll({
+      attributes: [
+        "id", "firstname", "lastname", "email", "role", "plan",
+        "institutionId", "createdAt", "planJoinedAt", "isActive",
+        "isEmailVerified",
+      ],
+      include: [
+        { model: Institution, as: "institution", attributes: ["id", "name"], required: false },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // ÉTAPE 2 : on récupère TOUTES les soumissions en une fois pour éviter
+    // un N+1 par utilisateur. On groupe ensuite côté Node.
+    const allSubs = await CodeSubmission.findAll({
+      attributes: ["userId", "status", "language"],
+    });
+    const subsByUser = {};        // userId -> { total, solved }
+    const langCounts = {};         // language -> total submissions
+    for (const s of allSubs) {
+      const slot = subsByUser[s.userId] || (subsByUser[s.userId] = { total: 0, solved: 0 });
+      slot.total += 1;
+      if (s.status === "passed") slot.solved += 1;
+      langCounts[s.language] = (langCounts[s.language] || 0) + 1;
+    }
+
+    // ÉTAPE 3 : pour les institution_admin on calcule les détails de leur école.
+    // On commence par grouper les users par institutionId pour compter
+    // facilement les membres / profs.
+    const Class = require("../models").Class;
+    const byInstitution = {};
+    for (const u of users) {
+      if (!u.institutionId) continue;
+      const slot = byInstitution[u.institutionId] || (byInstitution[u.institutionId] = { members: 0, teachers: 0, teacherIds: [] });
+      slot.members += 1;
+      if (u.role === "teacher") {
+        slot.teachers += 1;
+        slot.teacherIds.push(u.id);
+      }
+    }
+    // Pour chaque institution on compte les classrooms (= classes des profs).
+    for (const instId of Object.keys(byInstitution)) {
+      const slot = byInstitution[instId];
+      slot.classrooms = slot.teacherIds.length
+        ? await Class.count({ where: { teacherId: slot.teacherIds } })
+        : 0;
+    }
+
+    // ÉTAPE 4 : on assemble la réponse user par user.
+    const enriched = users.map((u) => {
+      const base = u.toJSON();
+      const stats = subsByUser[u.id] || { total: 0, solved: 0 };
+      const adminInfo =
+        u.role === "institution_admin" && u.institutionId && byInstitution[u.institutionId]
+          ? {
+              institutionMemberCount: byInstitution[u.institutionId].members,
+              institutionTeacherCount: byInstitution[u.institutionId].teachers,
+              institutionClassroomCount: byInstitution[u.institutionId].classrooms,
+            }
+          : null;
+      return {
+        ...base,
+        institutionName: base.institution?.name || null,
+        submissionCount: stats.total,
+        solvedCount: stats.solved,
+        adminInfo,
+      };
+    });
+
+    // ÉTAPE 5 : compteurs globaux pour les Recharts.
+    const counts = {
+      free: enriched.filter((u) => u.plan === "free").length,
+      pro: enriched.filter((u) => u.plan === "pro").length,
+      institution: enriched.filter((u) => u.plan === "institution").length,
+      total: enriched.length,
+    };
+
+    // Top utilisateurs par problèmes résolus (pour le bar chart).
+    const topSolvers = enriched
+      .filter((u) => u.solvedCount > 0)
+      .sort((a, b) => b.solvedCount - a.solvedCount)
+      .slice(0, 10)
+      .map((u) => ({
+        name: `${u.firstname} ${u.lastname}`,
+        solved: u.solvedCount,
+      }));
+
+    // Langages les plus utilisés (pour le pie/bar chart).
+    const languageStats = Object.entries(langCounts)
+      .map(([language, count]) => ({ language, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      counts,
+      users: enriched,
+      stats: {
+        totalSolved: allSubs.filter((s) => s.status === "passed").length,
+        totalSubmissions: allSubs.length,
+        topSolvers,
+        languageStats,
+      },
+    });
+  } catch (err) {
+    console.error("users-overview:", err);
+    res.status(500).json({ error: "Failed to fetch users overview" });
   }
 });
 
