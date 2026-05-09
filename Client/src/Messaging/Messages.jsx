@@ -66,8 +66,16 @@ const formatTime = (d) => {
 
 // ── /stackoverflow slash-command helper ───────────────────────────────────
 // Calls the public Stack Exchange API and returns the top 3-5 questions
-// sorted by votes. Returns a plain string ready to drop into a chat bubble.
-// We DO NOT summarize, rewrite titles, or add advice — only real results.
+// sorted by votes. Returns an ARRAY of {title, score, link} objects so the
+// UI can render real clickable cards (no AI summaries, no rewriting).
+const decodeHtml = (s) =>
+  s
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
 const searchStackOverflow = async (query) => {
   // Build the API URL: search Stack Overflow, ordered by votes desc.
   const url =
@@ -81,24 +89,251 @@ const searchStackOverflow = async (query) => {
   const data = await res.json();
   const items = (data.items || []).slice(0, 5); // keep top 5 max
 
-  // No results → exact required string.
-  if (items.length === 0) return "No relevant Stack Overflow questions found.";
+  // Normalize into a small, predictable shape for the UI.
+  return items.map((it) => ({
+    title: decodeHtml(it.title),
+    score: it.score,
+    link: it.link,
+  }));
+};
 
-  // Build the strict output format requested by the spec.
-  let out = "🔎 Stack Overflow Results\n";
-  items.forEach((it, i) => {
-    // it.title comes HTML-encoded (e.g. &quot;) → decode for readability.
-    const title = it.title
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">");
-    out += `${i + 1}. ${title}\n`;
-    out += `⭐ ${it.score} votes\n`;
-    out += `${it.link}\n`;
-  });
-  return out.trim();
+// ── Persisting Stack Overflow answers in the existing message model ──────
+// We don't create a new DB collection. We just encode the results inside the
+// regular message `content` string with a marker prefix. On render we detect
+// the marker and show the Stack Overflow logo + name instead of the sender.
+const SO_MARKER = "__SO__";
+
+// Build the string we save in DB.
+const encodeStackMessage = (results) => SO_MARKER + JSON.stringify(results);
+
+// If a message was a Stack Overflow answer, return the parsed results array.
+// Otherwise return null (= regular message).
+const parseStackMessage = (content) => {
+  if (typeof content !== "string" || !content.startsWith(SO_MARKER)) return null;
+  try {
+    return JSON.parse(content.slice(SO_MARKER.length));
+  } catch {
+    return null;
+  }
+};
+
+// Tiny inline Stack Overflow logo (SVG) — no extra dependency, no network call.
+const StackOverflowLogo = ({ size = 28 }) => (
+  <div
+    style={{
+      width: size,
+      height: size,
+      borderRadius: 6,
+      background: "#F48024", // official SO orange
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    }}
+  >
+    {/* The "stacked bars" mark, simplified */}
+    <svg viewBox="0 0 32 32" width={size * 0.7} height={size * 0.7} fill="#fff">
+      <path d="M22 28v-7h2v9H4v-9h2v7h16z" />
+      <path d="M8 19l13 2 .3-2-13-2L8 19zm1-5l12 5 .8-1.8-12-5L9 14zm2-4l11 7 1.1-1.6-11-7L11 10zm3-3l9 9 1.4-1.4-9-9L14 7zm5-3l-1.6 1.2 7 9 1.6-1.2-7-9z" />
+    </svg>
+  </div>
+);
+
+// ── /video slash-command helper ──────────────────────────────────────────
+// Calls the YouTube Data API and returns the top 5 most-viewed videos
+// matching the user's query. Each item has the basic info we need to
+// build a small video card (title, channel, thumbnail, link).
+const YT_API_KEY = "AIzaSyCS3VuEA4XdzJYaNTZxKl0l9MTk_b06ks8";
+
+const searchYouTube = async (query) => {
+  // Build the YouTube search URL.
+  // - part=snippet      → we want title, channel, thumbnail
+  // - type=video        → only videos (no playlists/channels)
+  // - order=viewCount   → most-viewed first
+  // - maxResults=5      → keep it short
+  const url =
+    "https://www.googleapis.com/youtube/v3/search" +
+    "?part=snippet&type=video&order=viewCount&maxResults=5" +
+    "&q=" + encodeURIComponent(query) +
+    "&key=" + YT_API_KEY;
+
+  // Ask YouTube and read the JSON answer.
+  const res = await fetch(url);
+  const data = await res.json();
+  const items = data.items || [];
+
+  // Turn each YouTube item into a small simple object.
+  return items.map((it) => ({
+    title: decodeHtml(it.snippet.title),
+    channel: it.snippet.channelTitle,
+    thumb: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
+    link: "https://www.youtube.com/watch?v=" + it.id.videoId,
+  }));
+};
+
+// Same persistence trick as Stack Overflow: a marker + JSON inside `content`.
+const YT_MARKER = "__YT__";
+const encodeYouTubeMessage = (videos) => YT_MARKER + JSON.stringify(videos);
+const parseYouTubeMessage = (content) => {
+  if (typeof content !== "string" || !content.startsWith(YT_MARKER)) return null;
+  try { return JSON.parse(content.slice(YT_MARKER.length)); } catch { return null; }
+};
+
+// Tiny inline YouTube logo — red rounded square with a white play triangle.
+const YouTubeLogo = ({ size = 28 }) => (
+  <div
+    style={{
+      width: size,
+      height: size,
+      borderRadius: 6,
+      background: "#FF0000", // YouTube red
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    }}
+  >
+    <svg viewBox="0 0 24 24" width={size * 0.6} height={size * 0.6} fill="#fff">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  </div>
+);
+
+// Renders one card per video. Clicking a card opens it on YouTube.
+const YouTubeResults = ({ videos }) => {
+  if (!videos || videos.length === 0) {
+    return <span>No videos found.</span>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {videos.map((v, i) => (
+        <a
+          key={i}
+          href={v.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "flex",
+            gap: 10,
+            padding: 8,
+            borderRadius: 10,
+            background: "#FEF2F2",          // soft red tint
+            border: "1px solid #FECACA",
+            color: "#1F2937",
+            textDecoration: "none",
+          }}
+        >
+          {/* Thumbnail */}
+          {v.thumb && (
+            <img
+              src={v.thumb}
+              alt=""
+              style={{ width: 96, height: 54, borderRadius: 6, objectFit: "cover" }}
+            />
+          )}
+          {/* Title + channel */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+              {v.title}
+            </div>
+            <div style={{ fontSize: 11, color: "#6B7280" }}>{v.channel}</div>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// ── /ai slash-command helper ─────────────────────────────────────────────
+// Sends the user's prompt to our backend (which calls the Groq LLM) and
+// returns one plain-text answer. Same persistence trick as the others.
+const askAI = async (prompt) => {
+  const data = await api.aiChat(prompt);
+  return data.answer || "";
+};
+
+const AI_MARKER = "__AI__";
+const encodeAIMessage = (answer) => AI_MARKER + answer;
+const parseAIMessage = (content) => {
+  if (typeof content !== "string" || !content.startsWith(AI_MARKER)) return null;
+  return content.slice(AI_MARKER.length);
+};
+
+// Tiny inline AI logo — purple square with a small sparkle icon.
+const AILogo = ({ size = 28 }) => (
+  <div
+    style={{
+      width: size,
+      height: size,
+      borderRadius: 6,
+      background: "#7C3AED", // friendly purple
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    }}
+  >
+    <svg viewBox="0 0 24 24" width={size * 0.6} height={size * 0.6} fill="#fff">
+      <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2zM19 14l.9 2.6L22 17l-2.1.4L19 20l-.9-2.6L16 17l2.1-.4L19 14z" />
+    </svg>
+  </div>
+);
+
+// Renders the AI answer text. Keeps line breaks readable.
+const AIResult = ({ answer }) => (
+  <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{answer}</div>
+);
+
+// ── List of slash commands available in the composer ─────────────────────
+// Add new commands here and they'll show up in the autocomplete dropdown.
+const SLASH_COMMANDS = [
+  { name: "/ai",            hint: "Ask the AI assistant" },
+  { name: "/stackoverflow", hint: "Search Stack Overflow questions" },
+  { name: "/video",         hint: "Search YouTube videos" },
+];
+
+// ── Renders a tidy card for each Stack Overflow result ────────────────────
+// Used inside the bot message bubble. Titles are clickable links that open
+// the question on Stack Overflow in a new tab.
+const StackOverflowResults = ({ results }) => {
+  // No matches → show the exact required fallback string.
+  if (!results || results.length === 0) {
+    return <span>No relevant Stack Overflow questions found.</span>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Header tag */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+        <span>🔎</span>
+        <span>Stack Overflow Results</span>
+      </div>
+      {/* One card per question */}
+      {results.map((r, i) => (
+        <a
+          key={i}
+          href={r.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "block",
+            padding: "10px 12px",
+            borderRadius: 10,
+            background: "#FFF7ED", // soft Stack Overflow orange tint
+            border: "1px solid #FED7AA",
+            color: "#1F2937",
+            textDecoration: "none",
+          }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+            {i + 1}. {r.title}
+          </div>
+          <div style={{ fontSize: 12, color: "#6B7280" }}>
+            ⭐ {r.score} votes · {r.link}
+          </div>
+        </a>
+      ))}
+    </div>
+  );
 };
 
 const formatBytes = (n = 0) => {
@@ -297,6 +532,76 @@ const Messages = () => {
     if ((!text && !pendingAttachment) || !activeId || sending) return;
     setSending(true);
     try {
+      // ── /ai command ───────────────────────────────────────────────────
+      // Send the prompt to our /ai/chat endpoint and save the answer.
+      if (text.toLowerCase().startsWith("/ai")) {
+        const prompt = text.slice("/ai".length).trim();
+        if (!prompt) {
+          antdMessage.warning("Usage: /ai <your question>");
+          setSending(false);
+          return;
+        }
+        // Save the user's prompt so it stays in the chat.
+        const qMsg = await api.sendMessage(activeId, text, null);
+        setMessages((prev) => (prev.some((m) => m.id === qMsg.id) ? prev : [...prev, qMsg]));
+
+        // Save the AI answer.
+        const answer = await askAI(prompt);
+        const aMsg = await api.sendMessage(activeId, encodeAIMessage(answer), null);
+        setMessages((prev) => (prev.some((m) => m.id === aMsg.id) ? prev : [...prev, aMsg]));
+
+        setDraft("");
+        setSending(false);
+        return;
+      }
+
+      // ── /video command ────────────────────────────────────────────────
+      // Search YouTube and save the videos as a normal message.
+      if (text.toLowerCase().startsWith("/video")) {
+        const query = text.slice("/video".length).trim();
+        if (!query) {
+          antdMessage.warning("Usage: /video <search words>");
+          setSending(false);
+          return;
+        }
+        // Save what the user asked for (so it stays in the chat).
+        const qMsg = await api.sendMessage(activeId, text, null);
+        setMessages((prev) => (prev.some((m) => m.id === qMsg.id) ? prev : [...prev, qMsg]));
+
+        // Save the YouTube answer.
+        const videos = await searchYouTube(query);
+        const aMsg = await api.sendMessage(activeId, encodeYouTubeMessage(videos), null);
+        setMessages((prev) => (prev.some((m) => m.id === aMsg.id) ? prev : [...prev, aMsg]));
+
+        setDraft("");
+        setSending(false);
+        return;
+      }
+
+      // ── /stackoverflow command ────────────────────────────────────────
+      // Fetch results, then save them as a normal message (we encode the
+      // results inside `content` so the existing DB model is reused).
+      if (text.toLowerCase().startsWith("/stackoverflow")) {
+        const query = text.slice("/stackoverflow".length).trim();
+        if (!query) {
+          antdMessage.warning("Usage: /stackoverflow <your question>");
+          setSending(false);
+          return;
+        }
+        // Save the user's question so it stays visible.
+        const qMsg = await api.sendMessage(activeId, text, null);
+        setMessages((prev) => (prev.some((m) => m.id === qMsg.id) ? prev : [...prev, qMsg]));
+
+        // Save the Stack Overflow answer.
+        const results = await searchStackOverflow(query);
+        const aMsg = await api.sendMessage(activeId, encodeStackMessage(results), null);
+        setMessages((prev) => (prev.some((m) => m.id === aMsg.id) ? prev : [...prev, aMsg]));
+
+        setDraft("");
+        setSending(false);
+        return;
+      }
+
       const msg = await api.sendMessage(activeId, text, pendingAttachment);
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       setDraft("");
@@ -417,12 +722,42 @@ const Messages = () => {
         padding: 24,
       }}
     >
+      {/* ── Quick docs banner ──────────────────────────────────────────
+          Tells the user what the messenger can do and lists the available
+          slash commands. Kept compact so it doesn't push the chat down. */}
+      <div
+        style={{
+          background: PALETTE.surface,
+          border: `1px solid ${PALETTE.border}`,
+          borderRadius: 12,
+          padding: "10px 16px",
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <Text strong style={{ color: PALETTE.text, fontSize: 13 }}>
+          💬 Messenger
+        </Text>
+        <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+          Send messages, share files, create groups.
+        </Text>
+        <Tag style={{ background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11 }}>
+          /stackoverflow &lt;query&gt;
+        </Tag>
+        <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+          → search Stack Overflow inside the chat.
+        </Text>
+      </div>
+
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "340px 1fr",
           gap: 16,
-          height: "calc(100vh - 160px)",
+          height: "calc(100vh - 200px)",
           minHeight: 560,
         }}
       >
@@ -729,6 +1064,182 @@ const Messages = () => {
                   </div>
                 ) : (
                   messages.map((msg, i) => {
+                    // ── AI answer? render special bubble ──
+                    // Same idea: detect the marker and show the AI logo
+                    // + name "AI" with the answer inside the bubble.
+                    const aiAnswer = parseAIMessage(msg.content);
+                    if (aiAnswer !== null) {
+                      return (
+                        <div
+                          key={msg.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-start",
+                            alignItems: "flex-end",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <AILogo size={32} />
+                          <div style={{ maxWidth: "70%" }}>
+                            <Text
+                              style={{
+                                color: "#7C3AED",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                display: "block",
+                              }}
+                            >
+                              AI Assistant
+                            </Text>
+                            <div
+                              style={{
+                                padding: "10px 14px",
+                                borderRadius: 16,
+                                background: "#F5F3FF",
+                                border: "1px solid #DDD6FE",
+                                borderBottomLeftRadius: 4,
+                                fontSize: 14,
+                                color: PALETTE.text,
+                              }}
+                            >
+                              <AIResult answer={aiAnswer} />
+                            </div>
+                            <Text
+                              style={{
+                                color: PALETTE.textSoft,
+                                fontSize: 10,
+                                marginTop: 4,
+                                display: "block",
+                                padding: "0 4px",
+                              }}
+                            >
+                              {dayjs(msg.createdAt).format("HH:mm")}
+                            </Text>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // ── YouTube answer? render special bubble ──
+                    // Same idea as Stack Overflow: detect the marker and
+                    // show the YouTube logo + name with the video cards.
+                    const ytVideos = parseYouTubeMessage(msg.content);
+                    if (ytVideos) {
+                      return (
+                        <div
+                          key={msg.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-start",
+                            alignItems: "flex-end",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <YouTubeLogo size={32} />
+                          <div style={{ maxWidth: "70%" }}>
+                            <Text
+                              style={{
+                                color: "#FF0000",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                display: "block",
+                              }}
+                            >
+                              YouTube
+                            </Text>
+                            <div
+                              style={{
+                                padding: "10px 14px",
+                                borderRadius: 16,
+                                background: PALETTE.surface,
+                                border: `1px solid ${PALETTE.border}`,
+                                borderBottomLeftRadius: 4,
+                                fontSize: 14,
+                              }}
+                            >
+                              <YouTubeResults videos={ytVideos} />
+                            </div>
+                            <Text
+                              style={{
+                                color: PALETTE.textSoft,
+                                fontSize: 10,
+                                marginTop: 4,
+                                display: "block",
+                                padding: "0 4px",
+                              }}
+                            >
+                              {dayjs(msg.createdAt).format("HH:mm")}
+                            </Text>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // ── Stack Overflow answer? render special bubble ──
+                    // We detect the marker stored in `content` and show
+                    // the SO logo + name "Stack Overflow" instead of
+                    // the original sender's avatar/name.
+                    const stackResults = parseStackMessage(msg.content);
+                    if (stackResults) {
+                      return (
+                        <div
+                          key={msg.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-start",
+                            alignItems: "flex-end",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <StackOverflowLogo size={32} />
+                          <div style={{ maxWidth: "70%" }}>
+                            <Text
+                              style={{
+                                color: "#F48024",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                display: "block",
+                              }}
+                            >
+                              Stack Overflow
+                            </Text>
+                            <div
+                              style={{
+                                padding: "10px 14px",
+                                borderRadius: 16,
+                                background: PALETTE.surface,
+                                border: `1px solid ${PALETTE.border}`,
+                                borderBottomLeftRadius: 4,
+                                fontSize: 14,
+                              }}
+                            >
+                              <StackOverflowResults results={stackResults} />
+                            </div>
+                            <Text
+                              style={{
+                                color: PALETTE.textSoft,
+                                fontSize: 10,
+                                marginTop: 4,
+                                display: "block",
+                                padding: "0 4px",
+                              }}
+                            >
+                              {dayjs(msg.createdAt).format("HH:mm")}
+                            </Text>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     const mine = msg.senderId === me?.id;
                     const sender = usersById[msg.senderId];
                     const prev = messages[i - 1];
@@ -872,6 +1383,60 @@ const Messages = () => {
                     />
                   </div>
                 )}
+                {/* ── Slash-command autocomplete ──────────────────────────
+                    If the draft starts with "/", we filter SLASH_COMMANDS by
+                    what the user has typed and show matching options.
+                    Click a row (or press Tab) to complete the command. */}
+                {draft.startsWith("/") &&
+                  (() => {
+                    // Take only the first word so "/stack hello" stops matching once a space is typed.
+                    const typed = draft.split(" ")[0].toLowerCase();
+                    // Hide the dropdown once a full command is fully typed.
+                    const matches = SLASH_COMMANDS.filter(
+                      (c) => c.name.startsWith(typed) && c.name !== typed
+                    );
+                    if (matches.length === 0) return null;
+                    return (
+                      <div
+                        style={{
+                          background: PALETTE.surface,
+                          border: `1px solid ${PALETTE.border}`,
+                          borderRadius: 10,
+                          padding: 4,
+                          maxWidth: 320,
+                        }}
+                      >
+                        {matches.map((c) => (
+                          <div
+                            key={c.name}
+                            // Click → replace the typed prefix with the full command + space.
+                            onClick={() => setDraft(c.name + " ")}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              fontSize: 13,
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = PALETTE.accentSoft)
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = "transparent")
+                            }
+                          >
+                            <span style={{ fontWeight: 600, color: PALETTE.accent }}>
+                              {c.name}
+                            </span>
+                            <span style={{ color: PALETTE.textSoft }}>{c.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
                   <input
                     ref={fileInputRef}
@@ -896,7 +1461,20 @@ const Messages = () => {
                         handleSend();
                       }
                     }}
-                    placeholder="Write a message…"
+                    // Tab key → autocomplete the first matching slash command.
+                    onKeyDown={(e) => {
+                      if (e.key === "Tab" && draft.startsWith("/")) {
+                        const typed = draft.split(" ")[0].toLowerCase();
+                        const match = SLASH_COMMANDS.find((c) =>
+                          c.name.startsWith(typed)
+                        );
+                        if (match && match.name !== typed) {
+                          e.preventDefault();
+                          setDraft(match.name + " ");
+                        }
+                      }
+                    }}
+                    placeholder="Write a message…  (type / for commands)"
                     autoSize={{ minRows: 1, maxRows: 5 }}
                     style={{
                       flex: 1,

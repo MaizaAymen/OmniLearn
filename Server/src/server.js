@@ -23,6 +23,7 @@ const planRoutes = require("./routes/planRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
 const institutionCurriculumRoutes = require("./routes/institutionCurriculumRoutes");
+const roadmapRoutes = require("./routes/roadmapRoutes");
 const { Server } = require("socket.io");
 const { setupMessageHub } = require("./realtime/messageHub");
 const { router: roomsRouter, setupSessionHub } = require("./realtime/sessionHub");
@@ -64,6 +65,7 @@ app.use("/api/workspace", workspaceRoutes);
 app.use("/api/stripe", stripeRoutes);
 // Per-institution Grades / Specialities / Levels (managed by institution_admin).
 app.use("/api/institution-curriculum", institutionCurriculumRoutes);
+app.use("/api/roadmap", roadmapRoutes);
 
 
 app.get("/", (req, res) => {

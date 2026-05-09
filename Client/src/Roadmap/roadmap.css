@@ -1,0 +1,244 @@
+/* Roadmap styling — matches UML page (cream bg, navy borders, purple accent). */
+.rm-shell {
+  background: #FFF0E5;
+  min-height: calc(100vh - 64px);
+  color: #10162F;
+}
+
+/* React Flow tweaks for light theme */
+.rm-shell .react-flow {
+  background: #FFF0E5;
+}
+.rm-shell .react-flow__edge-path {
+  stroke: #10162F;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.rm-shell .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #3A10E5;
+}
+.rm-shell .react-flow__handle {
+  background: #10162F;
+  border: 2px solid #FFF0E5;
+  width: 8px;
+  height: 8px;
+}
+.rm-shell .react-flow__controls,
+.rm-shell .react-flow__minimap {
+  background: #FFFFFF;
+  border: 2px solid #10162F;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rm-shell .react-flow__controls button {
+  background: #FFFFFF;
+  color: #10162F;
+  border-bottom: 1px solid #E5E5E5;
+}
+.rm-shell .react-flow__controls button:hover {
+  background: #FFF7F0;
+}
+
+/* ── Pyramid node card (matches UML problem card aesthetic) ─────────────── */
+.rm-node {
+  position: relative;
+  width: 240px;
+  background: #FFFFFF;
+  border: 2px solid #10162F;
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+}
+.rm-node:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 0 #10162F;
+}
+.rm-node.selected {
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 0 var(--rm-accent, #3A10E5);
+}
+.rm-node .rm-bar {
+  height: 6px;
+  background: var(--rm-accent, #3A10E5);
+}
+.rm-node .rm-body {
+  padding: 12px 14px 14px;
+}
+.rm-node .rm-type {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rm-accent, #3A10E5);
+  background: color-mix(in srgb, var(--rm-accent, #3A10E5) 8%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--rm-accent, #3A10E5) 30%, transparent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.rm-node .rm-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #10162F;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rm-node .rm-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #E5E7EB;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.rm-node .rm-diff {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rm-node .rm-diff.diff-easy   { color: #008A27; background: #008A2715; }
+.rm-node .rm-diff.diff-medium { color: #F59E0B; background: #F59E0B18; }
+.rm-node .rm-diff.diff-hard   { color: #E91C11; background: #E91C1115; }
+.rm-node .rm-progress {
+  flex: 1;
+  margin-left: 10px;
+  height: 4px;
+  background: #F1F5F9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rm-node .rm-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--rm-accent, #3A10E5);
+  transition: width 400ms ease;
+}
+.rm-node.status-completed .rm-bar {
+  background: #008A27;
+}
+.rm-node.status-completed::after {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #008A27;
+  color: #FFFFFF;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 13px;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 0 0 1.5px #10162F;
+}
+.rm-node.status-in_progress .rm-bar {
+  background: repeating-linear-gradient(
+    45deg, #3A10E5 0 8px, #6B5CE7 8px 16px
+  );
+  background-size: 200% 100%;
+  animation: rm-stripe 1.4s linear infinite;
+}
+@keyframes rm-stripe {
+  from { background-position: 0 0; }
+  to { background-position: 32px 0; }
+}
+
+/* ── Detail panel (light theme) ─────────────────────────────────────────── */
+.rm-panel {
+  position: fixed;
+  top: 64px;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  background: #FFFFFF;
+  border-left: 2px solid #10162F;
+  box-shadow: -8px 0 0 -4px #10162F22;
+  overflow-y: auto;
+  z-index: 50;
+  animation: rm-slide 240ms ease;
+}
+@keyframes rm-slide {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.rm-link {
+  display: block;
+  padding: 10px 12px;
+  background: #FFFFFF;
+  border: 2px solid #10162F;
+  border-radius: 8px;
+  color: #10162F;
+  text-decoration: none;
+  margin-bottom: 8px;
+  transition: transform 180ms, box-shadow 180ms;
+}
+.rm-link:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 #10162F;
+}
+
+.rm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  border: 2px solid #10162F;
+  color: #10162F;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 8px 8px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms, color 150ms;
+}
+.rm-chip:hover {
+  background: #10162F;
+  color: #FFFFFF;
+}
+.rm-chip.active {
+  background: #3A10E5;
+  color: #FFFFFF;
+  border-color: #3A10E5;
+}
+
+.rm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  border: 2px solid #10162F;
+  background: #3A10E5;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background 160ms;
+}
+.rm-btn:hover { background: #2D0CB8; }
+.rm-btn.ghost {
+  background: transparent;
+  color: #10162F;
+}
+.rm-btn.ghost:hover {
+  background: #10162F;
+  color: #FFFFFF;
+}
+.rm-btn:disabled { opacity: 0.6; cursor: not-allowed; }

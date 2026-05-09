@@ -61,6 +61,29 @@ async function generateRoadmap(topic) {
   return JSON.parse(text);
 }
 
+// ── Simple chat endpoint used by the /ai slash-command in the messenger.
+// Takes { prompt } and returns { answer } — one short reply, plain text.
+router.post("/ai/chat", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt is required" });
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: "You are a helpful assistant. Keep answers short and clear." },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    const answer = completion.choices[0].message.content.trim();
+    res.json({ answer });
+  } catch (err) {
+    console.error("/ai/chat error:", err.message);
+    res.status(500).json({ error: "AI request failed" });
+  }
+});
+
 router.post("/ai/generate/roadmaps", async (req, res) => {
 
   try {

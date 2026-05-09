@@ -76,6 +76,10 @@ export const api = {
 
   declineInvitation: (id) =>
     axios.post(`${API_BASE}/notifications/${id}/decline`, {}, { headers: authHeaders() }).then((r) => r.data),
+
+  // Ask the AI a question — used by the /ai slash command in chat.
+  aiChat: (prompt) =>
+    axios.post(`${API_BASE}/ai/ai/chat`, { prompt }, { headers: authHeaders() }).then((r) => r.data),
 };
 
 // Singleton socket — connects once per app session and survives route changes.

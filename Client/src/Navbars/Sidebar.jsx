@@ -59,6 +59,7 @@ const ROLE_MENU = {
   '/messages':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/pdf-assistant': ['admin', 'institution_admin', 'teacher', 'student'],
   '/roadmaps':      ['admin', 'institution_admin', 'teacher', 'student'],
+  '/roadmap':       ['admin', 'institution_admin', 'teacher', 'student'],
   '/problem-roadmap': ['admin', 'institution_admin', 'teacher', 'student'],
   '/uml/problems':  ['admin', 'institution_admin', 'teacher', 'student'],
   '/users':         ['admin'],
@@ -342,6 +343,11 @@ const Sidebar = ({ children, profileStatus }) => {
         icon: <ReadOutlined />,
         label: 'PDF Assistant',
       },
+      {
+        key: '/roadmap',
+        icon: <DeploymentUnitOutlined />,
+        label: 'AI Roadmap',
+      },
 
       // {
       //   key: '/uml/problems',
@@ -398,6 +404,7 @@ const Sidebar = ({ children, profileStatus }) => {
     if (location.pathname.startsWith('/messages')) return '/messages';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
+    if (location.pathname.startsWith('/roadmap')) return '/roadmap';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
     if (location.pathname.startsWith('/uml/problems')) return '/uml/problems';
     if (location.pathname.startsWith('/users')) return '/users';

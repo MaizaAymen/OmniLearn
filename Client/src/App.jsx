@@ -30,6 +30,7 @@ import JoinInstitution from "./Auth/JoinInstitution";
 import OnboardInstitution from "./Auth/OnboardInstitution";
 import VerifyEmail from "./Auth/VerifyEmail";
 import LearningDashboard from "./Dashbord/LearningDashboard";
+import RoadmapPage from "./Roadmap/RoadmapPage";
 
 const getStoredUser = () => {
   try {
@@ -129,6 +130,7 @@ function App() {
       <Route path="/pdf-assistant" element={<Guard allow={ALL} profileStatus={profileStatus}><PdfAssistant /></Guard>} />
       <Route path="/classroom-pdf" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomPdf /></Guard>} />
       <Route path="/learning-dashboard" element={<Guard allow={ALL} profileStatus={profileStatus}><LearningDashboard /></Guard>} />
+      <Route path="/roadmap" element={<Guard allow={ALL} profileStatus={profileStatus}><RoadmapPage /></Guard>} />
       <Route path="/live-sessions" element={<Guard allow={STAFF} profileStatus={profileStatus}><LiveSessionsPage /></Guard>} />
       <Route path="/video-call" element={<Guard allow={ALL} profileStatus={profileStatus}><VideoCall /></Guard>} />
       <Route path="/education" element={<Guard allow={STAFF} profileStatus={profileStatus}><AdminDashboard /></Guard>} />
