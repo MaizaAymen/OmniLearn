@@ -8,14 +8,14 @@ const auth = () => ({
 });
 
 export const roadmapApi = {
-  me: () => axios.get(`${BASE}/me`, auth()).then((r) => r.data),
-  saveProfile: (payload) =>
-    axios.put(`${BASE}/profile`, payload, auth()).then((r) => r.data),
-  generate: () => axios.post(`${BASE}/generate`, {}, auth()).then((r) => r.data),
-  setStatus: (nodeId, status) =>
-    axios
-      .post(`${BASE}/node/${nodeId}/status`, { status }, auth())
-      .then((r) => r.data),
-  resources: (nodeId) =>
-    axios.get(`${BASE}/node/${nodeId}/resources`, auth()).then((r) => r.data),
+  me:           ()           => axios.get(`${BASE}/me`, auth()).then((r) => r.data),
+  list:         ()           => axios.get(`${BASE}/list`, auth()).then((r) => r.data),
+  saveProfile:  (payload)    => axios.put(`${BASE}/profile`, payload, auth()).then((r) => r.data),
+  generate:     ()           => axios.post(`${BASE}/generate`, {}, auth()).then((r) => r.data),
+  switchTo:     (id)         => axios.post(`${BASE}/switch/${id}`, {}, auth()).then((r) => r.data),
+  deleteRoadmap:(id)         => axios.delete(`${BASE}/${id}`, auth()).then((r) => r.data),
+  rename:       (id, title)  => axios.patch(`${BASE}/${id}/title`, { title }, auth()).then((r) => r.data),
+  setStatus:    (nodeId, status) =>
+    axios.post(`${BASE}/node/${nodeId}/status`, { status }, auth()).then((r) => r.data),
+  resources:    (nodeId)     => axios.get(`${BASE}/node/${nodeId}/resources`, auth()).then((r) => r.data),
 };

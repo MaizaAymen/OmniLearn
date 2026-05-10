@@ -37,6 +37,10 @@ const Message = require("./Message");
 // ─── Plans / Institutions ────────────────────────────────────────────────────
 const Institution = require("./Institution");
 const InviteLink = require("./InviteLink");
+// ─── Roadmaps ─────────────────────────────────────────────────────────────────
+const SavedRoadmap = require("./SavedRoadmap");
+User.hasMany(SavedRoadmap, { foreignKey: "userId", as: "savedRoadmaps" });
+SavedRoadmap.belongsTo(User, { foreignKey: "userId", as: "user" });
 
 // ─── User ↔ Profile (1:1) ────────────────────────────────────────────────────
 User.hasOne(Profile, { foreignKey: "userId", as: "profile" });
@@ -267,5 +271,6 @@ module.exports = {
   Message,
   Institution,
   InviteLink,
+  SavedRoadmap,
 };
 

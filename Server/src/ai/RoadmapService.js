@@ -12,6 +12,10 @@ const NODE_TYPES = ["concept", "debugging", "challenge", "project", "stackoverfl
 async function generateRoadmapGraph({ careerGoal, interests, programmingLanguages, problems, solved = [] }) {
   const sys = `You are a senior engineer that designs personalized PROBLEM-SOLVING roadmaps for developers.
 You DO NOT teach theory passively. You output a graph of practical, hands-on nodes.
+
+The roadmap MUST be a PYRAMID of progressive levels (Step 1 → Step 2 → … → Advanced Topics).
+NEVER produce random/parallel nodes — every node must build on prior steps.
+
 Allowed node types: ${NODE_TYPES.join(", ")}.
 Node type meaning:
   - concept: a focused practical concept tied to a real bug or pattern
@@ -20,7 +24,8 @@ Node type meaning:
   - project: a small project to build end-to-end
   - stackoverflow: a cluster of common SO issues to study and solve
   - youtube: a focused video learning topic
-You MUST return ONLY valid JSON with the schema:
+
+Return ONLY valid JSON:
 {
   "nodes": [
     {
@@ -29,20 +34,31 @@ You MUST return ONLY valid JSON with the schema:
       "type": "concept|debugging|challenge|project|stackoverflow|youtube",
       "difficulty": "easy|medium|hard",
       "description": "1-2 sentence practical description",
-      "stackoverflowQuery": "search query string for stackoverflow",
-      "youtubeQuery": "search query string for youtube",
+      "stackoverflowQuery": "search query for stackoverflow",
+      "youtubeQuery": "search query for youtube",
       "challenge": "a concrete practice challenge (1-2 sentences)",
+      "level": 1,
       "next": ["n2","n3"]
     }
   ]
 }
-Rules:
-- 12-18 nodes total.
-- Order from foundational weaknesses to applied projects.
-- Every node MUST have stackoverflowQuery and youtubeQuery.
-- "next" must reference real ids already in the list.
-- Bias the FIRST nodes toward the user's listed weaknesses/problems.
-- Bias later nodes toward the user's career goal.`;
+
+PYRAMID ORDERING RULES (CRITICAL):
+- Output EXACTLY 15 nodes in this exact order to fill a 5-level pyramid:
+    Level 1 (Step 1, foundations): 1 node            → ids n1
+    Level 2 (Step 2, core skills):  2 nodes          → ids n2, n3
+    Level 3 (Step 3, applied):      3 nodes          → ids n4, n5, n6
+    Level 4 (Step 4, integration):  4 nodes          → ids n7..n10
+    Level 5 (Advanced Topics):      5 nodes          → ids n11..n15
+- Each node's "level" field MUST match its level (1..5).
+- ids MUST be exactly n1..n15 in that order.
+- "next" of a node at level L must reference 1-2 nodes at level L+1 directly below it.
+- Difficulty grows top→bottom: easy at L1-L2, medium at L3, medium/hard at L4, hard at L5.
+- Step 1 = the user's biggest single weakness, recast as a foundational debugging concept.
+- Steps 2-3 = practical concepts/debugging tied to listed weaknesses + languages.
+- Step 4 = integration challenges (mix of debugging/challenge/project).
+- Advanced Topics = projects + advanced patterns aligned with the career goal.
+- Every node MUST have stackoverflowQuery and youtubeQuery.`;
 
   const usr = `User profile:
 - careerGoal: ${careerGoal || "Full Stack Developer"}
@@ -51,7 +67,10 @@ Rules:
 - weaknesses/problems: ${JSON.stringify(problems || [])}
 - already solved nodes: ${JSON.stringify(solved)}
 
-Generate a fresh roadmap graph that targets the weaknesses first, then evolves toward the career goal.
+Generate the 15-node pyramid roadmap exactly as specified.
+- Step 1 attacks the user's biggest weakness.
+- Each step strictly builds on the previous step.
+- Advanced Topics (level 5) targets projects/patterns for the career goal.
 Return ONLY the JSON object.`;
 
   const completion = await groq.chat.completions.create({
@@ -136,39 +155,63 @@ async function fetchStackOverflow(query, pagesize = 5) {
   }
 }
 
-// ── YouTube: real Data API v3 if key provided, else search-link fallback ─────
-async function fetchYouTube(query, max = 5) {
+// ── YouTube Data API v3 — order by viewCount, same as the chat /video command ─
+async function fetchYouTube(query, max = 3) {
   if (!query) return [];
   const key = process.env.YOUTUBE_API_KEY;
-  if (key) {
-    try {
-      const u = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${max}&q=${encodeURIComponent(query)}&key=${key}`;
-      const r = await fetch(u);
-      if (r.ok) {
-        const data = await r.json();
-        return (data.items || []).map((it) => ({
-          title: it.snippet?.title,
-          channel: it.snippet?.channelTitle,
-          thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url,
-          duration: null,
-          link: `https://www.youtube.com/watch?v=${it.id?.videoId}`,
-        }));
-      }
-    } catch {
-      /* fall through */
-    }
+  if (!key) return [];
+  try {
+    const url =
+      "https://www.googleapis.com/youtube/v3/search" +
+      `?part=snippet&type=video&order=viewCount&maxResults=${max}` +
+      `&q=${encodeURIComponent(query)}&key=${key}`;
+    const r = await fetch(url);
+    if (!r.ok) return [];
+    const data = await r.json();
+    return (data.items || []).map((it) => ({
+      title: decodeHtml(it.snippet?.title || ""),
+      channel: it.snippet?.channelTitle || "",
+      thumbnail: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || null,
+      link: `https://www.youtube.com/watch?v=${it.id?.videoId}`,
+    }));
+  } catch {
+    return [];
   }
-  // Fallback: a single "search YouTube" card so the UI still works without a key.
-  return [
-    {
-      title: `YouTube search: ${query}`,
-      channel: "YouTube",
-      thumbnail: `https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg`,
-      duration: null,
-      link: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-      isFallback: true,
-    },
-  ];
+}
+
+// ── Docs: use Groq to return 2-3 real official documentation links ────────────
+async function fetchDocs(nodeTitle, youtubeQuery) {
+  const topic = youtubeQuery || nodeTitle || "programming";
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.1,
+      messages: [
+        {
+          role: "user",
+          content: `For the programming topic: "${topic}"
+Give me exactly 3 official documentation links.
+Return ONLY a valid JSON array, no markdown, no explanation:
+[
+  {"title":"...","url":"https://...","source":"MDN|Python Docs|React Docs|etc","description":"one short sentence"}
+]
+Rules:
+- Use ONLY real URLs from official sources (MDN, Python.org, React.dev, docs.oracle.com, developer.mozilla.org, docs.python.org, nodejs.org, typescript-lang.org, etc.)
+- Never invent or guess URLs — only use ones you are certain exist
+- If unsure about a URL, omit that entry`,
+        },
+      ],
+    });
+    let text = completion.choices[0].message.content || "[]";
+    text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const start = text.indexOf("[");
+    const end = text.lastIndexOf("]");
+    if (start >= 0 && end > start) text = text.slice(start, end + 1);
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+  } catch {
+    return [];
+  }
 }
 
 function decodeHtml(s = "") {
@@ -180,9 +223,32 @@ function decodeHtml(s = "") {
     .replace(/&#39;/g, "'");
 }
 
+// ── Pre-fetch SO + YouTube + Docs for every node and embed into node.resources ─
+// Called once at generation time so the panel never re-fetches.
+// Batched in groups of 5 to avoid hammering rate limits.
+async function enrichGraphWithResources(graph) {
+  const nodes = graph.nodes || [];
+  const BATCH = 5;
+  for (let i = 0; i < nodes.length; i += BATCH) {
+    await Promise.all(
+      nodes.slice(i, i + BATCH).map(async (node) => {
+        const [stackoverflow, youtube, docs] = await Promise.all([
+          fetchStackOverflow(node.stackoverflowQuery || node.title, 5),
+          fetchYouTube(node.youtubeQuery || node.title, 3),
+          fetchDocs(node.title, node.youtubeQuery),
+        ]);
+        node.resources = { stackoverflow, youtube, docs };
+      })
+    );
+  }
+  return graph;
+}
+
 module.exports = {
   generateRoadmapGraph,
+  enrichGraphWithResources,
   fetchStackOverflow,
   fetchYouTube,
+  fetchDocs,
   NODE_TYPES,
 };
