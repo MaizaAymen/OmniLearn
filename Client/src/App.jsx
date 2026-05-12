@@ -20,7 +20,6 @@ import UmlProblems from "./Uml/Problem";
 import VideoCall from "./components/VideoCall";
 import MeetingRoom from "./components/MeetingRoom";
 import Profile from "./components/Profile";
-import ClassAssignmentsPage from "./Classroom/ClassAssignmentsPage";
 import MyClassrooms from "./Classroom/MyClassrooms";
 import ClassroomView from "./Classroom/ClassroomView";
 import JoinClassroom from "./Classroom/JoinClassroom";
@@ -31,6 +30,7 @@ import OnboardInstitution from "./Auth/OnboardInstitution";
 import VerifyEmail from "./Auth/VerifyEmail";
 import LearningDashboard from "./Dashbord/LearningDashboard";
 import RoadmapPage from "./Roadmap/RoadmapPage";
+import Home from "./Home/Home";
 
 const getStoredUser = () => {
   try {
@@ -53,10 +53,16 @@ const isProfileComplete = (user) => {
   return checks.every(Boolean);
 };
 
-const Guard = ({ allow, children, allowIncompleteProfile = false, profileStatus }) => {
+const needsInstitutionOnboarding = () => {
+  const user = getStoredUser();
+  return user?.plan === "institution" && !user?.institutionId;
+};
+
+const Guard = ({ allow, children, allowIncompleteProfile = false, profileStatus, skipInstitutionCheck = false }) => {
   const role = getRole();
   if (!role) return <Navigate to="/auth" replace />;
   if (!allow.includes(role)) return <Navigate to="/" replace />;
+  if (!skipInstitutionCheck && needsInstitutionOnboarding()) return <Navigate to="/onboarding/institution" replace />;
   if (!allowIncompleteProfile) {
     if (profileStatus?.loading) {
       return (
@@ -81,6 +87,7 @@ function App() {
   const isAuthPage = location.pathname.startsWith("/auth");
   const isMeetingPage = location.pathname.startsWith("/meeting");
   const isVerifyPage = location.pathname.startsWith("/verify-email");
+  const isHomePage = location.pathname === "/";
   const [profileStatus, setProfileStatus] = useState({ loading: true, complete: true });
 
   useEffect(() => {
@@ -122,7 +129,7 @@ function App() {
 
   const appRoutes = (
     <Routes>
-      <Route path="/" element={<Guard allow={ALL} profileStatus={profileStatus}><Codeeditor /></Guard>} />
+      <Route path="/editor" element={<Guard allow={ALL} profileStatus={profileStatus}><Codeeditor /></Guard>} />
       <Route path="/problems" element={<Guard allow={ALL} profileStatus={profileStatus}><ProblemsPage /></Guard>} />
       <Route path="/problems/create" element={<Guard allow={STAFF} profileStatus={profileStatus}><ProblemCreatePage /></Guard>} />
       <Route path="/problems/:id" element={<Guard allow={ALL} profileStatus={profileStatus}><ProblemPage /></Guard>} />
@@ -138,7 +145,6 @@ function App() {
       <Route path="/uml/problems" element={<Guard allow={ALL} profileStatus={profileStatus}><UmlProblems /></Guard>} />
       <Route path="/uml/problems/:id" element={<Guard allow={ALL} profileStatus={profileStatus}><UMLEditor /></Guard>} />
       <Route path="/profile" element={<Guard allow={ALL} allowIncompleteProfile profileStatus={profileStatus}><Profile /></Guard>} />
-      <Route path="/assignments" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassAssignmentsPage /></Guard>} />
       <Route path="/my-classrooms" element={<Guard allow={ALL} profileStatus={profileStatus}><MyClassrooms /></Guard>} />
       <Route path="/my-classrooms/:classId" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomView /></Guard>} />
       <Route path="/join/:code" element={<Guard allow={ALL} profileStatus={profileStatus}><JoinClassroom /></Guard>} />
@@ -146,14 +152,15 @@ function App() {
       {/* Page publique : page d'acceptation d'un lien d'invitation. */}
       <Route path="/join-institution/:token" element={<JoinInstitution />} />
       {/* Onboarding après l'upgrade au plan Institution. */}
-      <Route path="/onboarding/institution" element={<Guard allow={ALL} profileStatus={profileStatus}><OnboardInstitution /></Guard>} />
+      <Route path="/onboarding/institution" element={<Guard allow={ALL} profileStatus={profileStatus} skipInstitutionCheck><OnboardInstitution /></Guard>} />
     </Routes>
   );
 
   return (
     <TooltipProvider>
-      {isAuthPage || isMeetingPage || isVerifyPage ? (
+      {isAuthPage || isMeetingPage || isVerifyPage || isHomePage ? (
         <Routes>
+          <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/meeting/:roomId" element={<MeetingRoom />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

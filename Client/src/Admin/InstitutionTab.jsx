@@ -1,9 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, List, Modal,
-  Popconfirm, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, message,
+  Popconfirm, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, message,
 } from "antd";
+import {
+  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import Cookies from "js-cookie";
+
+// Palette partagée avec /users pour rester cohérent visuellement.
+const CHART_PALETTE = ["#1677ff", "#52c41a", "#faad14", "#722ed1", "#eb2f96", "#13c2c2", "#fa541c"];
+const SEAT_COLORS = { used: "#1677ff", free: "#f0f0f0", over: "#ff4d4f" };
 import {
   createInviteLink, fetchInviteLinks, fetchInstitutionMembers, revokeInviteLink, inviteUserByEmail, searchUsers,
   fetchInstitutionProblems, createInstitutionProblem, deleteInstitutionProblem,
@@ -66,20 +74,27 @@ const OverviewPanel = ({ id }) => {
   const used = (stats.teacherCount || 0) + (stats.studentCount || 0);
   const seatPct = seatLimit > 0 ? Math.round((used / seatLimit) * 100) : 0;
 
+  const membersChartData = [
+    { name: "Classrooms", value: stats.classroomCount || 0, fill: "#722ed1" },
+    { name: "Teachers", value: stats.teacherCount || 0, fill: "#1677ff" },
+    { name: "Students", value: stats.studentCount || 0, fill: "#52c41a" },
+    { name: "Enrollments", value: stats.enrolledCount || 0, fill: "#faad14" },
+  ];
+
+  const seatChartData = seatLimit > 0
+    ? [
+        { name: "Used", value: Math.min(used, seatLimit), fill: used >= seatLimit ? SEAT_COLORS.over : SEAT_COLORS.used },
+        { name: "Available", value: Math.max(seatLimit - used, 0), fill: SEAT_COLORS.free },
+      ]
+    : [
+        { name: "Teachers", value: stats.teacherCount || 0, fill: "#1677ff" },
+        { name: "Students", value: stats.studentCount || 0, fill: "#52c41a" },
+      ];
+
   return (
     <div>
       {/* Quick actions */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Button type="primary" onClick={() => message.info("Open the Invites tab to generate a link.")}>
-            Generate invite link
-          </Button>
-          <Button onClick={() => window.location.href = "/education"}>Create classroom</Button>
-          <Button onClick={() => document.querySelector('[data-node-key="analytics"]')?.click()}>
-            View reports
-          </Button>
-        </Space>
-      </Card>
+   
 
       {/* Stats */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -89,7 +104,49 @@ const OverviewPanel = ({ id }) => {
         <Col span={6}><Card><Statistic title="Enrollments" value={stats.enrolledCount} /></Card></Col>
       </Row>
 
-      {/* Seat usage */}
+      {/* Charts : members breakdown + seat usage */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={14}>
+          <Card title="Members & activity breakdown">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={membersChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="value" name="Count">
+                  {membersChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} md={10}>
+          <Card title={seatLimit > 0 ? `Seat usage (${used}/${seatLimit})` : "Members composition"}>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={seatChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={90}
+                  label={(e) => `${e.name}: ${e.value}`}
+                >
+                  {seatChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Seat usage progress */}
       <Card title="Seat usage" style={{ marginBottom: 16 }}>
         {seatLimit > 0 ? (
           <>
@@ -505,6 +562,27 @@ const AnalyticsPanel = ({ id }) => {
 
   if (!data) return <Card loading />;
 
+  const total = data.submissions.total || 0;
+  const correct = data.submissions.correct || 0;
+  const incorrect = Math.max(total - correct, 0);
+
+  const submissionsPieData = [
+    { name: "Correct", value: correct, fill: "#52c41a" },
+    { name: "Incorrect", value: incorrect, fill: "#ff4d4f" },
+  ];
+
+  const heatmapChartData = (data.heatmap || []).map((h) => ({
+    name: h.name,
+    submissions: h.submissions || 0,
+    students: h.students || 0,
+  }));
+
+  const teacherChartData = (data.teacherActivity || [])
+    .slice()
+    .sort((a, b) => (b.classCount || 0) - (a.classCount || 0))
+    .slice(0, 10)
+    .map((t) => ({ name: t.name, classrooms: t.classCount || 0 }));
+
   return (
     <div>
       <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -512,6 +590,74 @@ const AnalyticsPanel = ({ id }) => {
         <Col span={8}><Card><Statistic title="Correct submissions" value={data.submissions.correct} /></Card></Col>
         <Col span={8}><Card><Statistic title="Avg completion" value={data.submissions.completionRate} suffix="%" /></Card></Col>
       </Row>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={8}>
+          <Card title="Submissions outcome">
+            {total === 0 ? (
+              <Typography.Text type="secondary">No submissions yet.</Typography.Text>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={submissionsPieData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={90}
+                    label={(e) => `${e.name}: ${e.value}`}
+                  >
+                    {submissionsPieData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} md={16}>
+          <Card title="Submissions per classroom">
+            {heatmapChartData.length === 0 ? (
+              <Typography.Text type="secondary">No classroom data yet.</Typography.Text>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={heatmapChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="submissions" fill="#722ed1" name="Submissions" />
+                  <Bar dataKey="students" fill="#1677ff" name="Students" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      <Card title="Top teachers by classroom count" style={{ marginBottom: 16 }}>
+        {teacherChartData.length === 0 ? (
+          <Typography.Text type="secondary">No teachers yet.</Typography.Text>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={teacherChartData} layout="vertical" margin={{ left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Bar dataKey="classrooms" name="Classrooms">
+                {teacherChartData.map((_, idx) => (
+                  <Cell key={idx} fill={CHART_PALETTE[idx % CHART_PALETTE.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
 
       <Card title="Teacher activity" style={{ marginBottom: 16 }}>
         <Table rowKey="id" dataSource={data.teacherActivity} pagination={false}

@@ -31,6 +31,12 @@ const SavedRoadmap = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Set when the user earns the certificate for this roadmap
+    certificateIssuedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "saved_roadmaps",

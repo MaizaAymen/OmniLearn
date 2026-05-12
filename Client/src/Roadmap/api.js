@@ -17,5 +17,9 @@ export const roadmapApi = {
   rename:       (id, title)  => axios.patch(`${BASE}/${id}/title`, { title }, auth()).then((r) => r.data),
   setStatus:    (nodeId, status) =>
     axios.post(`${BASE}/node/${nodeId}/status`, { status }, auth()).then((r) => r.data),
+  quizSubmit:      (nodeId, score) =>
+    axios.post(`${BASE}/node/${nodeId}/quiz-submit`, { score }, auth()).then((r) => r.data),
+  issueCertificate: () =>
+    axios.post(`${BASE}/certificate/issue`, {}, auth()).then((r) => r.data),
   resources:    (nodeId)     => axios.get(`${BASE}/node/${nodeId}/resources`, auth()).then((r) => r.data),
 };

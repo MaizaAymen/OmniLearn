@@ -134,10 +134,12 @@ router.use(async (req, res, next) => {
 // GRADE ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Get all grades
+// Get all grades — scoped to the caller's institution when applicable
 router.get("/grades", async (req, res) => {
   try {
+    const where = req.user.institutionId ? { institutionId: req.user.institutionId } : {};
     const grades = await Grade.findAll({
+      where,
       order: [["order", "ASC"], ["createdAt", "DESC"]],
     });
     res.json(grades);
@@ -225,11 +227,13 @@ router.delete("/grades/:id", async (req, res) => {
 // SPECIALITY ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Get all specialities (optionally filter by gradeId)
+// Get all specialities — scoped to the caller's institution when applicable
 router.get("/specialities", async (req, res) => {
   try {
     const { gradeId } = req.query;
-    const where = gradeId ? { gradeId } : {};
+    const where = {};
+    if (gradeId) where.gradeId = gradeId;
+    if (req.user.institutionId) where.institutionId = req.user.institutionId;
     const specialities = await Speciality.findAll({
       where,
       include: [{ model: Grade, as: "grade", attributes: ["id", "name", "displayName"] }],
@@ -341,11 +345,13 @@ router.delete("/specialities/:id", async (req, res) => {
 // LEVEL ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Get all levels (optionally filter by specialityId)
+// Get all levels — scoped to the caller's institution when applicable
 router.get("/levels", async (req, res) => {
   try {
     const { specialityId } = req.query;
-    const where = specialityId ? { specialityId } : {};
+    const where = {};
+    if (specialityId) where.specialityId = specialityId;
+    if (req.user.institutionId) where.institutionId = req.user.institutionId;
     const levels = await Level.findAll({
       where,
       include: [
@@ -554,8 +560,11 @@ router.post("/courses", async (req, res) => {
       const classroom = await Class.findByPk(classId);
       if (classroom) levelId = classroom.levelId;
     }
-    if (!levelId || !title) {
-      return res.status(400).json({ error: "levelId and title are required" });
+    if (!title) {
+      return res.status(400).json({ error: "title is required" });
+    }
+    if (!levelId && !classId) {
+      return res.status(400).json({ error: "levelId is required when not attached to a classroom" });
     }
     // Teachers can only create courses owned by themselves and only in classrooms they own.
     if (req.user.role === "teacher") {

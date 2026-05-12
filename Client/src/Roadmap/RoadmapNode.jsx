@@ -44,10 +44,25 @@ function RoadmapNode({ data, selected }) {
           ) : (
             <span />
           )}
-          <span className="rm-v2-status">
-            <i className="dot" style={{ background: sm.color }} />
-            {sm.label}
-          </span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* Quiz score badge — only shown after at least one attempt */}
+            {data.bestScore != null && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: "2px 6px",
+                borderRadius: 4,
+                background: data.bestScore >= 80 ? "#F0FDF4" : "#FFF7ED",
+                color:      data.bestScore >= 80 ? "#16A34A" : "#EA580C",
+                border:     `1px solid ${data.bestScore >= 80 ? "#BBF7D0" : "#FED7AA"}`,
+              }}>
+                🧠 {data.bestScore}%
+              </span>
+            )}
+            <span className="rm-v2-status">
+              <i className="dot" style={{ background: sm.color }} />
+              {sm.label}
+            </span>
+          </div>
         </div>
       </div>
 

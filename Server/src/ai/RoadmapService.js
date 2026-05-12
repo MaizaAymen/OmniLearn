@@ -179,6 +179,51 @@ async function fetchYouTube(query, max = 3) {
   }
 }
 
+// ── Quiz: generate 5 multiple-choice questions for a node ────────────────────
+async function generateQuiz(nodeTitle, description) {
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.4,
+      messages: [
+        {
+          role: "user",
+          content: `Create a 5-question multiple-choice quiz about: "${nodeTitle}"
+${description ? `Context: ${description}` : ""}
+
+Return ONLY valid JSON, no markdown:
+{
+  "questions": [
+    {
+      "question": "...",
+      "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+      "answer": "A",
+      "explanation": "one sentence why this is correct"
+    }
+  ]
+}
+
+Rules:
+- Questions test practical understanding, not memorization
+- One clearly correct answer per question
+- "answer" is the letter only: A, B, C, or D
+- Keep questions short and clear`,
+        },
+      ],
+    });
+
+    let text = completion.choices[0].message.content || "{}";
+    text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) text = text.slice(start, end + 1);
+    const parsed = JSON.parse(text);
+    return parsed.questions || [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Docs: use Groq to return 2-3 real official documentation links ────────────
 async function fetchDocs(nodeTitle, youtubeQuery) {
   const topic = youtubeQuery || nodeTitle || "programming";
@@ -232,12 +277,14 @@ async function enrichGraphWithResources(graph) {
   for (let i = 0; i < nodes.length; i += BATCH) {
     await Promise.all(
       nodes.slice(i, i + BATCH).map(async (node) => {
-        const [stackoverflow, youtube, docs] = await Promise.all([
+        const [stackoverflow, youtube, docs, quizQuestions] = await Promise.all([
           fetchStackOverflow(node.stackoverflowQuery || node.title, 5),
           fetchYouTube(node.youtubeQuery || node.title, 3),
           fetchDocs(node.title, node.youtubeQuery),
+          generateQuiz(node.title, node.description),
         ]);
         node.resources = { stackoverflow, youtube, docs };
+        node.quiz = { questions: quizQuestions, passingScore: 80 };
       })
     );
   }
@@ -247,6 +294,7 @@ async function enrichGraphWithResources(graph) {
 module.exports = {
   generateRoadmapGraph,
   enrichGraphWithResources,
+  generateQuiz,
   fetchStackOverflow,
   fetchYouTube,
   fetchDocs,

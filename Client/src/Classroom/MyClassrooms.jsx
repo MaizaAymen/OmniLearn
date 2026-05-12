@@ -21,6 +21,7 @@ import {
   Popconfirm,
   Form,
   Select,
+  Switch,
 } from "antd";
 import {
   ReadOutlined,
@@ -91,6 +92,7 @@ export default function MyClassrooms() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [freeClassroom, setFreeClassroom] = useState(false);
   const [grades, setGrades] = useState([]);
   const [specialities, setSpecialities] = useState([]);
   const [levels, setLevels] = useState([]);
@@ -148,6 +150,7 @@ export default function MyClassrooms() {
 
   const openCreate = async () => {
     classroomForm.resetFields();
+    setFreeClassroom(false);
     setCreateOpen(true);
     try {
       const [g, s, l] = await Promise.all([fetchGrades(), fetchSpecialities(), fetchLevels()]);
@@ -562,35 +565,64 @@ export default function MyClassrooms() {
             <Form.Item name="name" label="Name" rules={[{ required: true }]}>
               <Input placeholder="e.g. 3A" />
             </Form.Item>
-            <Form.Item name="gradeId" label="Grade">
-              <Select
-                placeholder="Select grade"
-                allowClear
-                options={grades.map((g) => ({ value: g.id, label: g.displayName || g.name }))}
-                onChange={() =>
-                  classroomForm.setFieldsValue({ specialityId: undefined, levelId: undefined })
-                }
-              />
+
+            <Form.Item label="Free classroom">
+              <Space>
+                <Switch
+                  checked={freeClassroom}
+                  onChange={(checked) => {
+                    setFreeClassroom(checked);
+                    if (checked) {
+                      classroomForm.setFieldsValue({
+                        gradeId: undefined,
+                        specialityId: undefined,
+                        levelId: undefined,
+                      });
+                    }
+                  }}
+                />
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  {freeClassroom
+                    ? "No grade / speciality / level required"
+                    : "Assign to a grade, speciality and level"}
+                </Text>
+              </Space>
             </Form.Item>
-            <Form.Item name="specialityId" label="Speciality">
-              <Select
-                placeholder="Select speciality"
-                allowClear
-                options={specialities
-                  .filter((s) => !formGradeId || s.gradeId === formGradeId)
-                  .map((s) => ({ value: s.id, label: s.displayName || s.name }))}
-                onChange={() => classroomForm.setFieldsValue({ levelId: undefined })}
-              />
-            </Form.Item>
-            <Form.Item name="levelId" label="Level">
-              <Select
-                placeholder="Select level"
-                allowClear
-                options={levels
-                  .filter((l) => !formSpecialityId || l.specialityId === formSpecialityId)
-                  .map((l) => ({ value: l.id, label: l.displayName || l.name }))}
-              />
-            </Form.Item>
+
+            {!freeClassroom && (
+              <>
+                <Form.Item name="gradeId" label="Grade">
+                  <Select
+                    placeholder="Select grade"
+                    allowClear
+                    options={grades.map((g) => ({ value: g.id, label: g.displayName || g.name }))}
+                    onChange={() =>
+                      classroomForm.setFieldsValue({ specialityId: undefined, levelId: undefined })
+                    }
+                  />
+                </Form.Item>
+                <Form.Item name="specialityId" label="Speciality">
+                  <Select
+                    placeholder="Select speciality"
+                    allowClear
+                    options={specialities
+                      .filter((s) => !formGradeId || s.gradeId === formGradeId)
+                      .map((s) => ({ value: s.id, label: s.displayName || s.name }))}
+                    onChange={() => classroomForm.setFieldsValue({ levelId: undefined })}
+                  />
+                </Form.Item>
+                <Form.Item name="levelId" label="Level">
+                  <Select
+                    placeholder="Select level"
+                    allowClear
+                    options={levels
+                      .filter((l) => !formSpecialityId || l.specialityId === formSpecialityId)
+                      .map((l) => ({ value: l.id, label: l.displayName || l.name }))}
+                  />
+                </Form.Item>
+              </>
+            )}
+
             <Form.Item name="academicYear" label="Year">
               <Input placeholder="2025" />
             </Form.Item>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Form,
   Input,
@@ -11,14 +11,13 @@ import {
   MailOutlined,
   LockOutlined,
   UserOutlined,
-  GoogleOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
 } from "@ant-design/icons";
 import { GoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 import "./Auth.css";
 import Cookies from "js-cookie";
-
-
 
 const { Title, Text, Link } = Typography;
 
@@ -36,27 +35,64 @@ export const refreshToken = async () => {
   }
 };
 
+/* ── Password strength helpers ── */
+const PASSWORD_RULES = [
+  { id: "length",    label: "At least 8 characters",      test: (p) => p.length >= 8 },
+  { id: "upper",     label: "One uppercase letter (A–Z)",  test: (p) => /[A-Z]/.test(p) },
+  { id: "lower",     label: "One lowercase letter (a–z)",  test: (p) => /[a-z]/.test(p) },
+  { id: "number",    label: "One number (0–9)",            test: (p) => /\d/.test(p) },
+  { id: "special",   label: "One special character (!@#…)", test: (p) => /[^A-Za-z0-9]/.test(p) },
+];
+
+const STRENGTH_LABELS = ["", "Weak", "Fair", "Good", "Strong", "Very Strong"];
+const STRENGTH_COLORS = ["#e5e7eb", "#ef4444", "#f97316", "#eab308", "#22c55e", "#10b981"];
+
+function usePasswordStrength(password) {
+  return useMemo(() => {
+    if (!password) return { score: 0, rules: PASSWORD_RULES.map((r) => ({ ...r, passed: false })) };
+    const rules = PASSWORD_RULES.map((r) => ({ ...r, passed: r.test(password) }));
+    const score = rules.filter((r) => r.passed).length;
+    return { score, rules };
+  }, [password]);
+}
+
+/* ── OmniLearn SVG Logo ── */
+const OmniLearnLogo = ({ size = 44 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <circle cx="32" cy="32" r="32" fill="#c8cc6b" />
+    <circle cx="36" cy="30" r="14" fill="#5bc4c0" opacity="0.92" />
+    <circle cx="24" cy="24" r="12" fill="#f08baa" opacity="0.92" />
+    <circle cx="30" cy="28" r="5" fill="#fff" opacity="0.2" />
+  </svg>
+);
+
 const Auth = () => {
-  //   const [email, setEmail] = useState("");
-  // const [password, setPassword] = useState("");
-  // const [firstname, setFirstname] = useState("");
-  // const [lastname, setLastname] = useState("");
-  // const [role, setRole] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
-  // 2FA state: when login returns require2FA=true, show OTP step
   const [require2FA, setRequire2FA] = useState(false);
   const [pendingUserId, setPendingUserId] = useState(null);
   const [otpValue, setOtpValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
+  const [confirmValue, setConfirmValue] = useState("");
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [confirmTouched, setConfirmTouched] = useState(false);
 
+  const { score, rules } = usePasswordStrength(passwordValue);
+  const passwordLengthOk = passwordValue.length >= 8;
+  const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
+  const showLengthError = !isLogin && passwordTouched && passwordValue.length > 0 && !passwordLengthOk;
+  const showMatchError = !isLogin && confirmTouched && confirmValue.length > 0 && !passwordsMatch;
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
+    setPasswordValue("");
+    setConfirmValue("");
+    setPasswordTouched(false);
+    setConfirmTouched(false);
     form.resetFields();
   };
 
-  // Handle OTP submission during 2FA login step
   const handle2FAVerify = async () => {
     if (!otpValue || otpValue.length !== 6) {
       return message.error("Please enter the 6-digit code");
@@ -87,15 +123,12 @@ const Auth = () => {
           email: values.email,
           password: values.password,
         });
-
-        // If 2FA is enabled, show the OTP step instead of logging in
         if (res.data.require2FA) {
           setRequire2FA(true);
           setPendingUserId(res.data.userId);
           setLoading(false);
           return;
         }
-
         Cookies.set("token", res.data.token, { expires: 7, path: "/" });
         Cookies.set("refreshToken", res.data.refreshToken, { expires: 7, path: "/" });
         Cookies.set("user", JSON.stringify(res.data.user), { expires: 7, path: "/" });
@@ -111,6 +144,7 @@ const Auth = () => {
         });
         message.success("Account created! Please sign in.");
         setIsLogin(true);
+        setPasswordValue("");
         form.resetFields();
       }
     } catch (err) {
@@ -133,25 +167,21 @@ const Auth = () => {
       message.success("Logged in with Google!");
       window.location.href = "/";
     } catch (err) {
-      message.error(
-        err.response?.data?.message || "Google login failed"
-      );
+      message.error(err.response?.data?.message || "Google login failed");
     } finally {
       setLoading(false);
     }
   };
 
-
-
   return (
     <div className="auth-container">
-      {/* Left side — illustration */}
+      {/* ── Left panel ── */}
       <div className="auth-left">
         <div className="auth-left-content">
           <div className="auth-brand">
             <div className="auth-logo">
-              <span className="logo-icon">🧠</span>
-              <span className="logo-text">SmartLearn Lab AI</span>
+              <OmniLearnLogo size={52} />
+              <span className="logo-text">OmniLearn</span>
             </div>
             <p className="auth-tagline">
               Intelligent Adaptive Learning Platform powered by AI
@@ -161,9 +191,7 @@ const Auth = () => {
             src="/auth-illustration.svg"
             alt="Learning illustration"
             className="auth-illustration"
-            onError={(e) => {
-              e.target.style.display = "none";
-            }}
+            onError={(e) => { e.target.style.display = "none"; }}
           />
           <div className="auth-features">
             <div className="feature-item">
@@ -186,188 +214,272 @@ const Auth = () => {
         </div>
       </div>
 
-      {/* Right side — form */}
+      {/* ── Right panel ── */}
       <div className="auth-right">
         <div className="auth-form-wrapper">
 
-          {/* ── 2FA OTP Step ─────────────────────────────────────────────── */}
+          {/* ── 2FA step ── */}
           {require2FA ? (
             <div style={{ textAlign: "center" }}>
-              <Title level={3} className="auth-title">Two-Factor Authentication</Title>
-              <Text type="secondary" className="auth-subtitle">
-                Open your authenticator app and enter the 6-digit code
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+              <Title level={3} className="auth-title">Two-Factor Auth</Title>
+              <Text className="auth-subtitle">
+                Enter the 6-digit code from your authenticator app
               </Text>
-              <div style={{ margin: "32px 0" }}>
+              <div style={{ margin: "28px 0" }}>
                 <Input
                   placeholder="000000"
                   value={otpValue}
                   onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
                   maxLength={6}
                   size="large"
-                  style={{ textAlign: "center", fontSize: 28, letterSpacing: 10, width: 220 }}
+                  style={{
+                    textAlign: "center",
+                    fontSize: 30,
+                    letterSpacing: 14,
+                    width: 220,
+                    borderRadius: 14,
+                    border: "1.5px solid #e5e7eb",
+                    padding: "12px 16px",
+                    fontWeight: 700,
+                    color: "#0f0c29",
+                  }}
                   onPressEnter={handle2FAVerify}
                 />
               </div>
-              <Button
-                type="primary"
-                loading={loading}
-                block
-                className="auth-submit-btn"
-                onClick={handle2FAVerify}
-              >
-                Verify
+              <Button type="primary" loading={loading} block className="auth-submit-btn" onClick={handle2FAVerify}>
+                Verify Code
               </Button>
               <Button
                 type="text"
-                style={{ marginTop: 12, width: "100%" }}
-                onClick={() => {
-                  setRequire2FA(false);
-                  setPendingUserId(null);
-                  setOtpValue("");
-                  form.resetFields();
-                }}
+                style={{ marginTop: 12, width: "100%", color: "#7c3aed", fontWeight: 600 }}
+                onClick={() => { setRequire2FA(false); setPendingUserId(null); setOtpValue(""); form.resetFields(); }}
               >
                 Back to login
               </Button>
             </div>
           ) : (
-          <>
-          <Title level={2} className="auth-title">
-            {isLogin ? "Welcome Back" : "Create Account"}
-          </Title>
-          <Text type="secondary" className="auth-subtitle">
-            {isLogin
-              ? "Sign in to continue your learning journey"
-              : "Join SmartLearn Lab AI and start learning"}
-          </Text>
+            <>
+              {/* Logo in form card (mobile / right panel) */}
+              <div className="form-logo">
+                <OmniLearnLogo size={36} />
+                <span className="form-logo-text">OmniLearn</span>
+              </div>
 
-          {/* Google Login */}
-          <div className="google-btn-wrapper">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => message.error("Google login failed")}
-              width="100%"
-              shape="rectangular"
-              size="large"
-              text={isLogin ? "signin_with" : "signup_with"}
-              theme="outline"
-            />
-          </div>
+              <Title level={2} className="auth-title">
+                {isLogin ? "Welcome Back" : "Create Account"}
+              </Title>
+              <Text type="secondary" className="auth-subtitle">
+                {isLogin
+                  ? "Sign in to continue your learning journey"
+                  : "Join OmniLearn and start learning"}
+              </Text>
 
-          <Divider plain>
-            <Text type="secondary">or</Text>
-          </Divider>
-
-          {/* Email/Password Form */}
-          <Form
-            form={form}
-            name="auth"
-            onFinish={onFinish}
-            layout="vertical"
-            size="large"
-            requiredMark={false}
-          >
-            {!isLogin && (
-              <>
-                <div className="name-row">
-                  <Form.Item
-                    name="firstName"
-                    rules={[{ required: true, message: "First name required" }]}
-                    className="name-field"
-                  >
-                    <Input
-                      prefix={<UserOutlined />}
-                      placeholder="First Name"
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="lastName"
-                    rules={[{ required: true, message: "Last name required" }]}
-                    className="name-field"
-                  >
-                    <Input
-                      prefix={<UserOutlined />}
-                      placeholder="Last Name"
-                    />
-                  </Form.Item>
-                </div>
-
-
-              </>
-            )}
-
-            <Form.Item
-              name="email"
-              rules={[
-                { required: true, message: "Email is required" },
-                { type: "email", message: "Enter a valid email" },
-              ]}
-            >
-              <Input prefix={<MailOutlined />} placeholder="Email" />
-            </Form.Item>
-
-            <Form.Item
-              name="password"
-              rules={[
-                { required: true, message: "Password is required" },
-                { min: 6, message: "At least 6 characters" },
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Password"
-              />
-            </Form.Item>
-
-            {!isLogin && (
-              <Form.Item
-                name="confirmPassword"
-                dependencies={["password"]}
-                rules={[
-                  { required: true, message: "Confirm your password" },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      if (!value || getFieldValue("password") === value) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(
-                        new Error("Passwords do not match")
-                      );
-                    },
-                  }),
-                ]}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="Confirm Password"
+              {/* Google Login */}
+              <div className="google-btn-wrapper">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => message.error("Google login failed")}
+                  width="100%"
+                  shape="rectangular"
+                  size="large"
+                  text={isLogin ? "signin_with" : "signup_with"}
+                  theme="outline"
                 />
-              </Form.Item>
-            )}
+              </div>
 
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={loading}
-                block
-                className="auth-submit-btn"
+              <Divider plain>
+                <Text type="secondary">or</Text>
+              </Divider>
+
+              {/* Form */}
+              <Form
+                form={form}
+                name="auth"
+                onFinish={onFinish}
+                layout="vertical"
+                size="large"
+                requiredMark={false}
               >
-                {isLogin ? "Sign In" : "Create Account"}
-              </Button>
-            </Form.Item>
-          </Form>
+                {!isLogin && (
+                  <div className="name-row">
+                    <Form.Item
+                      name="firstName"
+                      rules={[{ required: true, message: "First name required" }]}
+                      className="name-field"
+                    >
+                      <Input prefix={<UserOutlined />} placeholder="First Name" />
+                    </Form.Item>
+                    <Form.Item
+                      name="lastName"
+                      rules={[{ required: true, message: "Last name required" }]}
+                      className="name-field"
+                    >
+                      <Input prefix={<UserOutlined />} placeholder="Last Name" />
+                    </Form.Item>
+                  </div>
+                )}
 
-          <div className="auth-toggle">
-            <Text type="secondary">
-              {isLogin
-                ? "Don't have an account? "
-                : "Already have an account? "}
-            </Text>
-            <Link onClick={toggleMode} strong>
-              {isLogin ? "Sign Up" : "Sign In"}
-            </Link>
-          </div>
-          </>
+                <Form.Item
+                  name="email"
+                  rules={[
+                    { required: true, message: "Email is required" },
+                    { type: "email", message: "Enter a valid email" },
+                  ]}
+                >
+                  <Input prefix={<MailOutlined />} placeholder="Email" />
+                </Form.Item>
+
+                {isLogin ? (
+                  <Form.Item
+                    name="password"
+                    rules={[{ required: true, message: "Password is required" }]}
+                  >
+                    <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+                  </Form.Item>
+                ) : (
+                  <>
+                    <div className="pwd-row">
+                      <div className="pwd-field">
+                        <Form.Item
+                          name="password"
+                          validateTrigger={["onChange", "onBlur"]}
+                          rules={[
+                            { required: true, message: "Password is required" },
+                            {
+                              validator: (_, value) =>
+                                !value || value.length >= 8
+                                  ? Promise.resolve()
+                                  : Promise.reject(new Error("Min 8 characters")),
+                            },
+                          ]}
+                          help={showLengthError ? "Min 8 characters" : undefined}
+                          validateStatus={showLengthError ? "error" : undefined}
+                          style={{ marginBottom: 6 }}
+                        >
+                          <Input.Password
+                            prefix={<LockOutlined />}
+                            placeholder="Password"
+                            value={passwordValue}
+                            onChange={(e) => {
+                              setPasswordValue(e.target.value);
+                              setPasswordTouched(true);
+                            }}
+                            onBlur={() => setPasswordTouched(true)}
+                          />
+                        </Form.Item>
+                        <div className="pwd-bar-row pwd-bar-row--mini">
+                          {PASSWORD_RULES.map((_, i) => (
+                            <div
+                              key={i}
+                              className="pwd-bar-segment"
+                              style={{
+                                background: showLengthError
+                                  ? "#ef4444"
+                                  : i < score
+                                  ? STRENGTH_COLORS[score]
+                                  : "#e5e7eb",
+                                transition: "background 0.3s ease",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pwd-field">
+                        <Form.Item
+                          name="confirmPassword"
+                          dependencies={["password"]}
+                          validateTrigger={["onChange", "onBlur"]}
+                          rules={[
+                            { required: true, message: "Confirm your password" },
+                            ({ getFieldValue }) => ({
+                              validator(_, value) {
+                                if (!value || getFieldValue("password") === value) {
+                                  return Promise.resolve();
+                                }
+                                return Promise.reject(new Error("Passwords don't match"));
+                              },
+                            }),
+                          ]}
+                          help={showMatchError ? "Passwords don't match" : undefined}
+                          validateStatus={showMatchError ? "error" : undefined}
+                          style={{ marginBottom: 6 }}
+                        >
+                          <Input.Password
+                            prefix={<LockOutlined />}
+                            placeholder="Confirm Password"
+                            value={confirmValue}
+                            onChange={(e) => {
+                              setConfirmValue(e.target.value);
+                              setConfirmTouched(true);
+                            }}
+                            onBlur={() => setConfirmTouched(true)}
+                          />
+                        </Form.Item>
+                        <div className="pwd-bar-row pwd-bar-row--mini">
+                          {PASSWORD_RULES.map((_, i) => (
+                            <div
+                              key={i}
+                              className="pwd-bar-segment"
+                              style={{
+                                background: showMatchError
+                                  ? "#ef4444"
+                                  : passwordsMatch
+                                  ? "#22c55e"
+                                  : "#e5e7eb",
+                                transition: "background 0.3s ease",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optional strength conditions */}
+                    {passwordValue && (
+                      <div className="pwd-strength-wrapper">
+                        <div className="pwd-strength-label" style={{ color: STRENGTH_COLORS[score] }}>
+                          {STRENGTH_LABELS[score]}
+                        </div>
+                        <ul className="pwd-rules">
+                          {rules.map((rule) => (
+                            <li key={rule.id} className={`pwd-rule ${rule.passed ? "passed" : "failed"}`}>
+                              {rule.passed
+                                ? <CheckCircleFilled className="pwd-rule-icon passed" />
+                                : <CloseCircleFilled className="pwd-rule-icon failed" />
+                              }
+                              {rule.label}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <Form.Item style={{ marginBottom: 0 }}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={loading}
+                    block
+                    className="auth-submit-btn"
+                  >
+                    {isLogin ? "Sign In" : "Create Account"}
+                  </Button>
+                </Form.Item>
+              </Form>
+
+              <div className="auth-toggle">
+                <Text type="secondary">
+                  {isLogin ? "Don't have an account? " : "Already have an account? "}
+                </Text>
+                <Link onClick={toggleMode} strong>
+                  {isLogin ? "Sign Up" : "Sign In"}
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </div>

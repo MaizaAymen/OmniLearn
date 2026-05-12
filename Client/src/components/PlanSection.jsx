@@ -138,6 +138,29 @@ const PlanSection = () => {
       
 
 
+      {currentPlan === "free" && info?.roadmaps && (
+        <Card style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
+          <Text strong style={{ display: "block", marginBottom: 12 }}>Roadmap Usage</Text>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={{ fontSize: 13 }}>Your roadmaps</Text>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {info.roadmaps.count} / {info.roadmaps.limit}
+            </Text>
+          </div>
+          <Progress
+            percent={Math.min(100, Math.round((info.roadmaps.count / info.roadmaps.limit) * 100))}
+            showInfo={false}
+            strokeColor={info.roadmaps.count >= info.roadmaps.limit ? "#DC2626" : "#4F46E5"}
+            size="small"
+          />
+          {info.roadmaps.count >= info.roadmaps.limit && (
+            <Text type="secondary" style={{ fontSize: 12, color: "#DC2626", marginTop: 4, display: "block" }}>
+              Limit reached — upgrade to Pro for up to 20 roadmaps.
+            </Text>
+          )}
+        </Card>
+      )}
+
       {currentPlan === "free" && info?.workspace && (
         <Card style={{ marginBottom: 24, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
           <Text strong style={{ display: "block", marginBottom: 12 }}>Workspace Usage</Text>
@@ -189,7 +212,25 @@ const PlanSection = () => {
           )}
         </Card>
       )}
-           {currentPlan === "pro" && info?.workspace && (
+      {currentPlan === "pro" && info?.roadmaps && (
+        <Card style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
+          <Text strong style={{ display: "block", marginBottom: 12 }}>Roadmap Usage</Text>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={{ fontSize: 13 }}>Your roadmaps</Text>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {info.roadmaps.count} / {info.roadmaps.limit}
+            </Text>
+          </div>
+          <Progress
+            percent={Math.min(100, Math.round((info.roadmaps.count / info.roadmaps.limit) * 100))}
+            showInfo={false}
+            strokeColor="#1677ff"
+            size="small"
+          />
+        </Card>
+      )}
+
+      {currentPlan === "pro" && info?.workspace && (
         <Card style={{ marginBottom: 24, borderRadius: 12 }} styles={{ body: { padding: 20 } }}>
           <Text strong style={{ display: "block", marginBottom: 12 }}>Workspace Usage</Text>
           <div style={{ marginBottom: 12 }}>

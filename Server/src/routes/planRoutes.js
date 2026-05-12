@@ -2,15 +2,27 @@ const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
 const router = express.Router();
+const config = require("../config");
+
+cloudinary.config({
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET,
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const { Op } = require("sequelize");
-const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification, Message, Conversation } = require("../models");
+const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification, Message, Conversation, SavedRoadmap } = require("../models");
 const { emitNotification } = require("../realtime/messageHub");
 
 const WORKSPACE_INDEX = path.join(__dirname, "..", "uploads", "workspace.json");
 const FREE_WORKSPACE_LIMIT = 3;
 const FREE_PRIVATE_CONTACT_LIMIT = 3;
 const FREE_GROUP_LIMIT = 3;
+const ROADMAP_LIMITS = { free: 2, pro: 20, institution: Infinity };
 
 // Count distinct other-users this user has private conversations with.
 async function getPrivateContactCount(userId) {
@@ -102,6 +114,24 @@ router.get("/invite/:token", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.use(authenticate);
 
+// Upload logo for an institution (returns a Cloudinary URL).
+router.post("/institutions/logo-upload", upload.single("logo"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file provided" });
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "institution_logos", transformation: [{ width: 300, height: 300, crop: "pad", background: "white" }] },
+        (err, r) => (err ? reject(err) : resolve(r))
+      );
+      stream.end(req.file.buffer);
+    });
+    res.json({ url: result.secure_url });
+  } catch (err) {
+    console.error("logo upload:", err);
+    res.status(500).json({ error: "Failed to upload logo" });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // USER : INFOS DE MON PLAN
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,6 +145,8 @@ router.get("/me/plan", async (req, res) => {
     const usage = getWorkspaceUsage(req.user.id);
     const privateContacts = await getPrivateContactCount(req.user.id);
     const groupsOwned = await getOwnedGroupCount(req.user.id);
+    const roadmapCount = await SavedRoadmap.count({ where: { userId: req.user.id } });
+    const roadmapLimit = ROADMAP_LIMITS[req.user.plan] ?? ROADMAP_LIMITS.free;
     res.json({
       plan: req.user.plan,
       role: req.user.role,
@@ -136,6 +168,10 @@ router.get("/me/plan", async (req, res) => {
         privateContactLimit: isFree ? FREE_PRIVATE_CONTACT_LIMIT : null,
         groupsOwned,
         groupLimit: isFree ? FREE_GROUP_LIMIT : null,
+      },
+      roadmaps: {
+        count: roadmapCount,
+        limit: isFinite(roadmapLimit) ? roadmapLimit : null,
       },
     });
   } catch (err) {

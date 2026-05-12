@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Cookies from "js-cookie";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -14,6 +15,7 @@ import NodeDetailPanel from "./NodeDetailPanel";
 import OnboardingForm from "./OnboardingForm";
 import { roadmapApi } from "./api";
 import { STATUS_META } from "./nodeTypes";
+import CertificateButton from "./CertificateButton";
 import "./roadmap.css";
 
 const nodeTypes = { roadmap: RoadmapNode };
@@ -103,8 +105,10 @@ function toFlow(graph) {
   };
 }
 
+const ROADMAP_LIMITS = { free: 2, pro: 20, institution: Infinity };
+
 /* ── Roadmap Switcher dropdown ─────────────────────────────────────── */
-function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating }) {
+function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating, roadmapCount, roadmapLimit }) {
   const [open, setOpen]       = useState(false);
   const [list, setList]       = useState([]);
   const [loading, setLoading] = useState(false);
@@ -155,6 +159,8 @@ function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating }) {
   };
 
   const active = list.find((r) => r.id === activeId);
+  const count = list.length || roadmapCount;
+  const atLimit = isFinite(roadmapLimit) && count >= roadmapLimit;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -171,15 +177,43 @@ function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating }) {
       {open && (
         <div className="rm-switcher-menu">
           <div className="rm-switcher-head">
-            <span>Your roadmaps</span>
+            <span>
+              Your roadmaps
+              <span style={{
+                marginLeft: 8,
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "1px 7px",
+                borderRadius: 99,
+                background: atLimit ? "#FEE2E2" : "#EEF2FF",
+                color: atLimit ? "#DC2626" : "#4F46E5",
+              }}>
+                {count}/{isFinite(roadmapLimit) ? roadmapLimit : "∞"}
+              </span>
+            </span>
             <button
               className="rm-switcher-new"
               onClick={() => { setOpen(false); onNew(); }}
-              disabled={generating}
+              disabled={generating || atLimit}
+              title={atLimit ? "Upgrade to Pro to create more roadmaps" : undefined}
+              style={atLimit ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
             >
               + New
             </button>
           </div>
+          {atLimit && (
+            <div style={{
+              margin: "6px 10px",
+              padding: "7px 10px",
+              borderRadius: 8,
+              background: "#FEF2F2",
+              border: "1px solid #FECACA",
+              fontSize: 12,
+              color: "#DC2626",
+            }}>
+              Free plan limit reached. Upgrade to Pro for unlimited roadmaps.
+            </div>
+          )}
 
           {loading ? (
             <div className="rm-switcher-empty">Loading…</div>
@@ -244,6 +278,9 @@ function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating }) {
 
 /* ── Main page ─────────────────────────────────────────────────────── */
 function RoadmapInner() {
+  const storedPlan = (() => { try { return JSON.parse(Cookies.get("user") || "{}").plan || "free"; } catch { return "free"; } })();
+  const roadmapLimit = ROADMAP_LIMITS[storedPlan] ?? ROADMAP_LIMITS.free;
+
   const [profile, setProfile]         = useState(null);
   const [graph, setGraph]             = useState(null);
   const [activeId, setActiveId]       = useState(null);
@@ -253,7 +290,9 @@ function RoadmapInner() {
   const [selected, setSelected]       = useState(null);
   const [error, setError]             = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [activeStage, setActiveStage] = useState(0);
+  const [activeStage, setActiveStage]         = useState(0);
+  const [certIssuedAt, setCertIssuedAt]       = useState(null);
+  const [roadmapCount, setRoadmapCount]       = useState(0);
 
   const flow = useMemo(() => toFlow(graph), [graph]);
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
@@ -274,12 +313,14 @@ function RoadmapInner() {
   }, [flow.nodes, flow.edges, activeStage, setRfNodes, setRfEdges]);
 
   useEffect(() => {
-    roadmapApi.me()
-      .then((d) => {
+    Promise.all([roadmapApi.me(), roadmapApi.list()])
+      .then(([d, list]) => {
         setProfile({ careerGoal: d.careerGoal, interests: d.interests, programmingLanguages: d.programmingLanguages, problems: d.problems });
         setGraph(d.roadmap || null);
         setProgress(d.roadmapProgress || 0);
         setActiveId(d.activeRoadmapId || null);
+        setCertIssuedAt(d.certificateIssuedAt || null);
+        setRoadmapCount(list.length);
         if (!d.roadmap || !d.roadmap.nodes?.length) setShowOnboarding(true);
       })
       .catch((e) => setError(e.message))
@@ -297,8 +338,13 @@ function RoadmapInner() {
       setActiveId(g.roadmapId || null);
       if (payload) setProfile(payload);
       setShowOnboarding(false);
+      setRoadmapCount((c) => c + 1);
     } catch (e) {
-      setError(e.response?.data?.error || e.message);
+      const data = e.response?.data;
+      setError(data?.limitReached
+        ? `${storedPlan === "free" ? "Free" : "Pro"} plan limit: you can only create ${data?.limit ?? roadmapLimit} roadmaps.${storedPlan === "free" ? " Upgrade to Pro to create more." : ""}`
+        : data?.error || e.message
+      );
     } finally {
       setGenerating(false);
     }
@@ -310,10 +356,12 @@ function RoadmapInner() {
     setProgress(data.progress);
     setActiveId(id);
     setSelected(null);
+    setCertIssuedAt(null); // will reload on next /me
   }, []);
 
   const handleDelete = useCallback(async (id) => {
     await roadmapApi.deleteRoadmap(id);
+    setRoadmapCount((c) => Math.max(0, c - 1));
     if (id === activeId) {
       const me = await roadmapApi.me();
       setGraph(me.roadmap || null);
@@ -348,8 +396,10 @@ function RoadmapInner() {
             activeId={activeId}
             onSwitch={handleSwitch}
             onDelete={handleDelete}
-            onNew={() => setShowOnboarding(true)}
+            onNew={() => (!isFinite(roadmapLimit) || roadmapCount < roadmapLimit) && setShowOnboarding(true)}
             generating={generating}
+            roadmapCount={roadmapCount}
+            roadmapLimit={roadmapLimit}
           />
           {profile?.careerGoal && (
             <span className="rm-navbar-goal">🎯 {profile.careerGoal}</span>
@@ -383,17 +433,51 @@ function RoadmapInner() {
         </nav>
 
         <div className="rm-navbar-right">
-          <span className="rm-navbar-progress">
+          {/* Steps progress */}
+          <span className="rm-navbar-progress" title="Steps completed">
             <i style={{ width: `${progress}%` }} />
             <em>{progress}%</em>
           </span>
+
+          {/* Quiz progress bar */}
+          {(() => {
+            const { attempted, passed, total, avg } = quizStats(graph);
+            return (
+              <div className="rm-quiz-progress" title={`${passed} passed · avg ${avg}%`}>
+                <span className="rm-quiz-icon">🧠</span>
+                <div className="rm-quiz-bar-wrap">
+                  {/* grey track */}
+                  <div className="rm-quiz-track">
+                    {/* orange = attempted but not passed */}
+                    <div className="rm-quiz-fill attempted" style={{ width: `${total ? (attempted / total) * 100 : 0}%` }} />
+                    {/* green = passed */}
+                    <div className="rm-quiz-fill passed"   style={{ width: `${total ? (passed   / total) * 100 : 0}%` }} />
+                  </div>
+                  <span className="rm-quiz-label">{attempted}/{total}</span>
+                </div>
+              </div>
+            );
+          })()}
+
           {Object.entries(STATUS_META).map(([id, t]) => (
             <span key={id} className="rm-navbar-stat" title={t.label}>
               <i style={{ background: t.color }} />
               {countByStatus(graph, id)}
             </span>
           ))}
-          <button className="rm-navbar-btn primary" onClick={() => generate()} disabled={generating}>
+          <CertificateButton
+            graph={graph}
+            userName={profile?.careerGoal ? undefined : "Student"}
+            roadmapTitle={profile?.careerGoal || "AI Learning Roadmap"}
+            certificateIssuedAt={certIssuedAt}
+            onIssued={(date) => setCertIssuedAt(date)}
+          />
+          <button
+            className="rm-navbar-btn primary"
+            onClick={() => generate()}
+            disabled={generating || (isFinite(roadmapLimit) && roadmapCount >= roadmapLimit)}
+            title={isFinite(roadmapLimit) && roadmapCount >= roadmapLimit ? `${storedPlan === "free" ? "Upgrade to Pro" : "Plan limit reached"} (${roadmapLimit} roadmaps max)` : undefined}
+          >
             {generating ? "Generating…" : "New roadmap"}
           </button>
         </div>
@@ -435,7 +519,7 @@ function RoadmapInner() {
       {showOnboarding && (
         <OnboardingOverlay
           initial={profile}
-          onClose={() => graph?.nodes?.length && setShowOnboarding(false)}
+          onClose={() => setShowOnboarding(false)}
           onSubmit={generate}
           submitting={generating}
         />
@@ -449,6 +533,18 @@ function RoadmapInner() {
 function countByStatus(graph, status) {
   if (!graph?.nodes) return 0;
   return graph.nodes.filter((n) => (n.status || "pending") === status).length;
+}
+
+// Returns { attempted, passed, total, avg }
+function quizStats(graph) {
+  const nodes    = graph?.nodes || [];
+  const total    = nodes.length;
+  const attempted = nodes.filter((n) => (n.quizAttempts || []).length > 0).length;
+  const passed   = nodes.filter((n) => (n.bestScore || 0) >= 80).length;
+  const avg      = total
+    ? Math.round(nodes.reduce((s, n) => s + (n.bestScore || 0), 0) / total)
+    : 0;
+  return { attempted, passed, total, avg };
 }
 
 function OnboardingOverlay({ initial, onClose, onSubmit, submitting }) {

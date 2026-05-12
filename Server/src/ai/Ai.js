@@ -941,4 +941,67 @@ router.post("/ai/correct-code", authenticate, requirePro, async (req, res) => {
   }
 });
 
+// ─── AI Coding Mentor (streaming SSE) ────────────────────────────────────────
+router.post("/ai/mentor", async (req, res) => {
+  const { code, language, question, problemTitle, history = [] } = req.body;
+  if (!question?.trim()) return res.status(400).json({ error: "question is required" });
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const systemPrompt = `You are OmniLearn's AI coding mentor — a patient, Socratic teacher.
+
+RULES (never break these):
+1. NEVER give a complete solution or write the full corrected code.
+2. Always teach the WHY behind concepts and bugs.
+3. Ask a guiding reflective question at the end of each response.
+4. Keep responses concise — 3 to 6 short paragraphs max.
+5. Use simple language suitable for beginners.
+6. When explaining bugs: describe the root cause, then give a directional hint, not the fix.
+7. Suggest relevant concepts or patterns to study — never implement them for the user.
+8. Format nicely: use short code snippets ONLY to illustrate concepts, not full solutions.
+
+Your goal is to help the learner THINK and UNDERSTAND, not to hand them answers.`;
+
+  const contextParts = [];
+  if (problemTitle) contextParts.push(`**Problem:** ${problemTitle}`);
+  if (language) contextParts.push(`**Language:** ${language}`);
+  if (code?.trim()) {
+    const snippet = code.length > 2000 ? code.slice(0, 2000) + "\n// ... (truncated)" : code;
+    contextParts.push(`**Current code:**\n\`\`\`${language || ""}\n${snippet}\n\`\`\``);
+  }
+  contextParts.push(`**Student question:** ${question}`);
+
+  try {
+    const pastMessages = history
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const stream = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...pastMessages,
+        { role: "user", content: contextParts.join("\n\n") },
+      ],
+      stream: true,
+      max_tokens: 800,
+      temperature: 0.6,
+    });
+
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content || "";
+      if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err) {
+    console.error("/ai/mentor error:", err.message);
+    res.write(`data: ${JSON.stringify({ error: "Mentor AI request failed" })}\n\n`);
+    res.end();
+  }
+});
+
 module.exports = router;

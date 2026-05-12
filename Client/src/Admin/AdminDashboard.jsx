@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import {
   Card,
   Col,
   List,
@@ -130,14 +134,26 @@ const blackWhiteTheme = {
 // ── Problem Bank Section (standalone, used inside AdminDashboard) ─────────────
 const STATUS_COLOR = { published: "green", draft: "orange", review: "blue", archived: "default" };
 const DIFF_COLOR   = { Easy: "green", Medium: "orange", Hard: "red" };
+const STATUS_FILL  = { published: "#52c41a", draft: "#faad14", review: "#1677ff", archived: "#9CA3AF" };
+const DIFF_FILL    = { Easy: "#52c41a", Medium: "#faad14", Hard: "#ff4d4f" };
+const CAT_PALETTE  = ["#1677ff", "#52c41a", "#faad14", "#722ed1", "#eb2f96", "#13c2c2", "#fa541c"];
 
 function ProblemBankSection() {
   const AI_API = "http://localhost:5000/api/ai/ai";
   const [problems, setProblems]     = useState([]);
+  const [allProblems, setAllProblems] = useState([]); // unfiltered — used for charts
   const [loading, setLoading]       = useState(true);
   const [statusFilter, setStatus]   = useState("all");
   const [selected, setSelected]     = useState([]);
   const [bulkLoading, setBulk]      = useState(false);
+
+  // Load all problems once for charts (independent of status filter).
+  useEffect(() => {
+    fetch(`${AI_API}/getallproblems`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setAllProblems(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
 
   function load(status) {
     setLoading(true);
@@ -161,6 +177,7 @@ function ProblemBankSection() {
       if (!res.ok) throw new Error();
       message.success(`Problem ${newStatus}`);
       setProblems(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
+      setAllProblems(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
     } catch {
       message.error("Error updating status");
     }
@@ -183,6 +200,7 @@ function ProblemBankSection() {
       }
       message.success(`"${title}" deleted`);
       setProblems(prev => prev.filter(p => p.id !== id));
+      setAllProblems(prev => prev.filter(p => p.id !== id));
     } catch (err) {
       message.error(err.message || "Error deleting problem");
     }
@@ -260,8 +278,164 @@ function ProblemBankSection() {
     },
   ];
 
+  // ── Chart data — always computed from the full unfiltered list ───────────────
+  const statusChartData = useMemo(() => {
+    const counts = { published: 0, draft: 0, review: 0, archived: 0 };
+    for (const p of allProblems) {
+      const s = p.status || "published";
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    return Object.entries(counts).map(([name, value]) => ({ name, value, fill: STATUS_FILL[name] || "#9CA3AF" }));
+  }, [allProblems]);
+
+  const difficultyChartData = useMemo(() => {
+    const counts = { Easy: 0, Medium: 0, Hard: 0 };
+    for (const p of allProblems) counts[p.difficulty] = (counts[p.difficulty] || 0) + 1;
+    return Object.entries(counts).map(([name, value]) => ({ name, value, fill: DIFF_FILL[name] }));
+  }, [allProblems]);
+
+  const categoryChartData = useMemo(() => {
+    const counts = {};
+    for (const p of allProblems) counts[p.category || "Other"] = (counts[p.category || "Other"] || 0) + 1;
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, value]) => ({ name, value }));
+  }, [allProblems]);
+
+  const scopeChartData = useMemo(() => {
+    const counts = {};
+    for (const p of allProblems) counts[p.scope || "global"] = (counts[p.scope || "global"] || 0) + 1;
+    return Object.entries(counts).map(([name, value], idx) => ({ name, value, fill: CAT_PALETTE[idx % CAT_PALETTE.length] }));
+  }, [allProblems]);
+
+  const topTagsData = useMemo(() => {
+    const counts = {};
+    for (const p of allProblems) for (const t of (p.tags || [])) counts[t] = (counts[t] || 0) + 1;
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, value]) => ({ name, value }));
+  }, [allProblems]);
+
   return (
     <Card style={{ borderRadius: 10 }}>
+      {/* ── Row 1: status · difficulty · scope ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={8}>
+          <Card title="By status" size="small">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={statusChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={80}
+                  label={(e) => `${e.name}: ${e.value}`}
+                >
+                  {statusChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={8}>
+          <Card title="By difficulty" size="small">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={difficultyChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={80}
+                  label={(e) => `${e.name}: ${e.value}`}
+                >
+                  {difficultyChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={8}>
+          <Card title="By scope" size="small">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={scopeChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={80}
+                  label={(e) => `${e.name}: ${e.value}`}
+                >
+                  {scopeChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ── Row 2: top categories · top tags ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+        <Col xs={24} md={12}>
+          <Card title="Top categories" size="small">
+            {categoryChartData.length === 0 ? (
+              <span style={{ color: "#9CA3AF", fontSize: 13 }}>No data yet.</span>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={categoryChartData} layout="vertical" margin={{ left: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Problems">
+                    {categoryChartData.map((_, idx) => (
+                      <Cell key={idx} fill={CAT_PALETTE[idx % CAT_PALETTE.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} md={12}>
+          <Card title="Top tags" size="small">
+            {topTagsData.length === 0 ? (
+              <span style={{ color: "#9CA3AF", fontSize: 13 }}>No tags yet.</span>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topTagsData} layout="vertical" margin={{ left: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Problems">
+                    {topTagsData.map((_, idx) => (
+                      <Cell key={idx} fill={CAT_PALETTE[idx % CAT_PALETTE.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <Space>
           {["all", "published", "draft", "review", "archived"].map(s => (

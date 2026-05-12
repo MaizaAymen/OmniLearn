@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Outer circle background -->
+  <circle cx="32" cy="32" r="32" fill="#c8cc6b"/>
+  <!-- Blue/teal circle (right) -->
+  <circle cx="36" cy="30" r="14" fill="#5bc4c0" opacity="0.92"/>
+  <!-- Pink/coral circle (top-left) -->
+  <circle cx="24" cy="24" r="12" fill="#f08baa" opacity="0.92"/>
+  <!-- Small center highlight where they overlap -->
+  <circle cx="30" cy="28" r="5" fill="#fff" opacity="0.18"/>
+</svg>

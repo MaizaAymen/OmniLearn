@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { createLiveSocket, fetchSessionList } from "../lib/roomClient";
 import { Tldraw, createTLStore } from "tldraw";
 import "tldraw/tldraw.css";
@@ -23,6 +23,7 @@ import {
   RotateCcwIcon,
   ListIcon,
   WandSparklesIcon, //correcting state
+  SparklesIcon,
   UsersIcon,
   PlusIcon,
   LogOutIcon,
@@ -32,6 +33,7 @@ import {
   MessageSquareIcon,
 } from "lucide-react";
 
+import AIMentor from "../components/AIMentor";
 import "./ProblemPage.css";
 
 const normalizeOutput = (s, { strict = false } = {}) => {
@@ -154,7 +156,9 @@ function TagAutocomplete({ label, note, tags, setTags, users, badgeClass = "" })
 function ProblemPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const assignmentLanguageLock = location.state?.lockedLanguage || null;
 
   // Free tier: no AI correction, JavaScript only.
   const isFreeTier = (() => {
@@ -166,7 +170,7 @@ function ProblemPage() {
   const [currentProblemId, setCurrentProblemId] = useState(id || defaultProblemId);
   const [apiProblem, setApiProblem] = useState(null);
   const [isProblemLoading, setIsProblemLoading] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("javascript");
+  const [selectedLanguage, setSelectedLanguage] = useState(location.state?.lockedLanguage || "javascript");
   const [code, setCode] = useState("");
   const [output, setOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -239,6 +243,7 @@ function ProblemPage() {
   const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
   const [participantHistory, setParticipantHistory] = useState([]);
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
+  const [aiMentorOpen, setAiMentorOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatUnread, setChatUnread] = useState(0);
@@ -822,6 +827,10 @@ function ProblemPage() {
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
+    if (assignmentLanguageLock && newLang !== assignmentLanguageLock) {
+      toast.error(`Language is locked to ${assignmentLanguageLock} for this assignment`);
+      return;
+    }
     if (exam?.phase === "active" && exam.lockLanguage) {
       toast.error("Language is locked during the exam");
       return;
@@ -1429,6 +1438,15 @@ function ProblemPage() {
             <RotateCcwIcon className="size-3.5" />
           </button>
 
+          <button
+            className={`btn btn-xs gap-1 tooltip tooltip-bottom ${aiMentorOpen ? "btn-secondary" : "btn-ghost"}`}
+            data-tip="AI Mentor"
+            onClick={() => setAiMentorOpen((o) => !o)}
+          >
+            <SparklesIcon className="size-3.5" />
+            <span className="hidden sm:inline">Mentor</span>
+          </button>
+
           <div
             className="flex items-center gap-1.5 text-xs font-mono text-base-content/60 cursor-pointer select-none"
             onClick={() => setTimerRunning((r) => !r)}
@@ -1803,6 +1821,7 @@ function ProblemPage() {
               isRunning={isRunning}
               readOnly={isInSession && currentUserPermission !== "editable"}
               languageLocked={
+                !!assignmentLanguageLock ||
                 isFreeTier ||
                 (isInSession &&
                   currentUserRole !== "host" &&
@@ -2515,6 +2534,15 @@ function ProblemPage() {
           </button>
         </div>
       </div>
+
+      {/* ── AI MENTOR SIDE PANEL ── */}
+      <AIMentor
+        isOpen={aiMentorOpen}
+        onClose={() => setAiMentorOpen(false)}
+        code={code}
+        language={selectedLanguage}
+        problemTitle={currentProblem?.title}
+      />
 
       {/* Host: configure the live session after creation */}
       {configOpen && (

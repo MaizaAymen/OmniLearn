@@ -42,6 +42,7 @@ router.get("/me", authenticate, async (req, res) => {
     roadmap: active?.graph || null,
     roadmapProgress: active?.progress || 0,
     activeRoadmapId: active?.id || null,
+    certificateIssuedAt: active?.certificateIssuedAt || null,
   });
 });
 
@@ -107,14 +108,25 @@ router.put("/profile", authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
+const ROADMAP_LIMITS = { free: 2, pro: 20, institution: Infinity };
+
 /* ── POST /generate — create a new SavedRoadmap ────────────────────── */
 router.post("/generate", authenticate, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ error: "user not found" });
 
-    // Solved titles from ALL existing roadmaps for this user.
+    // Enforce per-plan roadmap cap.
     const existing = await SavedRoadmap.findAll({ where: { userId: req.user.id }, attributes: ["graph"] });
+    const limit = ROADMAP_LIMITS[user.plan] ?? ROADMAP_LIMITS.free;
+    if (user.role !== "admin" && isFinite(limit) && existing.length >= limit) {
+      return res.status(403).json({
+        error: `${user.plan === "free" ? "Free" : "Pro"} plan is limited to ${limit} roadmaps.${user.plan === "free" ? " Upgrade to Pro to create more." : ""}`,
+        limitReached: true,
+        limit,
+        count: existing.length,
+      });
+    }
     const solved = existing.flatMap((r) =>
       (r.graph?.nodes || []).filter((n) => n.status === "completed").map((n) => n.title)
     );
@@ -170,6 +182,67 @@ router.post("/node/:nodeId/status", authenticate, async (req, res) => {
   await rm.save();
 
   res.json({ ok: true, roadmapProgress: rm.progress });
+});
+
+/* ── POST /node/:nodeId/quiz-submit — score quiz, auto-update status ── */
+// Body: { score: 0-100 }
+// score >= passingScore  → status = "completed"
+// score >= 50            → status = "in_progress"
+// score < 50             → status stays, return feedback
+router.post("/node/:nodeId/quiz-submit", authenticate, async (req, res) => {
+  const { score } = req.body || {};
+  if (typeof score !== "number") return res.status(400).json({ error: "score required" });
+
+  const rm = await getActive(req.user.id);
+  if (!rm) return res.status(404).json({ error: "no active roadmap" });
+
+  const graph = JSON.parse(JSON.stringify(rm.graph));
+  const node  = (graph.nodes || []).find((n) => n.id === req.params.nodeId);
+  if (!node) return res.status(404).json({ error: "node not found" });
+
+  const passing = node.quiz?.passingScore ?? 80;
+  const passed  = score >= passing;
+
+  // Update status
+  node.status = passed ? "completed" : score >= 50 ? "in_progress" : node.status || "pending";
+
+  // Save this attempt so the client can show it next time
+  if (!node.quizAttempts) node.quizAttempts = [];
+  node.quizAttempts.push({ score, passed, date: new Date().toISOString() });
+
+  // Keep track of the best score ever
+  node.bestScore = Math.max(node.bestScore ?? 0, score);
+
+  rm.graph    = graph;
+  rm.progress = computeProgress(graph);
+  rm.changed("graph", true);
+  await rm.save();
+
+  res.json({ ok: true, status: node.status, passed, progress: rm.progress, bestScore: node.bestScore });
+});
+
+/* ── POST /certificate/issue — mark certificate as earned ─────────── */
+// The client already verified eligibility; we just stamp the date.
+router.post("/certificate/issue", authenticate, async (req, res) => {
+  const rm = await getActive(req.user.id);
+  if (!rm) return res.status(404).json({ error: "no active roadmap" });
+
+  // Double-check on server: all nodes completed + all quizzed + avg >= 80
+  const nodes = rm.graph?.nodes || [];
+  const allCompleted = nodes.every((n) => n.status === "completed");
+  const allQuizzed   = nodes.every((n) => (n.quizAttempts || []).length > 0);
+  const avgScore     = nodes.length
+    ? Math.round(nodes.reduce((sum, n) => sum + (n.bestScore || 0), 0) / nodes.length)
+    : 0;
+
+  if (!allCompleted || !allQuizzed || avgScore < 80) {
+    return res.status(400).json({ error: "Not eligible yet", allCompleted, allQuizzed, avgScore });
+  }
+
+  rm.certificateIssuedAt = new Date();
+  await rm.save();
+
+  res.json({ ok: true, issuedAt: rm.certificateIssuedAt, avgScore, title: rm.title });
 });
 
 /* ── GET /node/:nodeId/resources — serve cached or live ────────────── */

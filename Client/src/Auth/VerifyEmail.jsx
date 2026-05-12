@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button, Result, Spin } from "antd";
 
@@ -9,8 +9,12 @@ export default function VerifyEmail() {
   const navigate = useNavigate();
   const [status, setStatus] = useState("loading"); // "loading" | "success" | "error"
   const [errorMsg, setErrorMsg] = useState("");
+  const hasFetched = useRef(false);
 
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
     const token = searchParams.get("token");
     if (!token) {
       setErrorMsg("No verification token found in the link.");

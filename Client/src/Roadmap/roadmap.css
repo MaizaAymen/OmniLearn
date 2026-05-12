@@ -824,3 +824,45 @@
 }
 .rm-switcher-action:hover { background: #F1F5F9; color: #0F172A; border-color: #CBD5E1; }
 .rm-switcher-action.danger:hover { background: #FEE2E2; color: #DC2626; border-color: #FECACA; }
+
+/* ── Quiz progress bar (navbar) ───────────────────────────────────── */
+.rm-quiz-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 999px;
+  cursor: default;
+}
+.rm-quiz-icon { font-size: 13px; line-height: 1; }
+.rm-quiz-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rm-quiz-track {
+  position: relative;
+  width: 80px;
+  height: 6px;
+  background: #E5E7EB;
+  border-radius: 999px;
+  overflow: hidden;
+}
+/* attempted layer (orange) sits below passed layer (green) */
+.rm-quiz-fill {
+  position: absolute;
+  left: 0; top: 0;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 400ms ease;
+}
+.rm-quiz-fill.attempted { background: #FCD34D; }
+.rm-quiz-fill.passed    { background: #10B981; }
+.rm-quiz-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+}

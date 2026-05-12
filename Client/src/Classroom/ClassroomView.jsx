@@ -24,6 +24,7 @@ import {
   Select,
   Upload,
   Popconfirm,
+  Checkbox,
 } from "antd";
 import {
   UserOutlined,
@@ -48,6 +49,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   UserDeleteOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import {
   createCourse,
@@ -118,6 +120,29 @@ export default function ClassroomView() {
   const [announcementDraft, setAnnouncementDraft] = useState("");
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
   const [announcementsLoaded, setAnnouncementsLoaded] = useState(false);
+  const [instProblems, setInstProblems] = useState([]);
+  // ── Teacher assignment management ────────────────────────────────────────
+  const [createFor, setCreateFor] = useState(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [selectedPids, setSelectedPids] = useState([]);
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newMaxAttempts, setNewMaxAttempts] = useState("");
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerDiff, setPickerDiff] = useState("");
+  const [pickerTab, setPickerTab] = useState("all");
+  const [newLanguage, setNewLanguage] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [editAssignment, setEditAssignment] = useState(null);
+  const [editLanguage, setEditLanguage] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPids, setEditPids] = useState([]);
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editMaxAttempts, setEditMaxAttempts] = useState("");
+  const [editSearch, setEditSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [rosterTarget, setRosterTarget] = useState(null);
+  const [rosterData, setRosterData] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   const isTeacherOrAdmin = user.role === "teacher" || user.role === "admin";
   const canManage =
@@ -136,9 +161,9 @@ export default function ClassroomView() {
     if (!classId) return;
     setLoading(true);
     Promise.all([
-      fetch(`${BASE}/classrooms/${classId}`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`${BASE}/classrooms/${classId}/courses`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`${API}/ai/ai/getallproblems`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${BASE}/classrooms/${classId}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${BASE}/classrooms/${classId}/courses`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API}/ai/ai/getallproblems`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(async ([clsData, coursesData, problemsData]) => {
         setClassroom(clsData);
@@ -146,10 +171,17 @@ export default function ClassroomView() {
         const courseList = Array.isArray(coursesData) ? coursesData : [];
         setCourses(courseList);
 
+        if (user.institutionId) {
+          fetch(`${API}/ai/ai/getallproblems?scope=institution`, { headers: authHeaders() })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((d) => setInstProblems(Array.isArray(d) ? d : []))
+            .catch(() => {});
+        }
+
         const moduleEntries = await Promise.all(
           courseList.map(async (c) => {
             try {
-              const res = await fetch(`${BASE}/courses/${c.id}/modules`);
+              const res = await fetch(`${BASE}/courses/${c.id}/modules`, { headers: authHeaders() });
               const data = await res.json();
               return [c.id, Array.isArray(data) ? data : []];
             } catch {
@@ -166,7 +198,7 @@ export default function ClassroomView() {
   const loadModulesForCourse = async (courseId) => {
     if (modulesByCourse[courseId]) return modulesByCourse[courseId];
     try {
-      const res = await fetch(`${BASE}/courses/${courseId}/modules`);
+      const res = await fetch(`${BASE}/courses/${courseId}/modules`, { headers: authHeaders() });
       const data = await res.json();
       const arr = Array.isArray(data) ? data : [];
       setModulesByCourse((prev) => ({ ...prev, [courseId]: arr }));
@@ -180,7 +212,7 @@ export default function ClassroomView() {
   const loadLessonsForModule = async (moduleId) => {
     if (lessonsByModule[moduleId]) return lessonsByModule[moduleId];
     try {
-      const res = await fetch(`${BASE}/modules/${moduleId}/lessons`);
+      const res = await fetch(`${BASE}/modules/${moduleId}/lessons`, { headers: authHeaders() });
       const data = await res.json();
       const arr = Array.isArray(data) ? data : [];
       setLessonsByModule((prev) => ({ ...prev, [moduleId]: arr }));
@@ -349,10 +381,13 @@ export default function ClassroomView() {
     }
   };
 
-  const loadAssignmentsForModule = async (moduleId) => {
-    if (assignmentsByModule[moduleId] || !user.id) return;
+  const loadAssignmentsForModule = async (moduleId, force = false) => {
+    if ((assignmentsByModule[moduleId] && !force) || !user.id) return;
     try {
-      const res = await fetch(`${API}/assignments/student/${user.id}/module/${moduleId}`);
+      const url = isTeacherOrAdmin
+        ? `${API}/assignments/module/${moduleId}`
+        : `${API}/assignments/student/${user.id}/module/${moduleId}`;
+      const res = await fetch(url, { headers: authHeaders() });
       const data = await res.json();
       setAssignmentsByModule((prev) => ({
         ...prev,
@@ -392,6 +427,145 @@ export default function ClassroomView() {
     navigate("/pdf-assistant", {
       state: { pdfFile: getPdfUrl(lesson.contentUrl), filename: lesson.title },
     });
+  };
+
+  // ── Teacher assignment handlers ───────────────────────────────────────────
+  const openCreateFor = (m) => {
+    setCreateFor(m);
+    setNewTitle(""); setSelectedPids([]); setNewDueDate(""); setNewMaxAttempts(""); setNewLanguage(null);
+    setPickerSearch(""); setPickerDiff(""); setPickerTab("all");
+  };
+
+  const handleCreateAssignment = async () => {
+    if (!newTitle.trim() || selectedPids.length === 0) {
+      message.error("Title and at least one problem are required");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch(`${API}/assignments`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          moduleId: createFor.id,
+          classId,
+          title: newTitle,
+          problemIds: selectedPids,
+          dueDate: newDueDate || null,
+          maxAttempts: newMaxAttempts ? Number(newMaxAttempts) : null,
+          language: newLanguage || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      const created = await res.json();
+      setAssignmentsByModule((prev) => ({
+        ...prev,
+        [createFor.id]: [...(prev[createFor.id] || []), created],
+      }));
+      setCreateFor(null);
+      message.success("Draft saved — click Publish to notify students");
+    } catch (err) {
+      message.error(err.message || "Failed to create");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handlePublishAssignment = async (a) => {
+    try {
+      const res = await fetch(`${API}/assignments/${a.id}/publish`, {
+        method: "PUT",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setAssignmentsByModule((prev) => {
+        const list = prev[a.moduleId] || [];
+        return { ...prev, [a.moduleId]: list.map((x) => x.id === updated.id ? updated : x) };
+      });
+      message.success(updated.isPublished ? "Published — students notified" : "Moved to draft");
+    } catch {
+      message.error("Failed");
+    }
+  };
+
+  const openEditAssignment = (a) => {
+    setEditAssignment(a);
+    setEditTitle(a.title);
+    setEditPids([...a.problemIds]);
+    setEditDueDate(a.dueDate ? new Date(a.dueDate).toISOString().split("T")[0] : "");
+    setEditMaxAttempts(a.maxAttempts ?? "");
+    setEditLanguage(a.language || null);
+    setEditSearch("");
+  };
+
+  const handleEditAssignment = async () => {
+    if (!editTitle.trim() || editPids.length === 0) {
+      message.error("Title and at least one problem required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/assignments/${editAssignment.id}`, {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          title: editTitle,
+          problemIds: editPids,
+          dueDate: editDueDate || null,
+          maxAttempts: editMaxAttempts ? Number(editMaxAttempts) : null,
+          language: editLanguage || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setAssignmentsByModule((prev) => {
+        const list = prev[editAssignment.moduleId] || [];
+        return { ...prev, [editAssignment.moduleId]: list.map((x) => x.id === updated.id ? { ...x, ...updated } : x) };
+      });
+      setEditAssignment(null);
+      message.success("Updated");
+    } catch {
+      message.error("Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (a) => {
+    try {
+      await fetch(`${API}/assignments/${a.id}`, { method: "DELETE", headers: authHeaders() });
+      setAssignmentsByModule((prev) => {
+        const list = prev[a.moduleId] || [];
+        return { ...prev, [a.moduleId]: list.filter((x) => x.id !== a.id) };
+      });
+      message.success("Deleted");
+    } catch {
+      message.error("Failed to delete");
+    }
+  };
+
+  const openRoster = async (a) => {
+    setRosterTarget(a);
+    setRosterData(null);
+    setRosterLoading(true);
+    try {
+      const res = await fetch(`${API}/assignments/${a.id}/roster`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      setRosterData(await res.json());
+    } catch {
+      message.error("Failed to load roster");
+    } finally {
+      setRosterLoading(false);
+    }
+  };
+
+  const pickerProblems = (search, diff, tab) => {
+    const base = tab === "inst" ? instProblems : allProblems;
+    return base.filter((p) =>
+      (!diff || p.difficulty === diff) &&
+      (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
+    );
   };
 
   const highlightCode = (code) =>
@@ -851,7 +1025,7 @@ export default function ClassroomView() {
     <div style={{ marginTop: 4 }}>
       {allModulesFlat.length === 0 ? (
         <Card style={{ borderRadius: 12, border: "1px solid #eef0f3" }}>
-          <Empty description="Expand a course in the Content tab to load modules first." />
+          <Empty description="No modules found — add a course and modules in the Content tab first." />
         </Card>
       ) : (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -867,6 +1041,17 @@ export default function ClassroomView() {
                     <Text strong>{m.title}</Text>
                   </Space>
                 }
+                extra={canManage && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => openCreateFor(m)}
+                    style={{ background: "#111827", borderColor: "#111827" }}
+                  >
+                    New Assignment
+                  </Button>
+                )}
                 style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
               >
                 {!list ? (
@@ -874,8 +1059,86 @@ export default function ClassroomView() {
                     <Spin size="small" />
                   </div>
                 ) : list.length === 0 ? (
-                  <Text type="secondary">No assignments in this module.</Text>
+                  <Text type="secondary">
+                    {canManage
+                      ? "No assignments yet — click New Assignment to create one."
+                      : "No assignments in this module."}
+                  </Text>
+                ) : canManage ? (
+                  /* ── Teacher view ── */
+                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                    {list.map((a) => {
+                      const total = a.problemIds?.length ?? 0;
+                      const now = new Date();
+                      const isLate = a.dueDate && new Date(a.dueDate) < now;
+                      const hoursLeft = a.dueDate ? (new Date(a.dueDate) - now) / 36e5 : null;
+                      const soonDue = hoursLeft !== null && hoursLeft > 0 && hoursLeft < 24;
+                      return (
+                        <div
+                          key={a.id}
+                          style={{ border: "1px solid #eef0f3", borderRadius: 10, padding: "12px 14px", background: "#fafbfc" }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                            <Space size={6} wrap align="center">
+                              <Text strong style={{ fontSize: 14 }}>{a.title}</Text>
+                              <Tag color={a.isPublished ? "green" : "orange"} style={{ fontSize: 11 }}>
+                                {a.isPublished ? "Published" : "Draft"}
+                              </Tag>
+                              {isLate && <Tag icon={<ClockCircleOutlined />} color="red">Overdue</Tag>}
+                              {soonDue && <Tag icon={<ClockCircleOutlined />} color="warning">{Math.round(hoursLeft)}h left</Tag>}
+                              {a.dueDate && !isLate && !soonDue && (
+                                <Tag style={tagStyle}>Due {new Date(a.dueDate).toLocaleDateString()}</Tag>
+                              )}
+                              {a.maxAttempts && <Tag style={tagStyle}>Max {a.maxAttempts} attempts</Tag>}
+                              {a.language && <Tag color="blue" style={{ fontSize: 11 }}>🔒 {a.language}</Tag>}
+                              <Text type="secondary" style={{ fontSize: 12 }}>{total} problem{total !== 1 ? "s" : ""}</Text>
+                            </Space>
+                            <Space size={4}>
+                              <Button
+                                size="small"
+                                type={a.isPublished ? "default" : "primary"}
+                                icon={<SendOutlined />}
+                                onClick={() => handlePublishAssignment(a)}
+                                style={!a.isPublished ? { background: "#111827", borderColor: "#111827" } : {}}
+                              >
+                                {a.isPublished ? "Unpublish" : "Publish"}
+                              </Button>
+                              <Tooltip title="Edit">
+                                <Button size="small" icon={<EditOutlined />} onClick={() => openEditAssignment(a)} />
+                              </Tooltip>
+                              <Tooltip title="Student roster">
+                                <Button size="small" icon={<TeamOutlined />} onClick={() => openRoster(a)} />
+                              </Tooltip>
+                              <Popconfirm
+                                title="Delete this assignment?"
+                                okText="Delete"
+                                okButtonProps={{ danger: true }}
+                                onConfirm={() => handleDeleteAssignment(a)}
+                              >
+                                <Button size="small" danger icon={<DeleteOutlined />} />
+                              </Popconfirm>
+                            </Space>
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {(a.problemIds || []).map((pid) => {
+                              const prob = allProblems.find((p) => p.id === pid);
+                              return (
+                                <Tag
+                                  key={pid}
+                                  style={{ cursor: "pointer", ...tagStyle }}
+                                  onClick={() => navigate(`/problems/${pid}`)}
+                                >
+                                  {prob?.title || pid}
+                                </Tag>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Space>
                 ) : (
+                  /* ── Student view ── */
                   <Space direction="vertical" size={12} style={{ width: "100%" }}>
                     {list.map((a) => {
                       const total = a.total ?? a.problemIds?.length ?? 0;
@@ -887,141 +1150,53 @@ export default function ClassroomView() {
                       return (
                         <div
                           key={a.id}
-                          style={{
-                            border: "1px solid #eef0f3",
-                            borderRadius: 10,
-                            background: "#fafbfc",
-                            overflow: "hidden",
-                          }}
+                          style={{ border: "1px solid #eef0f3", borderRadius: 10, background: "#fafbfc", overflow: "hidden" }}
                         >
-                          <div
-                            style={{
-                              padding: "12px 14px",
-                              background: "#fff",
-                              borderBottom: "1px solid #eef0f3",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: 10,
-                                marginBottom: 8,
-                                flexWrap: "wrap",
-                              }}
-                            >
+                          <div style={{ padding: "12px 14px", background: "#fff", borderBottom: "1px solid #eef0f3" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
                               <Space size={8} align="center">
-                                {done ? (
-                                  <CheckCircleOutlined style={{ fontSize: 18, color: "#10b981" }} />
-                                ) : (
-                                  <FileTextOutlined style={{ fontSize: 16, color: "#6b7280" }} />
-                                )}
-                                <Text strong style={{ fontSize: 14 }}>
-                                  {a.title}
-                                </Text>
-                                {overdue && (
-                                  <Tag icon={<ClockCircleOutlined />} color="red" style={{ marginLeft: 4 }}>
-                                    Overdue
-                                  </Tag>
-                                )}
+                                {done
+                                  ? <CheckCircleOutlined style={{ fontSize: 18, color: "#10b981" }} />
+                                  : <FileTextOutlined style={{ fontSize: 16, color: "#6b7280" }} />}
+                                <Text strong style={{ fontSize: 14 }}>{a.title}</Text>
+                                {overdue && <Tag icon={<ClockCircleOutlined />} color="red">Overdue</Tag>}
                                 {a.dueDate && !overdue && (
-                                  <Tag style={tagStyle}>
-                                    Due {new Date(a.dueDate).toLocaleDateString()}
-                                  </Tag>
+                                  <Tag style={tagStyle}>Due {new Date(a.dueDate).toLocaleDateString()}</Tag>
                                 )}
                               </Space>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {solved}/{total} solved
-                              </Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{solved}/{total} solved</Text>
                             </div>
-                            <Progress
-                              percent={pct}
-                              size="small"
-                              showInfo={false}
-                              strokeColor={pct === 100 ? "#10b981" : "#111827"}
-                            />
-                            <Text type="secondary" style={{ fontSize: 11.5 }}>
-                              Pick any problem to start — you choose the order.
-                            </Text>
+                            <Progress percent={pct} size="small" showInfo={false} strokeColor={pct === 100 ? "#10b981" : "#111827"} />
+                            <Text type="secondary" style={{ fontSize: 11.5 }}>Pick any problem to start — you choose the order.</Text>
                           </div>
-
                           <div style={{ padding: 6 }}>
                             {(a.problemIds || []).map((pid, idx) => {
                               const prob = allProblems.find((p) => p.id === pid);
                               const isSolved = solvedSet.has(pid);
                               const diff = prob?.difficulty;
                               const diffColor =
-                                diff === "Easy"
-                                  ? { bg: "#ecfdf5", fg: "#047857" }
-                                  : diff === "Medium"
-                                  ? { bg: "#fffbeb", fg: "#b45309" }
-                                  : diff === "Hard"
-                                  ? { bg: "#fef2f2", fg: "#b91c1c" }
-                                  : { bg: "#f3f4f6", fg: "#6b7280" };
+                                diff === "Easy" ? { bg: "#ecfdf5", fg: "#047857" } :
+                                diff === "Medium" ? { bg: "#fffbeb", fg: "#b45309" } :
+                                diff === "Hard" ? { bg: "#fef2f2", fg: "#b91c1c" } :
+                                { bg: "#f3f4f6", fg: "#6b7280" };
                               return (
                                 <div
                                   key={pid}
-                                  onClick={() => navigate(`/problems/${pid}`)}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 10,
-                                    padding: "8px 12px",
-                                    borderRadius: 8,
-                                    cursor: "pointer",
-                                    transition: "background 0.15s",
-                                  }}
+                                  onClick={() => navigate(`/problems/${pid}`, a.language ? { state: { lockedLanguage: a.language } } : undefined)}
+                                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, cursor: "pointer", transition: "background 0.15s" }}
                                   onMouseEnter={(e) => (e.currentTarget.style.background = "#eef2f7")}
                                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                                 >
-                                  <div
-                                    style={{
-                                      width: 22,
-                                      height: 22,
-                                      borderRadius: "50%",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      background: isSolved ? "#10b981" : "#fff",
-                                      border: isSolved ? "none" : "1.5px solid #d1d5db",
-                                      color: "#fff",
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    {isSolved ? (
-                                      <CheckCircleOutlined style={{ fontSize: 14 }} />
-                                    ) : (
-                                      <span style={{ color: "#6b7280" }}>{idx + 1}</span>
-                                    )}
+                                  <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: isSolved ? "#10b981" : "#fff", border: isSolved ? "none" : "1.5px solid #d1d5db", color: "#fff", fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+                                    {isSolved
+                                      ? <CheckCircleOutlined style={{ fontSize: 14 }} />
+                                      : <span style={{ color: "#6b7280" }}>{idx + 1}</span>}
                                   </div>
-                                  <span
-                                    style={{
-                                      fontSize: 13,
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      flex: 1,
-                                      color: isSolved ? "#6b7280" : "#111827",
-                                      textDecoration: isSolved ? "line-through" : "none",
-                                    }}
-                                  >
+                                  <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, color: isSolved ? "#6b7280" : "#111827", textDecoration: isSolved ? "line-through" : "none" }}>
                                     {prob?.title || pid}
                                   </span>
                                   {diff && (
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        padding: "2px 8px",
-                                        borderRadius: 6,
-                                        background: diffColor.bg,
-                                        color: diffColor.fg,
-                                        flexShrink: 0,
-                                      }}
-                                    >
+                                    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: diffColor.bg, color: diffColor.fg, flexShrink: 0 }}>
                                       {diff}
                                     </span>
                                   )}
@@ -1401,6 +1576,258 @@ export default function ClassroomView() {
           ]}
         />
       </div>
+      {/* ── Create Assignment Modal ── */}
+      <Modal
+        title={`New Assignment — ${createFor?.title || ""}`}
+        open={!!createFor}
+        onCancel={() => setCreateFor(null)}
+        onOk={handleCreateAssignment}
+        okText={creating ? "Creating…" : "Save as Draft"}
+        confirmLoading={creating}
+        width={520}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={14} style={{ width: "100%", paddingTop: 4 }}>
+          <Input
+            placeholder="Assignment title (e.g. Arrays Practice)"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+          />
+          <Row gutter={12}>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Due date (optional)</Text>
+              <Input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} />
+            </Col>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Max attempts (optional)</Text>
+              <Input type="number" min={1} placeholder="Unlimited" value={newMaxAttempts} onChange={(e) => setNewMaxAttempts(e.target.value)} />
+            </Col>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Lock language</Text>
+              <Select
+                allowClear
+                placeholder="Any"
+                style={{ width: "100%" }}
+                value={newLanguage || undefined}
+                onChange={(v) => setNewLanguage(v || null)}
+                options={[
+                  { value: "javascript", label: "JavaScript" },
+                  { value: "python", label: "Python" },
+                  { value: "java", label: "Java" },
+                  { value: "typescript", label: "TypeScript" },
+                  { value: "csharp", label: "C#" },
+                  { value: "php", label: "PHP" },
+                ]}
+              />
+            </Col>
+          </Row>
+
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text strong style={{ fontSize: 13 }}>Problems — {selectedPids.length} selected</Text>
+              <Space size={4}>
+                {["", "Easy", "Medium", "Hard"].map((d) => (
+                  <Tag
+                    key={d}
+                    style={{ cursor: "pointer", ...(pickerDiff === d ? { background: "#111827", color: "#fff", border: "none" } : tagStyle) }}
+                    onClick={() => setPickerDiff(d)}
+                  >{d || "All"}</Tag>
+                ))}
+              </Space>
+            </div>
+            <Input
+              prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}
+              placeholder="Search problems…"
+              value={pickerSearch}
+              onChange={(e) => setPickerSearch(e.target.value)}
+              style={{ marginBottom: 8 }}
+              allowClear
+            />
+            {user.institutionId && (
+              <Space size={0} style={{ marginBottom: 8 }}>
+                {["all", "inst"].map((t) => (
+                  <Button
+                    key={t}
+                    size="small"
+                    type={pickerTab === t ? "primary" : "default"}
+                    onClick={() => setPickerTab(t)}
+                    style={pickerTab === t ? { background: "#111827", borderColor: "#111827" } : {}}
+                  >
+                    {t === "all" ? "Global" : "My Institution"}
+                  </Button>
+                ))}
+              </Space>
+            )}
+            <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #eef0f3", borderRadius: 8, padding: 4 }}>
+              {pickerProblems(pickerSearch, pickerDiff, pickerTab).length === 0
+                ? <Text type="secondary" style={{ display: "block", textAlign: "center", padding: 16 }}>No problems match</Text>
+                : pickerProblems(pickerSearch, pickerDiff, pickerTab).map((p) => (
+                  <div
+                    key={p.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f7fa")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    onClick={() => setSelectedPids((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                  >
+                    <Checkbox checked={selectedPids.includes(p.id)} onChange={() => {}} />
+                    <Text style={{ flex: 1, fontSize: 13 }}>{p.title}</Text>
+                    {p.difficulty && (
+                      <Tag color={p.difficulty === "Easy" ? "green" : p.difficulty === "Medium" ? "orange" : "red"} style={{ fontSize: 11 }}>
+                        {p.difficulty}
+                      </Tag>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        </Space>
+      </Modal>
+
+      {/* ── Edit Assignment Modal ── */}
+      <Modal
+        title="Edit Assignment"
+        open={!!editAssignment}
+        onCancel={() => setEditAssignment(null)}
+        onOk={handleEditAssignment}
+        okText={saving ? "Saving…" : "Save Changes"}
+        confirmLoading={saving}
+        width={520}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={14} style={{ width: "100%", paddingTop: 4 }}>
+          <Input
+            placeholder="Title"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+          />
+          <Row gutter={12}>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Due date</Text>
+              <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+            </Col>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Max attempts</Text>
+              <Input type="number" min={1} placeholder="Unlimited" value={editMaxAttempts} onChange={(e) => setEditMaxAttempts(e.target.value)} />
+            </Col>
+            <Col span={8}>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Lock language</Text>
+              <Select
+                allowClear
+                placeholder="Any"
+                style={{ width: "100%" }}
+                value={editLanguage || undefined}
+                onChange={(v) => setEditLanguage(v || null)}
+                options={[
+                  { value: "javascript", label: "JavaScript" },
+                  { value: "python", label: "Python" },
+                  { value: "java", label: "Java" },
+                  { value: "typescript", label: "TypeScript" },
+                  { value: "csharp", label: "C#" },
+                  { value: "php", label: "PHP" },
+                ]}
+              />
+            </Col>
+          </Row>
+          <div>
+            <Text strong style={{ fontSize: 13, display: "block", marginBottom: 8 }}>Problems — {editPids.length} selected</Text>
+            <Input
+              prefix={<SearchOutlined style={{ color: "#9ca3af" }} />}
+              placeholder="Search problems…"
+              value={editSearch}
+              onChange={(e) => setEditSearch(e.target.value)}
+              style={{ marginBottom: 8 }}
+              allowClear
+            />
+            <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #eef0f3", borderRadius: 8, padding: 4 }}>
+              {allProblems
+                .filter((p) => !editSearch || p.title?.toLowerCase().includes(editSearch.toLowerCase()))
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f7fa")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    onClick={() => setEditPids((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                  >
+                    <Checkbox checked={editPids.includes(p.id)} onChange={() => {}} />
+                    <Text style={{ flex: 1, fontSize: 13 }}>{p.title}</Text>
+                    {p.difficulty && (
+                      <Tag color={p.difficulty === "Easy" ? "green" : p.difficulty === "Medium" ? "orange" : "red"} style={{ fontSize: 11 }}>
+                        {p.difficulty}
+                      </Tag>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        </Space>
+      </Modal>
+
+      {/* ── Roster Modal ── */}
+      <Modal
+        title={
+          <Space>
+            <TeamOutlined style={{ color: "#1677ff" }} />
+            <span>{rosterTarget?.title} — Student Roster</span>
+          </Space>
+        }
+        open={!!rosterTarget}
+        onCancel={() => { setRosterTarget(null); setRosterData(null); }}
+        footer={null}
+        width={620}
+        destroyOnClose
+      >
+        {rosterLoading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 32 }}><Spin /></div>
+        ) : rosterData ? (
+          <>
+            <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
+              {rosterData.students.filter((s) => s.solvedIds.length === rosterTarget.problemIds.length).length}
+              {" / "}{rosterData.total} students fully completed
+            </Text>
+            {rosterData.students.length === 0 ? (
+              <Empty description="No enrolled students — assign classId when creating the assignment to see roster data." />
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #eef0f3" }}>
+                      <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 600 }}>Student</th>
+                      {rosterTarget.problemIds.map((pid, i) => {
+                        const prob = allProblems.find((p) => p.id === pid);
+                        return (
+                          <th key={pid} style={{ textAlign: "center", padding: "8px 6px", fontWeight: 600, fontSize: 11 }} title={prob?.title}>
+                            P{i + 1}
+                          </th>
+                        );
+                      })}
+                      <th style={{ textAlign: "center", padding: "8px 12px", fontWeight: 600 }}>Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rosterData.students.map((s) => (
+                      <tr key={s.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: "8px 12px", fontWeight: 500 }}>{s.name}</td>
+                        {rosterTarget.problemIds.map((pid) => (
+                          <td key={pid} style={{ textAlign: "center", padding: "8px 6px" }}>
+                            {s.solvedIds.includes(pid)
+                              ? <CheckCircleOutlined style={{ color: "#10b981", fontSize: 16 }} />
+                              : <span style={{ width: 16, height: 16, borderRadius: "50%", border: "1.5px solid #d1d5db", display: "inline-block" }} />}
+                          </td>
+                        ))}
+                        <td style={{ textAlign: "center", padding: "8px 12px", fontWeight: 600 }}>
+                          {s.solvedIds.length}/{rosterTarget.problemIds.length}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : null}
+      </Modal>
+
     </ConfigProvider>
   );
 }
