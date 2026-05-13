@@ -19,7 +19,7 @@ Submitted for the award of the
 ---
 
 # OmniLearn
-## An Intelligent Web Platform for Collaborative Learning — Integrating Code, AI, UML, Virtual Classrooms and Personalized Roadmaps
+## An Intelligent Web Platform for Collaborative Learning — Integrating Code, AI, Virtual Classrooms and Personalized Roadmaps
 
 ---
 

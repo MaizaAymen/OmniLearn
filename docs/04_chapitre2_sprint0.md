@@ -37,9 +37,6 @@ The table below gives a detailed view of OmniLearn's main functionalities, group
 | | | US11.3 | As a student, I want to run my code and see the output. |
 | | | US11.4 | As a student, I want to submit my solution and see the verdict. |
 | 12 | Coding dashboard | US12.1 | As a student, I want to see my latest submissions and progress. |
-| 13 | UML editor | US13.1 | As a student, I want to draw a UML diagram (class, sequence, etc.). |
-| | | US13.2 | As a student, I want to save my UML diagram. |
-| | | US13.3 | As a student, I want to solve a UML problem and get AI feedback. |
 | 14 | Classroom — student | US14.1 | As a student, I want to join a classroom using a code. |
 | | | US14.2 | As a student, I want to see my classrooms. |
 | | | US14.3 | As a student, I want to see assignments and announcements. |
@@ -49,7 +46,6 @@ The table below gives a detailed view of OmniLearn's main functionalities, group
 | 16 | Real-time messaging | US16.1 | As a student, I want to see my conversations. |
 | | | US16.2 | As a student, I want to send messages to peers and teachers. |
 | | | US16.3 | As a student, I want to be notified of new messages. |
-| 17 | Video meeting | US17.1 | As a student, I want to start or join a video meeting from a class. |
 | **Teacher** | | | |
 | 18 | Sign in | US18.1 | As a teacher, I want to sign in to access my teacher dashboard. |
 | 19 | Profile management | US19.1 | As a teacher, I want to manage my profile. |
@@ -94,7 +90,7 @@ Non-functional requirements indirectly impact the result and the performance of 
 - **Ergonomics:** design a user-friendly interface, easy to use, with intuitive navigation and a clear layout of features. Three different sidebars are provided according to plan (Free, Pro, Institution) to keep each user's navigation focused.
 - **Security:** all confidential information provided by users is encrypted (bcrypt for passwords, JWT for sessions, optional 2FA with TOTP, HTTPS). Email verification and password-reset tokens have a short expiration time.
 - **Availability:** the application must remain available and reliable. Long-running AI requests are sent through a streaming response so the user can be informed of progress.
-- **Extensibility:** the architecture must adapt easily to new requirements — for example, adding a new programming language to the code editor, a new diagram type to the UML editor, or a new payment provider.
+- **Extensibility:** the architecture must adapt easily to new requirements — for example, adding a new programming language to the code editor or a new payment provider.
 - **Multi-tenant isolation:** an Institution member must never see another institution's resources (classrooms, members, curriculum). The model enforces this at the route level.
 - **Scalability:** the backend is stateless (JWT-based auth) and can be horizontally scaled; Socket.IO connections are organized per-conversation / per-class for efficient broadcasting.
 
@@ -108,8 +104,8 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 |---|---|---|
 | **Sprint 1 — Authentication, profile, plans foundation** | 4 weeks | PBI 1, 2, 3, 4, 5, 6, 7, 8, 33 (partial) |
 | **Sprint 2 — Roadmap, problems, code editor, coding dashboard** | 4 weeks | PBI 9, 10, 11, 12, 14, 30, 39, 40 |
-| **Sprint 3 — Classrooms, UML editor, assignments, messaging** | 4 weeks | PBI 13, 14, 15 (full), 16, 17, 20, 21, 22, 23 |
-| **Sprint 4 — PDF assistant, video meetings, institution & super admin** | 4 weeks | PBI 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30 (mgmt), 31, 32, 33, 34 |
+| **Sprint 3 — Classrooms, assignments, messaging** | 4 weeks | PBI 14, 17, 20, 21, 22, 23 |
+| **Sprint 4 — PDF assistant, institution & super admin** | 4 weeks | PBI 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30 (mgmt), 31, 32, 33, 34 |
 
 > See [sprint_planning_and_backlog.md](./sprint_planning_and_backlog.md) for the detailed sprint-by-sprint backlog with story points and acceptance criteria.
 
@@ -118,7 +114,6 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 ### 1. Software Environment
 
 - **Visual Studio Code:** open-source, extensible code editor developed by Microsoft for Windows, Linux and macOS — used as the main IDE.
-- **StarUML:** a software engineering tool dedicated to UML modeling, cross-platform.
 - **PostgreSQL + pgAdmin:** the relational database used to store users, institutions, classrooms, problems, submissions, conversations and messages.
 - **Postman:** used to design and test the REST API endpoints.
 - **Git + GitHub:** version control and hosting of the project.
@@ -133,9 +128,8 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 - **React Router 7:** client-side routing.
 - **Ant Design 6 / Chakra UI / shadcn / Lucide / Framer Motion:** UI component libraries and animation framework used throughout the interface.
 - **CodeMirror 6:** the in-browser code editor (Java / Python / PHP / JavaScript language modes, One Dark theme).
-- **JointJS / @antv/x6 / @xyflow/react / tldraw / Excalidraw:** the diagramming libraries used in the UML editor and the roadmap canvas.
+- **@xyflow/react / tldraw / Excalidraw:** the diagramming libraries used in the roadmap canvas.
 - **Socket.IO (client + server):** the real-time engine used for messaging and notifications.
-- **Stream Video SDK (`@stream-io/video-react-sdk` / `@stream-io/node-sdk`):** used for the video meeting feature.
 - **Node.js + Express 5:** the backend runtime and HTTP framework.
 - **Sequelize 6 + PostgreSQL:** the ORM and the relational database engine.
 - **bcryptjs:** password hashing.
@@ -146,7 +140,7 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 - **pdf-parse:** PDF text extraction for the PDF assistant.
 - **LangChain (`@langchain/community`, `@langchain/core`, `@langchain/openai`, `langchain`):** RAG orchestration for the PDF assistant.
 - **Chroma DB (`chromadb`):** the vector store used by the PDF assistant.
-- **Groq SDK + Hugging Face Inference:** LLM providers for the AI features (PDF assistant, UML evaluation, roadmap generation).
+- **Groq SDK + Hugging Face Inference:** LLM providers for the AI features (PDF assistant, roadmap generation).
 - **Cloudinary:** asset hosting for avatars and uploaded media.
 - **Stripe:** subscriptions and payments for the Pro and Institution plans.
 

@@ -13,7 +13,6 @@ flowchart LR
     Router["React Router 7"]
     Socket["socket.io-client"]
     Editor["CodeMirror 6"]
-    UML["JointJS / Excalidraw / tldraw"]
     Flow["React Flow (Roadmap)"]
     Stream["Stream Video SDK"]
   end
@@ -26,7 +25,6 @@ flowchart LR
     Classroom["Classrooms / Assignments / Announcements"]
     Messaging["Conversations / Messages / Socket.IO Hub"]
     PDFAI["PDF assistant (LangChain + Chroma)"]
-    UMLAI["UML evaluation (LLM)"]
     RoadmapAI["RoadmapService"]
     Plan["Plan / Institution / Invite-link routes"]
     StripeAPI["Stripe routes (Checkout + webhook)"]
@@ -54,7 +52,6 @@ flowchart LR
   UI <-->|REST| Problems
   UI <-->|REST| Classroom
   UI <-->|REST| PDFAI
-  UI <-->|REST| UMLAI
   UI <-->|REST| RoadmapAI
   UI <-->|REST| Plan
   UI <-->|REST| StripeAPI
@@ -71,7 +68,6 @@ flowchart LR
   Notif --> PG
   PDFAI --> Chroma
   PDFAI --> LLM
-  UMLAI --> LLM
   RoadmapAI --> LLM
   UserAPI --> Cloud
   StripeAPI <-->|Webhook| StripeSvc
@@ -101,15 +97,12 @@ flowchart LR
   Student --> Problems["Browse problems"]
   Student --> Solve["Solve a problem (Editor + Submit)"]
   Student --> Dashboard["Coding dashboard"]
-  Student --> UMLEditor["Draw / save UML"]
-  Student --> UMLSolve["Solve UML problem + AI eval"]
   Student --> JoinClass["Join classroom (code or invite)"]
   Student --> Class["View classroom + announcements + assignments"]
   Student --> SubmitAssn["Submit assignment"]
   Student --> Msg["Real-time messaging"]
   Student --> PDF["Ask PDF assistant"]
   Student --> Mentor["Ask AI Mentor"]
-  Student --> Video["Join video meeting"]
 
   Teacher --> CreateClass["Create class + invite code"]
   Teacher --> CreateCourse["Create course / module / lesson"]
@@ -295,13 +288,6 @@ classDiagram
     +json payload
     +Date readAt
   }
-  class UmlDiagram {
-    +UUID id
-    +UUID userId
-    +string name
-    +string type
-    +json graphJson
-  }
   class SavedRoadmap {
     +UUID id
     +UUID userId
@@ -338,7 +324,6 @@ classDiagram
   Conversation "1" --> "*" Message
   User "1" --> "*" Message : sentMessages
   User "1" --> "*" Notification
-  User "1" --> "*" UmlDiagram
   User "1" --> "1" SavedRoadmap
 ```
 
@@ -678,12 +663,10 @@ flowchart TB
   Problems["ProblemsPage + ProblemPage + ProblemCreatePage"]
   Editor["Codeeditor + LanguageSelector + OutputPanel"]
   Dashboard["LearningDashboard + CodingDashboard + User"]
-  UML["UMLEditor + UML Problem"]
   Classroom["MyClassrooms + ClassroomView + JoinClassroom + ClassAssignmentsPage"]
   Messages["Messages"]
   PDF["PdfAssistant + ClassroomPdf"]
   AI["AIMentor + PlanSection"]
-  Video["VideoCall + MeetingRoom"]
   Admin["AdminDashboard + InstitutionTab + FreeTierTab + ProTierTab + UsersByPlanTab + ModuleProblemsTab + ModuleAssignmentsTab"]
 
   Routes --> Home
@@ -693,12 +676,10 @@ flowchart TB
   Routes --> Problems
   Problems --> Editor
   Routes --> Dashboard
-  Routes --> UML
   Routes --> Classroom
   Routes --> Messages
   Routes --> PDF
   Routes --> AI
-  Routes --> Video
   Routes --> Admin
 ```
 

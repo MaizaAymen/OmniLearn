@@ -1,4 +1,4 @@
-/* Roadmap styling — matches UML page (cream bg, navy borders, purple accent). */
+/* Roadmap styling — cream bg, navy borders, purple accent. */
 .rm-shell {
   background: #FFF0E5;
   min-height: calc(100vh - 64px);
@@ -39,7 +39,7 @@
   background: #FFF7F0;
 }
 
-/* ── Pyramid node card (matches UML problem card aesthetic) ─────────────── */
+/* ── Pyramid node card (matches problem card aesthetic) ─────────────── */
 .rm-node {
   position: relative;
   width: 240px;

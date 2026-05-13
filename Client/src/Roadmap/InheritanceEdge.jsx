@@ -1,7 +1,7 @@
 import React from "react";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 
-// UML inheritance edge — solid line with hollow white triangle at the target.
+// Inheritance edge — solid line with hollow white triangle at the target.
 function norm(dx, dy) {
   const l = Math.hypot(dx, dy) || 1;
   return { x: dx / l, y: dy / l };

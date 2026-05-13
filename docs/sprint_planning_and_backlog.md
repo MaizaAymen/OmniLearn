@@ -16,17 +16,17 @@ gantt
   section Sprint 2
   Roadmap + Problems + Editor + Catalogue :a2, after a1, 28d
   section Sprint 3
-  UML + Classrooms + Assignments + Messaging :a3, after a2, 28d
+  Classrooms + Assignments + Messaging :a3, after a2, 28d
   section Sprint 4
-  PDF assistant + Video + Institution + Super admin :a4, after a3, 28d
+  PDF assistant + Institution + Super admin :a4, after a3, 28d
 ```
 
 | Sprint | Goal | Velocity (estimate) | Demo deliverables |
 |---|---|---|---|
 | **Sprint 1** | Authentication, profile, 2FA, plans foundation | ≈ 34 SP | Sign up → verify email → sign in → 2FA → profile → upgrade to Pro (Stripe) |
 | **Sprint 2** | Personalized roadmap + problem solving | ≈ 42 SP | Roadmap onboarding, roadmap graph + certificate, Problems page, Code editor (Run + Submit), Coding dashboard, Free/Pro-tier admin |
-| **Sprint 3** | Collaboration — UML, classrooms, assignments, messaging | ≈ 48 SP | UML editor + AI eval, Create class + invite, Join class, Assignments, Announcements, Real-time messaging |
-| **Sprint 4** | AI tutor, video, institution + super admin | ≈ 46 SP | PDF assistant (RAG), AI Mentor, Video meetings, Institution onboarding + invite links, Institution admin & Super admin consoles, Stripe full flow |
+| **Sprint 3** | Collaboration — classrooms, assignments, messaging | ≈ 48 SP | Create class + invite, Join class, Assignments, Announcements, Real-time messaging |
+| **Sprint 4** | AI tutor, institution + super admin | ≈ 46 SP | PDF assistant (RAG), AI Mentor, Institution onboarding + invite links, Institution admin & Super admin consoles, Stripe full flow |
 
 > Story-point estimates use Fibonacci (1, 2, 3, 5, 8, 13).
 
@@ -125,16 +125,12 @@ A user story is "done" only if:
 
 ## 6. Sprint 3 — Collaboration
 
-**Sprint goal:** "Open OmniLearn to multi-actor collaboration: UML, classes, assignments and real-time messaging — so that teachers can run a class and students can work together."
+**Sprint goal:** "Open OmniLearn to multi-actor collaboration: classes, assignments and real-time messaging — so that teachers can run a class and students can work together."
 
 ### 6.1. Sprint 3 backlog (story points + acceptance criteria)
 
 | US Code | Story | SP | Acceptance criteria |
 |---|---|---:|---|
-| US13.1 | UML editor — class diagrams | 5 | Drag-drop classes, attributes, methods, relations |
-| US13.1b | UML editor — sequence + activity + use-case | 5 | Each diagram type tested |
-| US13.2 | Save / load UML diagrams | 3 | Per-user diagrams persisted |
-| US13.3 | UML AI evaluation | 5 | Score + feedback + suggestions JSON |
 | US20.1–3 | Class management (create, code, members) | 5 | Code is unique, copy-to-clipboard, enrollment listing |
 | US21.1–2 | Courses + modules + lessons | 5 | CRUD; lessons can have a PDF URL |
 | US22.1–3 | Assignments + problems attached + grading | 8 | Assignment due date; grades stored |
@@ -147,13 +143,12 @@ A user story is "done" only if:
 ### 6.2. Sprint 3 risks
 
 - Socket.IO scaling — adapter set up so a Redis pubsub can be added later without code changes.
-- UML diagram serialization stability — versioned `graphJson` schema.
 
 ---
 
 ## 7. Sprint 4 — AI tutor, video, multi-tenant administration
 
-**Sprint goal:** "Round off OmniLearn with the AI tutor grounded in user content, video meetings inside the platform, and the full Institution + Super Admin management consoles + Stripe."
+**Sprint goal:** "Round off OmniLearn with the AI tutor grounded in user content, and the full Institution + Super Admin management consoles + Stripe."
 
 ### 7.1. Sprint 4 backlog (story points + acceptance criteria)
 
@@ -162,7 +157,6 @@ A user story is "done" only if:
 | US15.1 | Upload PDF + ingest into Chroma | 5 | Chunks indexed with metadata (file id, page) |
 | US15.2 | Ask question on PDF (RAG) | 8 | Streamed answer with page citations |
 | Mentor | AI Mentor side panel | 5 | User context injected; conversation persisted |
-| US17.1 | Video meeting page | 5 | Stream Video token issued by Node SDK; toggles work |
 | US24.1 | Institution onboarding | 5 | After Stripe webhook, redirect + create Institution |
 | US25.1–2 | Invite links (generate + revoke) | 5 | TTL + max uses; revoke flips status |
 | US26.1 | Join via invite link | 3 | Role from token applied; `institutionId` set |
@@ -203,7 +197,7 @@ Carry-overs were rolled into a post-release "Maintenance & polish" iteration (mo
 |---|---|---|
 | **Sprint 1** | Auth foundations solid; 2FA worked first try | Email delivery setup took longer than estimated |
 | **Sprint 2** | Roadmap LLM JSON-schema validation prevented bad data | Sandbox security hardening underestimated |
-| **Sprint 3** | Socket.IO + room model very smooth | UML save format versioning came late |
+| **Sprint 3** | Socket.IO + room model very smooth | Assignment grading UI took longer than expected |
 | **Sprint 4** | RAG worked well with streaming UX | Institution onboarding flow had a redirect loop the first day |
 
 ---

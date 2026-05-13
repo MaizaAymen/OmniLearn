@@ -7,9 +7,6 @@ In this chapter, following the work of Sprint 2 (roadmap + code editor + problem
 ## II. Sprint Objectives
 
 Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 turned OmniLearn into a powerful single-user learning tool, Sprint 3 turns it into a true multi-actor platform. Key objectives:
-
-- Build the **UML editor** (`UMLEditor.jsx`) with multiple diagram types (class, sequence, activity, use-case) and **save/load** of diagrams through `UmlDiagram` model and `UmlRoute.js`.
-- Add the **UML problems** flow (`Uml/Problem.jsx`) with **AI-assisted evaluation** of student diagrams.
 - Build the **classroom system**: teacher creates a class linked to Grade / Speciality / Level, students join via a class code (`JoinClassroom.jsx`), and members see their classroom (`ClassroomView.jsx`).
 - Add **assignments** (`ClassAssignmentsPage.jsx`) linked to modules / classes, with submission and grading flows.
 - Implement the **announcements** broadcast inside a class.
@@ -22,14 +19,6 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 
 | PBI | Main functionality | US Code | User story | Task ID | Tasks |
 |---|---|---|---|---|---|
-| **UML — Student** | | | | | |
-| 13 | UML editor | US13.1 | As a student, I want to draw UML diagrams. | 13.1 | Build `UMLEditor.jsx` using `@joint/core` / `jointjs`. |
-| | | | | 13.2 | Support multiple diagram types (class, sequence, activity, use-case). |
-| | US13.2 | As a student, I want to save and load my UML diagrams. | 13.3 | Implement `UmlDiagram` model in `Server/src/models/UmlDiagram.js`. |
-| | | | | 13.4 | `POST/GET/PATCH /api/uml/diagrams`. |
-| | US13.3 | As a student, I want to solve a UML problem and get AI feedback. | 13.5 | Build `Uml/Problem.jsx` to list and open UML problems. |
-| | | | | 13.6 | `POST /api/uml/evaluate` calls the LLM in `Server/src/ai/UmlRoute.js`. |
-| | | | | 13.7 | Render the AI feedback (score + suggestions) in the side panel. |
 | **Classroom — Teacher / Institution Admin** | | | | | |
 | 20 | Class management | US20.1 | As a teacher, I want to create a class. | 20.1 | Implement `Class` model in `Server/src/models/Class.js`. |
 | | | | | 20.2 | `POST /api/classes` linked to a Grade / Speciality / Level. |
@@ -67,7 +56,7 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 
 #### Student side
 
-The student can: draw and save UML diagrams, solve a UML problem and receive AI feedback, join a classroom via code, view classrooms, see announcements, submit assignments, send messages and receive notifications.
+The student can: join a classroom via code, view classrooms, see announcements, submit assignments, send messages and receive notifications.
 
 > *Figure 38 — Use-case diagram of Sprint 3 — Student side.*
 
@@ -93,13 +82,7 @@ A user opens `Messages.jsx`, picks a conversation and types a message. On submit
 
 ### 3. Activity Diagrams
 
-#### 3.1. Activity diagram — "Submit a UML diagram for AI evaluation"
-
-The student opens a UML problem, builds the diagram in the UML editor, clicks "Evaluate". The frontend serializes the diagram and calls `POST /api/uml/evaluate`. The backend (`UmlRoute.js`) builds an LLM prompt with the problem's expected solution, sends it to the model, parses the JSON response (`score`, `feedback`, `suggestions`) and returns it. The frontend renders the result.
-
-> *Figure 42 — Activity diagram "Submit UML diagram for AI evaluation".*
-
-#### 3.2. Activity diagram — "Create an assignment"
+#### 3.1. Activity diagram — "Create an assignment"
 
 > *Figure 43 — Activity diagram "Create an assignment".*
 
@@ -117,48 +100,34 @@ The Sprint-3 class diagram introduces the collaboration entities:
 - `Conversation` — `id`, `name?`, `participantIds[]`, `createdAt`.
 - `Message` — `id`, `conversationId`, `senderId`, `body`, `createdAt`.
 - `Notification` — `id`, `userId`, `type`, `payload`, `readAt?`.
-- `UmlDiagram` — `id`, `userId`, `name`, `type`, `graphJson`.
 
 > *Figure 44 — Class diagram of Sprint 3.*
 
 ## V. Implementation
 
-### 1. UML editor
-
-The `UMLEditor` page integrates `@joint/core` with a custom toolbox. The student picks a diagram type, drags shapes onto the canvas, connects them, names elements, and saves the result.
-
-> *Figure 45 — UML editor.*
-
-### 2. UML problems and AI evaluation
-
-The UML problems list lets the student pick a modeling exercise. After drawing, the "Evaluate" button calls the AI route and displays the score + feedback in a side panel.
-
-> *Figure 46 — UML problems listing.*
-> *Figure 47 — UML problem with AI evaluation result.*
-
-### 3. My classrooms (student)
+### 1. My classrooms (student)
 
 > *Figure 48 — `MyClassrooms` listing of the student's enrolled classes.*
 
-### 4. Classroom view
+### 2. Classroom view
 
 `ClassroomView.jsx` shows modules, lessons, announcements and assignments for a class.
 
 > *Figure 49 — Classroom view (modules, lessons, announcements).*
 
-### 5. Join a classroom
+### 3. Join a classroom
 
 The `/join/:code` route opens `JoinClassroom.jsx` and asks the student to confirm the join.
 
 > *Figure 50 — Join a classroom page.*
 
-### 6. Assignments page
+### 4. Assignments page
 
 The `ClassAssignmentsPage` shows the assignments of a class with their due dates, attached problems and submission status.
 
 > *Figure 51 — Class assignments page.*
 
-### 7. Real-time messaging (`Messages.jsx`)
+### 5. Real-time messaging (`Messages.jsx`)
 
 A two-pane layout: conversations on the left, the active thread on the right. Messages stream in live through Socket.IO.
 
@@ -166,6 +135,6 @@ A two-pane layout: conversations on the left, the active thread on the right. Me
 
 ## VI. Conclusion
 
-Sprint 3 transformed OmniLearn into a real collaborative platform — UML modeling with AI evaluation, classrooms, assignments, announcements, real-time messaging and notifications all came online. The next chapter — Sprint 4 — focuses on the AI-grounded PDF assistant, video meetings, and the full Institution / Super Admin management consoles.
+Sprint 3 transformed OmniLearn into a real collaborative platform — classrooms, assignments, announcements, real-time messaging and notifications all came online. The next chapter — Sprint 4 — focuses on the AI-grounded PDF assistant and the full Institution / Super Admin management consoles.
 
 ---

@@ -14,10 +14,6 @@ import { useLocation } from "react-router-dom";
 import { Spin } from "antd";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
-import UMLEditor from "./Uml/UMLEditor";
-import UmlProblems from "./Uml/Problem";
-import VideoCall from "./components/VideoCall";
-import MeetingRoom from "./components/MeetingRoom";
 import Profile from "./components/Profile";
 import MyClassrooms from "./Classroom/MyClassrooms";
 import ClassroomView from "./Classroom/ClassroomView";
@@ -84,7 +80,6 @@ const ADMIN = ["admin"];
 function App() {
   const location = useLocation();
   const isAuthPage = location.pathname.startsWith("/auth");
-  const isMeetingPage = location.pathname.startsWith("/meeting");
   const isVerifyPage = location.pathname.startsWith("/verify-email");
   const isHomePage = location.pathname === "/";
   const [profileStatus, setProfileStatus] = useState({ loading: true, complete: true });
@@ -137,11 +132,7 @@ function App() {
       <Route path="/classroom-pdf" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomPdf /></Guard>} />
       <Route path="/learning-dashboard" element={<Guard allow={ALL} profileStatus={profileStatus}><LearningDashboard /></Guard>} />
       <Route path="/roadmap" element={<Guard allow={ALL} profileStatus={profileStatus}><RoadmapPage /></Guard>} />
-      <Route path="/video-call" element={<Guard allow={ALL} profileStatus={profileStatus}><VideoCall /></Guard>} />
       <Route path="/education" element={<Guard allow={STAFF} profileStatus={profileStatus}><AdminDashboard /></Guard>} />
-      <Route path="/uml" element={<Guard allow={ALL} profileStatus={profileStatus}><UMLEditor /></Guard>} />
-      <Route path="/uml/problems" element={<Guard allow={ALL} profileStatus={profileStatus}><UmlProblems /></Guard>} />
-      <Route path="/uml/problems/:id" element={<Guard allow={ALL} profileStatus={profileStatus}><UMLEditor /></Guard>} />
       <Route path="/profile" element={<Guard allow={ALL} allowIncompleteProfile profileStatus={profileStatus}><Profile /></Guard>} />
       <Route path="/my-classrooms" element={<Guard allow={ALL} profileStatus={profileStatus}><MyClassrooms /></Guard>} />
       <Route path="/my-classrooms/:classId" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomView /></Guard>} />
@@ -156,11 +147,10 @@ function App() {
 
   return (
     <TooltipProvider>
-      {isAuthPage || isMeetingPage || isVerifyPage || isHomePage ? (
+      {isAuthPage || isVerifyPage || isHomePage ? (
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/meeting/:roomId" element={<MeetingRoom />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
         </Routes>
       ) : (

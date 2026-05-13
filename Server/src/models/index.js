@@ -16,7 +16,6 @@ const Grade = require("./Grade");
 const Speciality = require("./Speciality");
 const Level = require("./Level");
 const Lesson = require("./Lesson");
-const UmlDiagram = require("./UmlDiagram");
 const StudentProblemSet = require("./StudentProblemSet");
 const ClassAssignment = require("./ClassAssignment");
 const Announcement = require("./Announcement");
@@ -164,7 +163,6 @@ module.exports = {
   Speciality,
   Level,
   Lesson,
-  UmlDiagram,
   ClassAssignment,
   Announcement,
   Conversation,

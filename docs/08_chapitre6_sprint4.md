@@ -6,11 +6,10 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 
 ## II. Sprint Objectives
 
-Sprint 4 wraps the platform with the **AI tutor**, the **video meeting** feature and the full **multi-tenant administration** layer:
+Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant administration** layer:
 
 - The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `@langchain/openai`, `chromadb`, `pdf-parse`, with optional `groq-sdk` / `@huggingface/inference` providers.
 - The **AI Mentor** sidebar (`AIMentor.jsx`) — a general-purpose AI tutor that can reference the student's roadmap, problems and recent submissions.
-- The **video meeting** feature (`VideoCall.jsx`, `MeetingRoom.jsx`) built on the **Stream Video SDK**.
 - The **Institution onboarding** flow (`OnboardInstitution.jsx`) — name, slug, logo, and the first super-user becoming `institution_admin`.
 - **Invite links** (`InviteLink` model) used by an institution admin to enroll teachers / students at a specific role (`JoinInstitution.jsx`).
 - The **Institution Admin console** — directory of members, role management, per-institution curriculum management (Grades / Specialities / Levels) through `institutionCurriculumRoutes.js`.
@@ -33,10 +32,6 @@ Sprint 4 wraps the platform with the **AI tutor**, the **video meeting** feature
 | **AI Mentor** | | | | | |
 | — | Cross-feature AI tutor | — | As a student, I want an AI mentor that knows my roadmap and submissions. | M.1 | Build `AIMentor.jsx`. |
 | | | | | M.2 | `POST /api/ai/mentor` injects user context into the LLM prompt. |
-| **Video Meetings** | | | | | |
-| 17 | Start / join a meeting | US17.1 | As a user, I want to start or join a video meeting. | 17.1 | Build `VideoCall.jsx` and `MeetingRoom.jsx` with the Stream Video SDK. |
-| | | | | 17.2 | `POST /api/ai/stream-token` issues a Stream token signed by the Node SDK. |
-| | | | | 17.3 | Add `/meeting/:roomId` route shown without the sidebar. |
 | **Institution Onboarding** | | | | | |
 | 24 | Onboard an institution | US24.1 | As a new Institution buyer, I want to onboard my institution. | 24.1 | Build `OnboardInstitution.jsx`. |
 | | | | | 24.2 | `POST /api/plan/institution` creates `Institution` + assigns the user as `institution_admin`. |
@@ -80,7 +75,7 @@ Sprint 4 wraps the platform with the **AI tutor**, the **video meeting** feature
 
 #### Student side — AI features
 
-> *Figure 55 — Use-case diagram of Sprint 4 — Student (AI & video meetings).*
+> *Figure 55 — Use-case diagram of Sprint 4 — Student (AI features).*
 
 ### 2. Sequence Diagrams
 
@@ -142,33 +137,27 @@ The PDF assistant page lets the student drag a PDF, ingest it and ask questions 
 
 > *Figure 64 — AI Mentor side panel.*
 
-### 4. Video meeting
-
-The video meeting page joins the student into a Stream Video room. Features include camera/mic toggles, screen share and a participant grid.
-
-> *Figure 65 — Video meeting room.*
-
-### 5. Institution onboarding
+### 4. Institution onboarding
 
 After upgrading to the Institution plan, the user is redirected to `/onboarding/institution` to register the institution.
 
 > *Figure 66 — Institution onboarding form.*
 
-### 6. Invite links
+### 5. Invite links
 
 The institution admin generates invite links scoped to a target role (teacher or student), with an expiration date and a maximum number of uses.
 
 > *Figure 67 — Invite-link generation form.*
 > *Figure 68 — Public "Join institution" page (`JoinInstitution.jsx`).*
 
-### 7. Institution Admin console
+### 6. Institution Admin console
 
 The institution-admin tabs show the member directory, the per-institution curriculum (Grades / Specialities / Levels), the institution's classes, and basic statistics.
 
 > *Figure 69 — Institution member directory (`InstitutionTab.jsx`).*
 > *Figure 70 — Per-institution curriculum management.*
 
-### 8. Super Admin console
+### 7. Super Admin console
 
 The super admin dashboard centralizes the management of institutions, the global problem catalogue, the Free-tier / Pro-tier flags, the ban / unban actions and the platform statistics.
 
@@ -178,7 +167,7 @@ The super admin dashboard centralizes the management of institutions, the global
 > *Figure 74 — Pro-tier management tab.*
 > *Figure 75 — Module assignments management.*
 
-### 9. Pricing / Plan section
+### 8. Pricing / Plan section
 
 The `PlanSection` component shows the three plans side-by-side with Stripe Checkout CTAs.
 
@@ -186,6 +175,6 @@ The `PlanSection` component shows the three plans side-by-side with Stripe Check
 
 ## VI. Conclusion
 
-In this last chapter we added several major features. The PDF assistant lets students ask questions grounded in their own course material; the AI Mentor follows them across the app; video meetings allow live sessions inside the platform; institution onboarding and invite links enable schools to bring their entire community under one roof; and the super-admin and institution-admin consoles round off the multi-tenant administration of the platform.
+In this last chapter we added several major features. The PDF assistant lets students ask questions grounded in their own course material; the AI Mentor follows them across the app; institution onboarding and invite links enable schools to bring their entire community under one roof; and the super-admin and institution-admin consoles round off the multi-tenant administration of the platform.
 
 ---

@@ -43,12 +43,8 @@
 | 39 | Use-case diagram of Sprint 3 — Teacher side | Ch. 5 — Sprint 3 |
 | 40 | Sequence diagram "Join a classroom" | Ch. 5 — Sprint 3 |
 | 41 | Sequence diagram "Send a real-time message" | Ch. 5 — Sprint 3 |
-| 42 | Activity diagram "Submit UML diagram for AI evaluation" | Ch. 5 — Sprint 3 |
 | 43 | Activity diagram "Create an assignment" | Ch. 5 — Sprint 3 |
 | 44 | Class diagram of Sprint 3 | Ch. 5 — Sprint 3 |
-| 45 | UML editor | Ch. 5 — Sprint 3 |
-| 46 | UML problems listing | Ch. 5 — Sprint 3 |
-| 47 | UML problem with AI evaluation result | Ch. 5 — Sprint 3 |
 | 48 | `MyClassrooms` listing | Ch. 5 — Sprint 3 |
 | 49 | Classroom view (modules, lessons, announcements) | Ch. 5 — Sprint 3 |
 | 50 | Join a classroom page | Ch. 5 — Sprint 3 |
@@ -66,7 +62,6 @@
 | 62 | PDF assistant — answer with grounded citations | Ch. 6 — Sprint 4 |
 | 63 | Classroom PDF assistant | Ch. 6 — Sprint 4 |
 | 64 | AI Mentor side panel | Ch. 6 — Sprint 4 |
-| 65 | Video meeting room | Ch. 6 — Sprint 4 |
 | 66 | Institution onboarding form | Ch. 6 — Sprint 4 |
 | 67 | Invite-link generation form | Ch. 6 — Sprint 4 |
 | 68 | Public "Join institution" page | Ch. 6 — Sprint 4 |

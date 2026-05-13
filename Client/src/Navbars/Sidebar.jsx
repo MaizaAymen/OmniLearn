@@ -60,7 +60,6 @@ const ROLE_MENU = {
   '/roadmaps':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/roadmap':       ['admin', 'institution_admin', 'teacher', 'student'],
   '/problem-roadmap': ['admin', 'institution_admin', 'teacher', 'student'],
-  '/uml/problems':  ['admin', 'institution_admin', 'teacher', 'student'],
   '/users':         ['admin'],
   '/education':     ['admin', 'institution_admin', 'teacher'],
   '/auth':          ['anon'],
@@ -342,11 +341,6 @@ const Sidebar = ({ children, profileStatus }) => {
         label: 'AI Roadmap',
       },
 
-      // {
-      //   key: '/uml/problems',
-      //   icon: <ProjectOutlined />,
-      //   label: 'UML Problems',
-      // },
       {
         key: '/users',
         icon: <TeamOutlined />,
@@ -398,7 +392,6 @@ const Sidebar = ({ children, profileStatus }) => {
     if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/roadmap')) return '/roadmap';
     if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
-    if (location.pathname.startsWith('/uml/problems')) return '/uml/problems';
     if (location.pathname.startsWith('/users')) return '/users';
     if (location.pathname.startsWith('/admin')) return '/admin';
     if (location.pathname.startsWith('/auth')) return '/auth';
