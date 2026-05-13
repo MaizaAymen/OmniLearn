@@ -46,6 +46,9 @@ The table below gives a detailed view of OmniLearn's main functionalities, group
 | 16 | Real-time messaging | US16.1 | As a student, I want to see my conversations. |
 | | | US16.2 | As a student, I want to send messages to peers and teachers. |
 | | | US16.3 | As a student, I want to be notified of new messages. |
+| 48 | AI mentor | US48.1 | As a student, I want an AI mentor that guides me without giving the final solution. |
+| | | US48.2 | As a student, I want AI-assisted code correction to improve my submissions. |
+| 49 | Learning tags | US49.1 | As a student, I want `/ai`, `/stack-overflow`, `/youtube` tags to find explanations and references faster. |
 | **Teacher** | | | |
 | 18 | Sign in | US18.1 | As a teacher, I want to sign in to access my teacher dashboard. |
 | 19 | Profile management | US19.1 | As a teacher, I want to manage my profile. |
@@ -105,7 +108,7 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 | **Sprint 1 — Authentication, profile, plans foundation** | 4 weeks | PBI 1, 2, 3, 4, 5, 6, 7, 8, 33 (partial) |
 | **Sprint 2 — Roadmap, problems, code editor, coding dashboard** | 4 weeks | PBI 9, 10, 11, 12, 14, 30, 39, 40 |
 | **Sprint 3 — Classrooms, assignments, messaging** | 4 weeks | PBI 14, 17, 20, 21, 22, 23 |
-| **Sprint 4 — PDF assistant, institution & super admin** | 4 weeks | PBI 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30 (mgmt), 31, 32, 33, 34 |
+| **Sprint 4 — PDF assistant, AI mentor, institution & super admin** | 4 weeks | PBI 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30 (mgmt), 31, 32, 33, 34, 48, 49 |
 
 > See [sprint_planning_and_backlog.md](./sprint_planning_and_backlog.md) for the detailed sprint-by-sprint backlog with story points and acceptance criteria.
 

@@ -33,7 +33,6 @@ This webography lists the main online resources consulted during the design and 
 ## Real-time & Video
 
 - [20] Socket.IO — https://socket.io/docs/v4/
-- [21] Stream Video — https://getstream.io/video/docs/
 
 ## Auth, Security & Payments
 

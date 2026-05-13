@@ -14,7 +14,6 @@ flowchart LR
     Socket["socket.io-client"]
     Editor["CodeMirror 6"]
     Flow["React Flow (Roadmap)"]
-    Stream["Stream Video SDK"]
   end
 
   subgraph Server["Server — Node.js + Express 5"]
@@ -39,7 +38,6 @@ flowchart LR
 
   subgraph Third["Third-party"]
     StripeSvc["Stripe"]
-    StreamSvc["Stream Video"]
     LLM["LLM providers (Groq / OpenAI / HF)"]
     SMTP["SMTP — Nodemailer"]
   end
@@ -56,7 +54,6 @@ flowchart LR
   UI <-->|REST| Plan
   UI <-->|REST| StripeAPI
   Socket <-->|WebSocket| Messaging
-  Stream <-->|RTC| StreamSvc
 
   Auth --> PG
   UserAPI --> PG
@@ -103,6 +100,7 @@ flowchart LR
   Student --> Msg["Real-time messaging"]
   Student --> PDF["Ask PDF assistant"]
   Student --> Mentor["Ask AI Mentor"]
+  Student --> LearnTags["Use learning tags (/ai, /stack-overflow, /youtube)"]
 
   Teacher --> CreateClass["Create class + invite code"]
   Teacher --> CreateCourse["Create course / module / lesson"]

@@ -9,7 +9,8 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant administration** layer:
 
 - The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `@langchain/openai`, `chromadb`, `pdf-parse`, with optional `groq-sdk` / `@huggingface/inference` providers.
-- The **AI Mentor** sidebar (`AIMentor.jsx`) — a general-purpose AI tutor that can reference the student's roadmap, problems and recent submissions.
+- The **AI Mentor** sidebar (`AIMentor.jsx`) — a general-purpose AI tutor that can reference the student's roadmap, problems and recent submissions, guide without giving the final solution, and provide AI-assisted code correction.
+- **Learning tags** (`/ai`, `/stack-overflow`, `/youtube`) — quick entry points to explanations, references and tutorials for faster self-study with or without the AI mentor.
 - The **Institution onboarding** flow (`OnboardInstitution.jsx`) — name, slug, logo, and the first super-user becoming `institution_admin`.
 - **Invite links** (`InviteLink` model) used by an institution admin to enroll teachers / students at a specific role (`JoinInstitution.jsx`).
 - The **Institution Admin console** — directory of members, role management, per-institution curriculum management (Grades / Specialities / Levels) through `institutionCurriculumRoutes.js`.
@@ -32,6 +33,9 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 | **AI Mentor** | | | | | |
 | — | Cross-feature AI tutor | — | As a student, I want an AI mentor that knows my roadmap and submissions. | M.1 | Build `AIMentor.jsx`. |
 | | | | | M.2 | `POST /api/ai/mentor` injects user context into the LLM prompt. |
+| | | | | M.3 | Provide guidance without final answers + AI-assisted code correction. |
+| **Learning tags** | | | | | |
+| — | Curated learning tags | — | As a student, I want `/ai`, `/stack-overflow`, `/youtube` tags to learn faster. | T.1 | Add tag shortcuts and a filterable tag list. |
 | **Institution Onboarding** | | | | | |
 | 24 | Onboard an institution | US24.1 | As a new Institution buyer, I want to onboard my institution. | 24.1 | Build `OnboardInstitution.jsx`. |
 | | | | | 24.2 | `POST /api/plan/institution` creates `Institution` + assigns the user as `institution_admin`. |
@@ -133,7 +137,9 @@ The PDF assistant page lets the student drag a PDF, ingest it and ask questions 
 
 ### 3. AI Mentor
 
-`AIMentor.jsx` is a sidebar that follows the student across pages — it can answer general questions, explain a problem, suggest the next roadmap step, etc.
+`AIMentor.jsx` is a sidebar that follows the student across pages — it answers questions, explains concepts, suggests the next roadmap step, and provides AI-assisted code correction without revealing the final solution.
+
+`/ai`, `/stack-overflow`, `/youtube` tags provide quick access to explanations and references for learners who want to study with or without the AI mentor.
 
 > *Figure 64 — AI Mentor side panel.*
 
@@ -175,6 +181,6 @@ The `PlanSection` component shows the three plans side-by-side with Stripe Check
 
 ## VI. Conclusion
 
-In this last chapter we added several major features. The PDF assistant lets students ask questions grounded in their own course material; the AI Mentor follows them across the app; institution onboarding and invite links enable schools to bring their entire community under one roof; and the super-admin and institution-admin consoles round off the multi-tenant administration of the platform.
+In this last chapter we added several major features. The PDF assistant lets students ask questions grounded in their own course material; the AI Mentor follows them across the app and supports code correction without giving final solutions; learning tags provide faster access to references; institution onboarding and invite links enable schools to bring their entire community under one roof; and the super-admin and institution-admin consoles round off the multi-tenant administration of the platform.
 
 ---

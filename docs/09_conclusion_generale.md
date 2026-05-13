@@ -3,13 +3,15 @@
 This end-of-studies internship gave me the opportunity to design and develop a full web platform dedicated to collaborative, AI-assisted online learning — **OmniLearn** — addressing concrete needs in education and self-driven computer-science learning. The project covered several technical areas:
 
 - A **multi-tenant data model** built on PostgreSQL and Sequelize, with super admin, institution admin, teacher and student roles, and three plans (Free, Pro, Institution).
-- A **rich frontend** built with React 19, Vite, Tailwind CSS, Ant Design, Chakra, shadcn, Framer Motion, CodeMirror, React Flow, tldraw, Excalidraw and the Stream Video SDK.
+- A **rich frontend** built with React 19, Vite, Tailwind CSS, Ant Design, Chakra, shadcn, Framer Motion, CodeMirror, React Flow, tldraw and Excalidraw.
 - A **modular backend** built on Node.js + Express 5, with Socket.IO for real-time messaging, Multer + Cloudinary for uploads, Nodemailer for transactional emails, Stripe for billing, Speakeasy for 2FA, and JWT for authentication.
 - An **AI layer** that orchestrates LangChain, Chroma DB and multiple LLM providers (Groq, OpenAI, Hugging Face) to power the PDF assistant, the AI mentor and the personalized roadmap generator.
 
 The objectives set at the beginning of the project were achieved overall:
 
 - The platform offers a **complete, end-to-end learning loop**: pick a goal, get a personalized roadmap, solve problems in the code editor, follow a class, chat with peers, ask the AI, and pick up where you left off.
+- The **AI mentor** supports learning without giving the final solution: it guides the student, suggests next steps, and provides **AI-assisted code correction** to help improve submissions.
+- A **tag-based learning layer** (e.g., `/ai`, `/stack-overflow`, `/youtube`) speeds up discovery of explanations, references and tutorials, so learners can progress faster with or without the AI mentor.
 - The **Institution plan** brings a real multi-tenant model that schools and universities can adopt — invite their teachers and students through invite links, define their own curriculum, and run their classes inside the platform.
 - The **plan enforcement** (Free vs Pro vs Institution) is consistent across the API and the UI, and Stripe takes care of the upgrade flow.
 

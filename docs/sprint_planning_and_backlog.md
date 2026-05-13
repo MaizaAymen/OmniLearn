@@ -26,7 +26,7 @@ gantt
 | **Sprint 1** | Authentication, profile, 2FA, plans foundation | ≈ 34 SP | Sign up → verify email → sign in → 2FA → profile → upgrade to Pro (Stripe) |
 | **Sprint 2** | Personalized roadmap + problem solving | ≈ 42 SP | Roadmap onboarding, roadmap graph + certificate, Problems page, Code editor (Run + Submit), Coding dashboard, Free/Pro-tier admin |
 | **Sprint 3** | Collaboration — classrooms, assignments, messaging | ≈ 48 SP | Create class + invite, Join class, Assignments, Announcements, Real-time messaging |
-| **Sprint 4** | AI tutor, institution + super admin | ≈ 46 SP | PDF assistant (RAG), AI Mentor, Institution onboarding + invite links, Institution admin & Super admin consoles, Stripe full flow |
+| **Sprint 4** | AI tutor, institution + super admin | ≈ 46 SP | PDF assistant (RAG), AI Mentor (guidance + code correction), Learning tags, Institution onboarding + invite links, Institution admin & Super admin consoles, Stripe full flow |
 
 > Story-point estimates use Fibonacci (1, 2, 3, 5, 8, 13).
 
@@ -156,7 +156,8 @@ A user story is "done" only if:
 |---|---|---:|---|
 | US15.1 | Upload PDF + ingest into Chroma | 5 | Chunks indexed with metadata (file id, page) |
 | US15.2 | Ask question on PDF (RAG) | 8 | Streamed answer with page citations |
-| Mentor | AI Mentor side panel | 5 | User context injected; conversation persisted |
+| Mentor | AI Mentor side panel | 5 | User context injected; guidance without final answers; AI-assisted code correction |
+| Tags | Learning tags (`/ai`, `/stack-overflow`, `/youtube`) | 3 | Tag shortcuts + curated references; works with or without AI |
 | US24.1 | Institution onboarding | 5 | After Stripe webhook, redirect + create Institution |
 | US25.1–2 | Invite links (generate + revoke) | 5 | TTL + max uses; revoke flips status |
 | US26.1 | Join via invite link | 3 | Role from token applied; `institutionId` set |
@@ -172,7 +173,7 @@ A user story is "done" only if:
 ### 7.2. Sprint 4 risks
 
 - RAG response latency — handled with token streaming + a small Chroma index per file.
-- Stream Video pricing on heavy usage — feature-flagged behind plan.
+- AI mentor response latency — mitigated with streaming and light prompt context.
 - Stripe webhook reliability — idempotency keys + signature verification.
 
 ---
