@@ -15,6 +15,7 @@ import {
   message as antdMessage,
 } from "antd";
 import {
+  BookOutlined,
   CloseOutlined,
   CrownOutlined,
   DeleteOutlined,
@@ -663,10 +664,16 @@ const Messages = () => {
     }
   };
 
-  const onInvite = async (userId) => {
+  const onInvite = async (userIds) => {
     if (!activeConv) return;
-    const updated = await api.invite(activeConv.id, userId);
-    setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    const ids = Array.isArray(userIds) ? userIds : [userIds];
+    let updated;
+    for (const userId of ids) {
+      updated = await api.invite(activeConv.id, userId);
+    }
+    if (updated) {
+      setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    }
   };
 
   const onRename = async (newName) => {
@@ -1703,6 +1710,175 @@ const UserPicker = ({ value, onChange, mode = "multiple", excludeIds = [], place
   );
 };
 
+// ── Quick-invite section (role-aware) ─────────────────────────────────────
+// institution_admin → one click to add every institution member.
+// teacher          → pick a classroom, add all enrolled students.
+const QuickInviteSection = ({ selectedIds, onAdd, excludeIds = [] }) => {
+  const me = getCurrentUser();
+  const [classrooms, setClassrooms] = useState([]);
+  const [selectedClassroom, setSelectedClassroom] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (me?.role === "teacher" && me?.id) {
+      api.getMyClassrooms(me.id).then(setClassrooms).catch(() => {});
+    }
+  }, [me?.id, me?.role]);
+
+  if (!me || !["institution_admin", "teacher"].includes(me.role)) return null;
+
+  const excluded = new Set([...selectedIds, ...excludeIds, me.id]);
+
+  const handleAddInstitution = async () => {
+    setLoading(true);
+    try {
+      const members = await api.getInstitutionMembers();
+      const newIds = members.map((u) => u.id).filter((id) => !excluded.has(id));
+      if (newIds.length === 0) return antdMessage.info("All institution members are already added");
+      onAdd(newIds);
+      antdMessage.success(`Added ${newIds.length} member${newIds.length !== 1 ? "s" : ""}`);
+    } catch {
+      antdMessage.error("Could not load institution members");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddClassroom = async () => {
+    if (!selectedClassroom) return;
+    setLoading(true);
+    try {
+      const students = await api.getClassroomStudents(selectedClassroom);
+      const newIds = students.map((u) => u.id).filter((id) => !excluded.has(id));
+      if (newIds.length === 0) return antdMessage.info("All students from this classroom are already added");
+      onAdd(newIds);
+      antdMessage.success(`Added ${newIds.length} student${newIds.length !== 1 ? "s" : ""}`);
+    } catch {
+      antdMessage.error("Could not load classroom students");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      {/* Divider */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
+        <div style={{ flex: 1, height: 1, background: PALETTE.borderSoft }} />
+        <Text style={{ color: PALETTE.textSoft, fontSize: 11, whiteSpace: "nowrap" }}>
+          Quick invite
+        </Text>
+        <div style={{ flex: 1, height: 1, background: PALETTE.borderSoft }} />
+      </div>
+
+      {/* Institution admin: add everyone at once */}
+      {me.role === "institution_admin" && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 14px",
+            background: PALETTE.bg,
+            border: `1px solid ${PALETTE.borderSoft}`,
+            borderRadius: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: PALETTE.accentSoft,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <TeamOutlined style={{ color: PALETTE.accent, fontSize: 18 }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text strong style={{ fontSize: 13, display: "block" }}>
+              Add all institution members
+            </Text>
+            <Text style={{ color: PALETTE.textSoft, fontSize: 11 }}>
+              Every member of your institution will be invited
+            </Text>
+          </div>
+          <Button
+            type="primary"
+            ghost
+            size="small"
+            loading={loading}
+            onClick={handleAddInstitution}
+            style={{ borderRadius: 8, flexShrink: 0 }}
+          >
+            Add all
+          </Button>
+        </div>
+      )}
+
+      {/* Teacher: pick a classroom then add its students */}
+      {me.role === "teacher" && (
+        <div
+          style={{
+            padding: "12px 14px",
+            background: PALETTE.bg,
+            border: `1px solid ${PALETTE.borderSoft}`,
+            borderRadius: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: PALETTE.accentSoft,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <BookOutlined style={{ color: PALETTE.accent, fontSize: 18 }} />
+            </div>
+            <div>
+              <Text strong style={{ fontSize: 13, display: "block" }}>
+                Invite students from a classroom
+              </Text>
+              <Text style={{ color: PALETTE.textSoft, fontSize: 11 }}>
+                Select one of your classrooms to add its enrolled students
+              </Text>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Select
+              placeholder={classrooms.length === 0 ? "No classrooms found" : "Select a classroom"}
+              style={{ flex: 1 }}
+              value={selectedClassroom}
+              onChange={setSelectedClassroom}
+              disabled={classrooms.length === 0}
+              options={classrooms.map((c) => ({ value: c.id, label: c.name }))}
+            />
+            <Button
+              type="primary"
+              ghost
+              loading={loading}
+              disabled={!selectedClassroom}
+              onClick={handleAddClassroom}
+              style={{ borderRadius: 8 }}
+            >
+              Add students
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const NewGroupModal = ({ open, onClose, onCreate }) => {
   const [name, setName] = useState("");
   const [memberIds, setMemberIds] = useState([]);
@@ -1748,7 +1924,11 @@ const NewGroupModal = ({ open, onClose, onCreate }) => {
         <UserPicker
           value={memberIds}
           onChange={setMemberIds}
-          placeholder="Add members"
+          placeholder="Search and add members"
+        />
+        <QuickInviteSection
+          selectedIds={memberIds}
+          onAdd={(ids) => setMemberIds((prev) => [...new Set([...prev, ...ids])])}
         />
       </div>
     </Modal>
@@ -1809,19 +1989,19 @@ const NewPrivateModal = ({ open, onClose, onSend }) => {
 };
 
 const InviteModal = ({ open, onClose, onInvite, excludeIds }) => {
-  const [userId, setUserId] = useState(undefined);
+  const [userIds, setUserIds] = useState([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setUserId(undefined); setBusy(false); }
+    if (!open) { setUserIds([]); setBusy(false); }
   }, [open]);
 
   const submit = async () => {
-    if (!userId) return;
+    if (userIds.length === 0) return antdMessage.warning("Select at least one person to invite");
     setBusy(true);
     try {
-      await onInvite(userId);
-      antdMessage.success("Invited");
+      await onInvite(userIds);
+      antdMessage.success(`Invited ${userIds.length} person${userIds.length !== 1 ? "s" : ""}`);
       onClose();
     } catch {
       antdMessage.error("Could not invite");
@@ -1840,13 +2020,17 @@ const InviteModal = ({ open, onClose, onInvite, excludeIds }) => {
       confirmLoading={busy}
       centered
     >
-      <div style={{ paddingTop: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8 }}>
         <UserPicker
-          mode={undefined}
-          value={userId}
-          onChange={setUserId}
+          value={userIds}
+          onChange={setUserIds}
           excludeIds={excludeIds}
-          placeholder="Pick a user"
+          placeholder="Search and pick people to invite"
+        />
+        <QuickInviteSection
+          selectedIds={userIds}
+          excludeIds={excludeIds}
+          onAdd={(ids) => setUserIds((prev) => [...new Set([...prev, ...ids])])}
         />
       </div>
     </Modal>

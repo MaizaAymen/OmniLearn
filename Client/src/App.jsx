@@ -14,7 +14,6 @@ import { useLocation } from "react-router-dom";
 import { Spin } from "antd";
 import ClassroomPdf from "./ClassroomPdf/ClassroomPdf";
 import AdminDashboard from "./Admin/AdminDashboard";
-import LiveSessionsPage from "./LiveSessions/LiveSessionsPage";
 import UMLEditor from "./Uml/UMLEditor";
 import UmlProblems from "./Uml/Problem";
 import VideoCall from "./components/VideoCall";
@@ -138,7 +137,6 @@ function App() {
       <Route path="/classroom-pdf" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomPdf /></Guard>} />
       <Route path="/learning-dashboard" element={<Guard allow={ALL} profileStatus={profileStatus}><LearningDashboard /></Guard>} />
       <Route path="/roadmap" element={<Guard allow={ALL} profileStatus={profileStatus}><RoadmapPage /></Guard>} />
-      <Route path="/live-sessions" element={<Guard allow={STAFF} profileStatus={profileStatus}><LiveSessionsPage /></Guard>} />
       <Route path="/video-call" element={<Guard allow={ALL} profileStatus={profileStatus}><VideoCall /></Guard>} />
       <Route path="/education" element={<Guard allow={STAFF} profileStatus={profileStatus}><AdminDashboard /></Guard>} />
       <Route path="/uml" element={<Guard allow={ALL} profileStatus={profileStatus}><UMLEditor /></Guard>} />

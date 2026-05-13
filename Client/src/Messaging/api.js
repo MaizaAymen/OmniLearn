@@ -65,6 +65,15 @@ export const api = {
   searchUsers: (q = "") =>
     axios.get(`${API_BASE}/users-search`, { params: { q }, headers: authHeaders() }).then((r) => r.data),
 
+  getInstitutionMembers: () =>
+    axios.get(`${API_BASE}/institution-members`, { headers: authHeaders() }).then((r) => r.data),
+
+  getClassroomStudents: (classroomId) =>
+    axios.get(`${API_BASE}/classroom/${classroomId}/students`, { headers: authHeaders() }).then((r) => r.data),
+
+  getMyClassrooms: (userId) =>
+    axios.get(`${API_BASE}/users/${userId}/classrooms`, { headers: authHeaders() }).then((r) => r.data),
+
   listNotifications: () =>
     axios.get(`${API_BASE}/notifications`, { headers: authHeaders() }).then((r) => r.data),
 

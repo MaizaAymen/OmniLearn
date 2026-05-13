@@ -53,6 +53,42 @@ router.get("/users-search", async (req, res) => {
     res.status(500).json({ error: "Search failed" });
   }
 });
+// GET /api/institution-members — all users in the same institution (institution_admin use)
+router.get("/institution-members", async (req, res) => {
+  try {
+    if (!req.user.institutionId) {
+      return res.status(400).json({ error: "You are not part of an institution" });
+    }
+    const users = await User.findAll({
+      where: { institutionId: req.user.institutionId },
+      attributes: ["id", "firstname", "lastname", "email", "role"],
+    });
+    res.json(users.filter((u) => u.id !== req.user.id));
+  } catch (err) {
+    console.error("institution-members:", err);
+    res.status(500).json({ error: "Failed to fetch institution members" });
+  }
+});
+
+// GET /api/classroom/:classroomId/students — enrolled students (teacher use)
+router.get("/classroom/:classroomId/students", async (req, res) => {
+  try {
+    const classroom = await Class.findByPk(req.params.classroomId);
+    if (!classroom) return res.status(404).json({ error: "Classroom not found" });
+    if (req.user.role !== "admin" && classroom.teacherId !== req.user.id) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const enrollments = await Enrollment.findAll({
+      where: { classId: req.params.classroomId },
+      include: [{ model: User, as: "student", attributes: ["id", "firstname", "lastname", "email", "role"] }],
+    });
+    res.json(enrollments.map((e) => e.student).filter(Boolean));
+  } catch (err) {
+    console.error("classroom-students:", err);
+    res.status(500).json({ error: "Failed to fetch students" });
+  }
+});
+
 router.get("/users/:id", async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);

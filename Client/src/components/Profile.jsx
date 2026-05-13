@@ -52,6 +52,7 @@ import CodingDashboard from "./CodingDashboard";
 import PlanSection from "./PlanSection";
 import Certificate from "./Certificate";
 import LearningDashboard from "../Dashbord/LearningDashboard";
+import RoadmapTab from "./RoadmapTab";
 import { api as msgApi, getSocket } from "../Messaging/api";
 
 const { Title, Text } = Typography;
@@ -149,6 +150,19 @@ const LearningSvg = (
     <svg {...svgProps}>
       <path d="M3 3v18h18" />
       <path d="M7 14l4-4 4 4 6-6" />
+    </svg>
+  </span>
+);
+
+const RoadmapSvg = (
+  <span role="img" style={{ display: "inline-flex", alignItems: "center" }}>
+    <svg {...svgProps}>
+      <circle cx="12" cy="5" r="2" />
+      <path d="M12 7v4" />
+      <circle cx="6" cy="13" r="2" />
+      <circle cx="18" cy="13" r="2" />
+      <path d="M12 11l-4 2M12 11l4 2" />
+      <path d="M6 15v2M18 15v2" />
     </svg>
   </span>
 );
@@ -768,6 +782,7 @@ export default function Profile() {
         { key: "classroom", icon: ClassroomSvg, label: "Classroom" },
         { key: "problems", icon: ProblemsSvg, label: "Problems" },
         { key: "learning", icon: LearningSvg, label: "Learning" },
+        { key: "roadmaps", icon: RoadmapSvg, label: "Roadmaps" },
         { key: "security", icon: SecuritySvg, label: "Security" },
         {
           key: "notifications",
@@ -874,6 +889,8 @@ export default function Profile() {
                     ? "Plan & Usage"
                     : selectedKey === "security"
                     ? "Security"
+                    : selectedKey === "roadmaps"
+                    ? "Roadmaps & Certifications"
                     : "Profile Information"}
                 </Title>
                 <Text type="secondary">
@@ -889,6 +906,8 @@ export default function Profile() {
                     ? "See what's unlocked on your current plan."
                     : selectedKey === "security"
                     ? "Manage your password and two-factor authentication."
+                    : selectedKey === "roadmaps"
+                    ? "Track your learning paths and earned certificates."
                     : "Update your personal information and account details."}
                 </Text>
               </div>
@@ -903,7 +922,9 @@ export default function Profile() {
             {/* ─── Onglet "Plan & Usage" ────────────────────────────────────
                 Affiche le plan courant et le bouton d'upgrade.
                 Tout est géré dans PlanSection pour garder Profile.jsx propre. */}
-            {selectedKey === "learning" ? (
+            {selectedKey === "roadmaps" ? (
+              <RoadmapTab />
+            ) : selectedKey === "learning" ? (
               <LearningDashboard embedded />
             ) : selectedKey === "plan" ? (
               <PlanSection />

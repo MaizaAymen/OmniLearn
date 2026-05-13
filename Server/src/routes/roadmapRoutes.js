@@ -50,7 +50,7 @@ router.get("/me", authenticate, async (req, res) => {
 router.get("/list", authenticate, async (req, res) => {
   const roadmaps = await SavedRoadmap.findAll({
     where: { userId: req.user.id },
-    attributes: ["id", "title", "progress", "isActive", "createdAt", "updatedAt"],
+    attributes: ["id", "title", "progress", "isActive", "certificateIssuedAt", "createdAt", "updatedAt"],
     order: [["createdAt", "DESC"]],
   });
   res.json(roadmaps);

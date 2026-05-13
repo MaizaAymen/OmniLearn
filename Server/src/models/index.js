@@ -19,7 +19,6 @@ const Lesson = require("./Lesson");
 const UmlDiagram = require("./UmlDiagram");
 const StudentProblemSet = require("./StudentProblemSet");
 const ClassAssignment = require("./ClassAssignment");
-const ExamSubmission = require("./ExamSubmission");
 const Announcement = require("./Announcement");
 const Conversation = require("./Conversation");
 const Message = require("./Message");
@@ -112,10 +111,6 @@ CodeSubmission.belongsTo(Course, { foreignKey: "courseId", as: "course" });
 Module.hasMany(CodeSubmission, { foreignKey: "moduleId", as: "codeSubmissions" });
 CodeSubmission.belongsTo(Module, { foreignKey: "moduleId", as: "module" });
 
-// ─── User ↔ ExamSubmissions (1:N, optional) ──────────────────────────────────
-User.hasMany(ExamSubmission, { foreignKey: "userId", as: "examSubmissions" });
-ExamSubmission.belongsTo(User, { foreignKey: "userId", as: "user" });
-
 // ─── Class ↔ Announcements (1:N) ─────────────────────────────────────────────
 Class.hasMany(Announcement, { foreignKey: "classId", as: "announcements" });
 Announcement.belongsTo(Class, { foreignKey: "classId", as: "class" });
@@ -171,7 +166,6 @@ module.exports = {
   Lesson,
   UmlDiagram,
   ClassAssignment,
-  ExamSubmission,
   Announcement,
   Conversation,
   Message,
