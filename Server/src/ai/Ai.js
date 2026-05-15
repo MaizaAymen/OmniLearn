@@ -680,15 +680,25 @@ router.get("/ai/problems/check-duplicate", async (req, res) => {
 });
 
 // ─── Fork Problem ─────────────────────────────────────────────────────────────
+// ─── Fork Problem ─────────────────────────────────────────────────────────────
+// Supports three fork targets:
+//   - institutionId → scope:"institution"  (institution admin forking into their bank)
+//   - moduleId      → scope:"module"       (teacher forking into a module)
+//   - neither       → scope:"global"
 router.post("/ai/problems/:id/fork", async (req, res) => {
   try {
     const { id } = req.params;
-    const { moduleId, createdBy } = req.body;
+    // institutionId added so institution admins can fork global problems into their private bank
+    const { moduleId, createdBy, institutionId } = req.body;
 
     const original = await Problem.findByPk(id);
     if (!original) return res.status(404).json({ error: "Problem not found" });
 
     const forkId = slugify(`${original.title}-copy-${Date.now()}`);
+
+    // Determine scope based on fork target
+    const finalScope = institutionId ? "institution" : moduleId ? "module" : "global";
+
     const forked = await Problem.create({
       id: forkId,
       title: `${original.title} (copy)`,
@@ -702,7 +712,9 @@ router.post("/ai/problems/:id/fork", async (req, res) => {
       expectedOutput: original.expectedOutput,
       roadmap: original.roadmap,
       status: "draft",
-      scope: moduleId ? "module" : "global",
+      scope: finalScope,
+      // Attach institution so the problem is only visible to that institution's members
+      institutionId: institutionId || null,
       forkedFrom: id,
       tags: original.tags || [],
       version: 1,

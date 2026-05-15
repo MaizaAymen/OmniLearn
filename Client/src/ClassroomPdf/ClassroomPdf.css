@@ -166,6 +166,115 @@
   color: #000;
 }
 
+.sidebar-search {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.filter-chips .ant-tag-checkable {
+  margin: 0;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  color: #666;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.filter-chips .ant-tag-checkable:hover {
+  color: #000;
+  border-color: #000;
+}
+
+.filter-chips .ant-tag-checkable-checked {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #000 !important;
+}
+
+.tag-chips {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed #f0f0f0;
+}
+
+.tag-chips-icon {
+  color: #999;
+  font-size: 12px;
+  margin-right: 2px;
+  align-self: center;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.item-row-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.item-tag-pill {
+  margin: 0 !important;
+  font-size: 10px !important;
+  padding: 0 6px !important;
+  line-height: 16px !important;
+  border-radius: 8px !important;
+  background: #f0f0f0 !important;
+  border-color: #e8e8e8 !important;
+  color: #666 !important;
+}
+
+.courses-menu .ant-menu-item-selected .item-tag-pill {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+
+.item-row-actions {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.edit-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 24px;
+  padding: 6px;
+  border: 1px dashed #e8e8e8;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
 .sidebar-loading {
   display: flex;
   justify-content: center;

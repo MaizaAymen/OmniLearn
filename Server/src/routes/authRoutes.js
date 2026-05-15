@@ -134,32 +134,97 @@ router.post("/refresh-token", async (req, res) => {
     }
 });
 
-router.post("/reset-password", async (req, res) => {
+// Step 1: Send password reset email
+router.post("/forgot-password", async (req, res) => {
     try {
         const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: "Email is required" });
+        }
+
         const user = await User.findOne({ where: { email } });
         if (!user) {
-            return res.status(404).json({ error: "Utilisateur non trouvé" });
+            // Don't reveal if email exists (security)
+            return res.json({ message: "If the email exists, a reset link has been sent" });
         }
-        const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
-        const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+
+        // Generate a secure reset token (expires in 1 hour)
+        const resetToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
+        user.passwordResetToken = resetToken;
+        user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        await user.save();
+
+        const resetLink = `${process.env.CLIENT_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+
         await sendEmail({
             to: email,
-            subject: "Réinitialisation de votre mot de passe",
-            text: `Bonjour ${user.firstname},
-
-Vous avez demandé une réinitialisation de votre mot de passe. Veuillez cliquer sur le lien suivant pour réinitialiser votre mot de passe :
-${resetLink}
-
-Si vous n'avez pas demandé cette réinitialisation, veuillez ignorer cet email.
-
-Cordialement,
-L'équipe Learnflow
-`,
+            subject: "Reset your OmniLearn password",
+            text: `Hello ${user.firstname},\n\nClick the link below to reset your password:\n${resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.\n\nOmniLearn Team`,
+            html: `
+                <p>Hello <strong>${user.firstname}</strong>,</p>
+                <p>We received a request to reset your password. Click the button below to create a new one:</p>
+                <p>
+                  <a href="${resetLink}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">
+                    Reset Password
+                  </a>
+                </p>
+                <p style="color:#888;font-size:13px;">Or copy this link: ${resetLink}</p>
+                <p style="color:#888;font-size:13px;">This link expires in 1 hour.</p>
+                <p style="color:#888;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+                <p>— <strong>OmniLearn Team</strong></p>
+            `,
         });
-        res.json({ message: "Email de réinitialisation envoyé avec succès" });
+
+        res.json({ message: "If the email exists, a reset link has been sent" });
     } catch (error) {
-        res.status(500).json({ error: "Erreur lors de l'envoi du mail de réinitialisation" });
+        console.error("Forgot password error:", error);
+        res.status(500).json({ error: "Failed to process password reset request" });
+    }
+});
+
+// Step 2: Verify reset token and reset password
+router.post("/reset-password", async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: "Token and new password are required" });
+        }
+
+        const user = await User.findOne({
+            where: {
+                passwordResetToken: token,
+                passwordResetExpires: { [Op.gt]: new Date() },
+            },
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: "Invalid or expired reset token" });
+        }
+
+        // Hash and update password
+        user.password = newPassword; // beforeCreate hook will hash it
+        user.passwordResetToken = null;
+        user.passwordResetExpires = null;
+        await user.save();
+
+        // Send confirmation email
+        await sendEmail({
+            to: user.email,
+            subject: "Your password has been reset",
+            text: `Hello ${user.firstname},\n\nYour password has been successfully reset.\n\nIf you didn't request this, please contact support immediately.\n\nOmniLearn Team`,
+            html: `
+                <p>Hello <strong>${user.firstname}</strong>,</p>
+                <p>Your password has been successfully reset.</p>
+                <p style="color:#888;font-size:13px;">If you didn't request this, please contact support immediately.</p>
+                <p>— <strong>OmniLearn Team</strong></p>
+            `,
+        }).catch(() => {});
+
+        res.json({ message: "Password reset successfully. You can now log in." });
+    } catch (error) {
+        console.error("Reset password error:", error);
+        res.status(500).json({ error: "Failed to reset password" });
     }
 });
 

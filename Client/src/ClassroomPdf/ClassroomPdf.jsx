@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Cookies from "js-cookie";
@@ -10,7 +10,7 @@ import {
   FileTextOutlined, UploadOutlined, BookOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, CodeOutlined,
   PlusOutlined, BulbOutlined, RobotOutlined,
-  DeleteOutlined, InboxOutlined,
+  DeleteOutlined, InboxOutlined, SearchOutlined, EditOutlined, TagsOutlined,
 } from "@ant-design/icons";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
@@ -59,6 +59,18 @@ export default function ClassroomPdf() {
   const [codeName, setCodeName] = useState("");
   const [codeContent, setCodeContent] = useState("");
   const [savingCode, setSavingCode] = useState(false);
+
+  // Search + filter
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | pdf | code | recent | tag:<name>
+
+  // Rename + tags modal
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editTags, setEditTags] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Notes (per-user, saved in localStorage)
   const [notes, setNotes] = useState(() => localStorage.getItem(NOTES_KEY) || "");
@@ -182,33 +194,123 @@ export default function ClassroomPdf() {
     });
   }
 
-  const menuItems = items.map((it) => ({
+  function openEdit(it) {
+    setEditItem(it);
+    setEditName(it.name);
+    setEditTags(Array.isArray(it.tags) ? it.tags : []);
+    setTagInput("");
+    setEditOpen(true);
+  }
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase();
+    if (!t) return;
+    if (!editTags.includes(t)) setEditTags([...editTags, t]);
+    setTagInput("");
+  }
+
+  function removeTag(t) {
+    setEditTags(editTags.filter((x) => x !== t));
+  }
+
+  async function saveEdit() {
+    if (!editItem) return;
+    if (!editName.trim()) {
+      message.error("Name cannot be empty");
+      return;
+    }
+    try {
+      setSavingEdit(true);
+      const res = await axios.patch(`${API}/item/${editItem.id}`, {
+        name: editName.trim(),
+        tags: editTags,
+      });
+      setItems((prev) => prev.map((i) => (i.id === editItem.id ? res.data : i)));
+      if (selected && selected.id === editItem.id) setSelected(res.data);
+      setEditOpen(false);
+      message.success("Saved");
+    } catch {
+      message.error("Could not save");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // Build the unique tag list for chip filters.
+  const allTags = useMemo(() => {
+    const s = new Set();
+    items.forEach((i) => (i.tags || []).forEach((t) => s.add(t)));
+    return Array.from(s);
+  }, [items]);
+
+  // Apply search + filter chip.
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return items.filter((it) => {
+      if (filter === "pdf" && it.type !== "pdf") return false;
+      if (filter === "code" && it.type !== "code") return false;
+      if (filter === "recent") {
+        const t = new Date(it.createdAt || 0).getTime();
+        if (!t || t < weekAgo) return false;
+      }
+      if (filter.startsWith("tag:")) {
+        const wanted = filter.slice(4);
+        if (!(it.tags || []).includes(wanted)) return false;
+      }
+      if (q) {
+        const hay = (it.name + " " + (it.tags || []).join(" ")).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, search, filter]);
+
+  const menuItems = visibleItems.map((it) => ({
     key: it.id,
     icon: it.type === "pdf" ? <FileTextOutlined /> : <CodeOutlined />,
     label: (
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
-          {it.name}
-        </span>
-        <Popconfirm
-          title="Delete file?"
-          description="This cannot be undone."
-          onConfirm={(e) => {
-            e.stopPropagation(); // Prevent menu click
-            handleDelete(it.id);
-          }}
-          onCancel={(e) => e.stopPropagation()}
-          okText="Delete"
-          cancelText="Cancel"
-        >
+      <div className="item-row">
+        <div className="item-row-main">
+          <span className="item-name">{it.name}</span>
+          {(it.tags || []).length > 0 && (
+            <div className="item-tags">
+              {(it.tags || []).slice(0, 3).map((t) => (
+                <Tag key={t} className="item-tag-pill">{t}</Tag>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="item-row-actions" onClick={(e) => e.stopPropagation()}>
           <Button
             type="text"
-            danger
             size="small"
-            icon={<DeleteOutlined />}
-            onClick={(e) => e.stopPropagation()}
+            icon={<EditOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(it);
+            }}
           />
-        </Popconfirm>
+          <Popconfirm
+            title="Delete file?"
+            description="This cannot be undone."
+            onConfirm={(e) => {
+              e.stopPropagation();
+              handleDelete(it.id);
+            }}
+            onCancel={(e) => e.stopPropagation()}
+            okText="Delete"
+            cancelText="Cancel"
+          >
+            <Button
+              type="text"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Popconfirm>
+        </div>
       </div>
     ),
   }));
@@ -324,12 +426,71 @@ export default function ClassroomPdf() {
           </div>
         )}
 
+        {!collapsed && items.length > 0 && (
+          <div className="sidebar-search">
+            <Input
+              placeholder="Search files..."
+              prefix={<SearchOutlined />}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              allowClear
+              size="small"
+            />
+            <div className="filter-chips">
+              <Tag.CheckableTag
+                checked={filter === "all"}
+                onChange={() => setFilter("all")}
+              >
+                All
+              </Tag.CheckableTag>
+              <Tag.CheckableTag
+                checked={filter === "pdf"}
+                onChange={() => setFilter("pdf")}
+              >
+                PDF
+              </Tag.CheckableTag>
+              <Tag.CheckableTag
+                checked={filter === "code"}
+                onChange={() => setFilter("code")}
+              >
+                Code
+              </Tag.CheckableTag>
+              <Tag.CheckableTag
+                checked={filter === "recent"}
+                onChange={() => setFilter("recent")}
+              >
+                Recent
+              </Tag.CheckableTag>
+            </div>
+            {allTags.length > 0 && (
+              <div className="filter-chips tag-chips">
+                <TagsOutlined className="tag-chips-icon" />
+                {allTags.map((t) => (
+                  <Tag.CheckableTag
+                    key={t}
+                    checked={filter === `tag:${t}`}
+                    onChange={() => setFilter(filter === `tag:${t}` ? "all" : `tag:${t}`)}
+                  >
+                    {t}
+                  </Tag.CheckableTag>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="sidebar-loading"><Spin size="small" /></div>
         ) : items.length === 0 ? (
           !collapsed && (
             <div className="sidebar-empty">
               <Text type="secondary">No files yet</Text>
+            </div>
+          )
+        ) : visibleItems.length === 0 ? (
+          !collapsed && (
+            <div className="sidebar-empty">
+              <Text type="secondary">No files match your search</Text>
             </div>
           )
         ) : (
@@ -415,6 +576,55 @@ export default function ClassroomPdf() {
             autoSize={{ minRows: 12, maxRows: 20 }}
             className="code-input"
           />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <EditOutlined />
+            <span>Rename & Tags</span>
+          </Space>
+        }
+        open={editOpen}
+        onCancel={() => setEditOpen(false)}
+        onOk={saveEdit}
+        okText="Save"
+        confirmLoading={savingEdit}
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <div>
+            <Text strong>Name</Text>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onPressEnter={saveEdit}
+              placeholder="File name"
+              style={{ marginTop: 4 }}
+            />
+          </div>
+          <div>
+            <Text strong>Tags</Text>
+            <div className="edit-tags-row" style={{ marginTop: 4 }}>
+              {editTags.map((t) => (
+                <Tag key={t} closable onClose={() => removeTag(t)}>
+                  {t}
+                </Tag>
+              ))}
+            </div>
+            <Space.Compact style={{ width: "100%", marginTop: 8 }}>
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onPressEnter={addTag}
+                placeholder="e.g. math, dsa, week-1"
+              />
+              <Button onClick={addTag} icon={<PlusOutlined />}>Add</Button>
+            </Space.Compact>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Press Enter to add a tag. Tags help group files by subject.
+            </Text>
+          </div>
         </Space>
       </Modal>
     </Layout>

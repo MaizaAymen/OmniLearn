@@ -20,6 +20,11 @@ const call = async (path, opts = {}) => {
   return res.json();
 };
 
+// Plan pricing (super admin can changeamount)
+export const fetchPlanPricing = () => call(`/plan/pricing`);
+export const changeamount = (pro, institution) =>
+  call(`/plan/pricing`, { method: "PUT", body: JSON.stringify({ pro, institution }) });
+
 // User
 export const fetchMyPlan = () => call(`/plan/me/plan`);
 export const upgradeToPro = () => call(`/plan/upgrade/pro`, { method: "POST" });

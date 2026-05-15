@@ -1,5 +1,14 @@
 [
   {
+    "id": "pdf_1778877958770",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "pdf",
+    "name": "FINAL_ RF_PFE youcef degachi2025 (1) (1).pdf",
+    "fileUrl": "/uploads/workspace/6e2c761b-1c8e-4111-8c83-1129e081848a/pdf/1778877958708-354236.pdf",
+    "filePath": "C:\\Users\\aymen\\Desktop\\OmniLearn\\OmniLearn\\Server\\src\\uploads\\workspace\\6e2c761b-1c8e-4111-8c83-1129e081848a\\pdf\\1778877958708-354236.pdf",
+    "createdAt": "2026-05-15T20:45:58.770Z"
+  },
+  {
     "id": "code_1778021377818",
     "userId": "a6c3d9ce-77c7-4627-ae22-73b65f44c3ff",
     "type": "code",
@@ -32,7 +41,10 @@
     "name": "les lettres de recommandation.pdf",
     "fileUrl": "/uploads/workspace/48f6c604-aa01-4475-b254-0af79d2eeebf/pdf/1777944561310-282380.pdf",
     "filePath": "C:\\Users\\aymen\\Desktop\\OmniLearn\\OmniLearn\\Server\\src\\uploads\\workspace\\48f6c604-aa01-4475-b254-0af79d2eeebf\\pdf\\1777944561310-282380.pdf",
-    "createdAt": "2026-05-05T01:29:21.318Z"
+    "createdAt": "2026-05-05T01:29:21.318Z",
+    "tags": [
+      "lettre"
+    ]
   },
   {
     "id": "pdf_1777944534958",

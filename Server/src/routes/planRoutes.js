@@ -19,6 +19,17 @@ const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement,
 const { emitNotification } = require("../realtime/messageHub");
 
 const WORKSPACE_INDEX = path.join(__dirname, "..", "uploads", "workspace.json");
+const PRICING_FILE = path.join(__dirname, "..", "uploads", "plan-pricing.json");
+
+function getamount() {
+  try { return JSON.parse(fs.readFileSync(PRICING_FILE, "utf8")); }
+  catch { return { pro: 999, institution: 4999 }; }
+}
+function changeamount(pro, institution) {
+  const next = { pro: Number(pro), institution: Number(institution) };
+  fs.writeFileSync(PRICING_FILE, JSON.stringify(next, null, 2));
+  return next;
+}
 const FREE_WORKSPACE_LIMIT = 3;
 const FREE_PRIVATE_CONTACT_LIMIT = 3;
 const FREE_GROUP_LIMIT = 3;
@@ -109,10 +120,21 @@ router.get("/invite/:token", async (req, res) => {
   }
 });
 
+// Prix des plans (public, lu par la landing page).
+router.get("/pricing", (req, res) => {
+  res.json(getamount());
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // À partir d'ici, il faut être authentifié.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use(authenticate);
+
+// Super admin : modifier le prix des plans Pro et Institution.
+router.put("/pricing", requireSuperAdmin, (req, res) => {
+  const { pro, institution } = req.body;
+  res.json(changeamount(pro, institution));
+});
 
 // Upload logo for an institution (returns a Cloudinary URL).
 router.post("/institutions/logo-upload", upload.single("logo"), async (req, res) => {

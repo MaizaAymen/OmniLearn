@@ -3,6 +3,7 @@ import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import ContributionSection from "./components/ContributionSection";
 import StatsCards from "./components/StatsCards";
+import PlansSection from "./components/PlansSection";
 import Footer from "./components/Footer";
 import "./home.css";
 
@@ -14,6 +15,7 @@ export default function Home() {
         <Hero />
         <ContributionSection />
         <StatsCards />
+        <PlansSection />
       </main>
       <Footer />
     </div>

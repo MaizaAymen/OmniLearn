@@ -26,6 +26,8 @@ import VerifyEmail from "./Auth/VerifyEmail";
 import LearningDashboard from "./Dashbord/LearningDashboard";
 import RoadmapPage from "./Roadmap/RoadmapPage";
 import Home from "./Home/Home";
+import ForgotPassword from "./Auth/ForgotPassword";
+import ResetPassword from "./Auth/ResetPassword";
 
 const getStoredUser = () => {
   try {
@@ -79,7 +81,7 @@ const ADMIN = ["admin"];
 
 function App() {
   const location = useLocation();
-  const isAuthPage = location.pathname.startsWith("/auth");
+  const isAuthPage = location.pathname.startsWith("/auth") || location.pathname.startsWith("/forgot-password") || location.pathname.startsWith("/reset-password");
   const isVerifyPage = location.pathname.startsWith("/verify-email");
   const isHomePage = location.pathname === "/";
   const [profileStatus, setProfileStatus] = useState({ loading: true, complete: true });
@@ -152,6 +154,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword onBack={() => window.location.href = "/auth"} />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       ) : (
         <Sidebar profileStatus={profileStatus}>{appRoutes}</Sidebar>

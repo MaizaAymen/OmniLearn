@@ -54,6 +54,7 @@ import FreeTierTab from "./FreeTierTab";
 import ProTierTab from "./ProTierTab";
 import UsersByPlanTab from "./UsersByPlanTab";
 import InstitutionTab from "./InstitutionTab";
+import PlanPricingTab from "./PlanPricingTab";
 import "./AdminDashboard.css";
 import {
   fetchGrades,
@@ -137,7 +138,6 @@ const DIFF_COLOR   = { Easy: "green", Medium: "orange", Hard: "red" };
 const STATUS_FILL  = { published: "#52c41a", draft: "#faad14", review: "#1677ff", archived: "#9CA3AF" };
 const DIFF_FILL    = { Easy: "#52c41a", Medium: "#faad14", Hard: "#ff4d4f" };
 const CAT_PALETTE  = ["#1677ff", "#52c41a", "#faad14", "#722ed1", "#eb2f96", "#13c2c2", "#fa541c"];
-
 function ProblemBankSection() {
   const AI_API = "http://localhost:5000/api/ai/ai";
   const [problems, setProblems]     = useState([]);
@@ -482,7 +482,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const currentRole = getCurrentRole();
   const [activeSection, setActiveSection] = useState(
-    currentRole === "teacher" ? "classrooms" : "overview"
+    currentRole === "teacher" ? "classrooms" : "grades"
   );
 
   const [grades, setGrades] = useState([]);
@@ -1674,94 +1674,6 @@ const AdminDashboard = () => {
 
   const renderSection = () => {
     switch (activeSection) {
-      case "overview":
-        return (
-          <div>
-            <div className="overview-welcome">
-              <Title level={4} style={{ margin: 0, color: "#202124", fontSize: 22 }}>
-                Welcome to OmniLearn Admin
-              </Title>
-              <Text style={{ color: "#5f6368", fontSize: 14 }}>
-                Manage your classrooms, courses, and learning content.
-              </Text>
-            </div>
-
-            <Row gutter={[16, 16]} style={{ marginTop: 28 }}>
-              {[
-                { label: "Classrooms", value: classrooms.length, color: "#1a73e8", section: "classrooms" },
-                { label: "Courses", value: courses.length, color: "#34a853", section: "courses" },
-                { label: "Teachers", value: users.filter((u) => u.role === "teacher").length, color: "#8430ce", section: "courses" },
-                { label: "Lessons", value: lessons.length, color: "#e8710a", section: "lessons" },
-              ].map((stat) => (
-                <Col xs={12} sm={6} key={stat.label}>
-                  <Card
-                    className="stat-card"
-                    style={{ borderTop: `4px solid ${stat.color}` }}
-                    onClick={() => setActiveSection(stat.section)}
-                  >
-                    <div className="stat-value" style={{ color: stat.color }}>{stat.value}</div>
-                    <div className="stat-label">{stat.label}</div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-
-            <div style={{ marginTop: 36, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Title level={5} style={{ margin: 0, color: "#202124" }}>Your Classrooms</Title>
-              <Button type="link" onClick={() => setActiveSection("classrooms")} style={{ padding: 0, color: "#1a73e8", fontWeight: 500 }}>
-                View all
-              </Button>
-            </div>
-
-            {classrooms.length === 0 ? (
-              <Card className="admin-card" style={{ textAlign: "center", padding: "40px 24px" }}>
-                <TeamOutlined style={{ fontSize: 48, color: "#dadce0", marginBottom: 16, display: "block" }} />
-                <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>No classrooms yet</Text>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => { setActiveSection("classrooms"); handleCreateClick("classrooms"); }}>
-                  Create Classroom
-                </Button>
-              </Card>
-            ) : (
-              <Row gutter={[16, 16]}>
-                {classrooms.slice(0, 6).map((record, index) => (
-                  <Col key={record.id} xs={24} sm={12} lg={8}>
-                    <Card className="classroom-drill-card" styles={{ body: { padding: 0 } }}>
-                      <div
-                        className="classroom-card-banner"
-                        style={{ background: getCardColor(index) }}
-                        onClick={() => { setActiveSection("classrooms"); handleSelectClassroom(record); }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setActiveSection("classrooms");
-                            handleSelectClassroom(record);
-                          }
-                        }}
-                      >
-                        <div>
-                          <div className="classroom-card-title">{record.name || "Classroom"}</div>
-                          <div className="classroom-card-meta">
-                            {gradeOptions.find((g) => g.value === record.gradeId)?.label || ""}
-                            {gradeOptions.find((g) => g.value === record.gradeId)?.label && levelOptions.find((l) => l.value === record.levelId)?.label ? " • " : ""}
-                            {levelOptions.find((l) => l.value === record.levelId)?.label || ""}
-                          </div>
-                        </div>
-                        <Avatar className="classroom-card-avatar">
-                          {getTeacherName(record.teacherId).charAt(0).toUpperCase()}
-                        </Avatar>
-                      </div>
-                      <div className="classroom-card-footer">
-                        <span className="classroom-card-teacher-name">{getTeacherName(record.teacherId)}</span>
-                      </div>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </div>
-        );
 
       case "grades":
         return (
@@ -2164,6 +2076,10 @@ const AdminDashboard = () => {
       // ÉTAPE 3 : institution_admin → liens d'invitation et membres.
       case "institution":
         return <InstitutionTab />;
+
+      // Super admin : modifier le prix des plans Pro et Institution.
+      case "plan-pricing":
+        return <PlanPricingTab />;
 
       default:
         return null;

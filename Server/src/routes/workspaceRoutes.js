@@ -455,6 +455,37 @@ router.delete("/history", function (req, res) {
   res.json({ ok: true });
 });
 
+// Rename an item or set its tags.
+router.patch("/item/:itemId", express.json(), function (req, res) {
+  const all = readAll();
+  const idx = all.findIndex(function (i) { return i.id === req.params.itemId; });
+  if (idx === -1) return res.status(404).json({ error: "Item not found" });
+
+  const item = all[idx];
+  if (String(item.userId) !== String(req.user.id)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { name, tags } = req.body || {};
+
+  if (typeof name === "string" && name.trim()) {
+    item.name = name.trim();
+  }
+
+  if (Array.isArray(tags)) {
+    const clean = [];
+    for (const t of tags) {
+      if (typeof t !== "string") continue;
+      const tag = t.trim().toLowerCase();
+      if (tag && !clean.includes(tag)) clean.push(tag);
+    }
+    item.tags = clean;
+  }
+
+  saveAll(all);
+  res.json(item);
+});
+
 // Delete a workspace item (PDF or code).
 router.delete("/item/:itemId", function (req, res) {
   const all = readAll();

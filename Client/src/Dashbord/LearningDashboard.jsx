@@ -334,9 +334,9 @@ export default function LearningDashboard({ embedded = false }) {
                     size="small"
                     columns={[
                       {
-                        title: "Document",
+                        title: "File name",
                         dataIndex: "name",
-                        ellipsis: true,
+                        render: (name) => <Text strong>{name}</Text>,
                       },
                       {
                         title: "Quizzes",
@@ -380,9 +380,9 @@ export default function LearningDashboard({ embedded = false }) {
                     size="small"
                     columns={[
                       {
-                        title: "Document",
+                        title: "File name",
                         dataIndex: "documentName",
-                        ellipsis: true,
+                        render: (name) => <Text strong>{name}</Text>,
                       },
                       {
                         title: "Date",

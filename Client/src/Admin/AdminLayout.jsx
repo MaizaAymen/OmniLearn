@@ -22,7 +22,7 @@ const allSections = [
   { key: "grades",       label: "Grades",       icon: <TrophyOutlined />, roles: ["admin"] },
   { key: "specialities", label: "Specialities",  icon: <ClusterOutlined />, roles: ["admin"] },
   { key: "levels",       label: "Levels",        icon: <AppstoreOutlined />, roles: ["admin"] },
-  { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined />, roles: ["admin", "teacher"] },
+  { key: "classrooms",   label: "Classrooms",    icon: <TeamOutlined />, roles: ["teacher"] },
   { key: "problems",     label: "Problem Bank",  icon: <CodeOutlined />, roles: ["admin", "teacher"] },
   // NOTE : "Free Tier", "Pro Tier" et "Users by Plan" sont maintenant
   // regroupés dans le dashboard /users pour rassembler tout ce qui touche

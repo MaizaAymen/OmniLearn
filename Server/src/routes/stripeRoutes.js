@@ -2,11 +2,18 @@ const path = require("path");
 // Charger le .env du dossier Server/ explicitement, peu importe le cwd.
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
+const fs = require("fs");
 const express = require("express");
 const router = express.Router();
 const Stripe = require("stripe");
 const { User } = require("../models");
 const { authenticate } = require("../middleware/Authmiddleware");
+
+const PRICING_FILE = path.join(__dirname, "..", "uploads", "plan-pricing.json");
+function getamount() {
+  try { return JSON.parse(fs.readFileSync(PRICING_FILE, "utf8")); }
+  catch { return { pro: 999, institution: 4999 }; }
+}
 
 // Lazy init : on n'instancie Stripe qu'au premier appel, comme ça si la clé
 // manque on a une erreur claire dans la requête, pas un crash au boot.
@@ -21,10 +28,12 @@ const getStripe = () => {
 };
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
-// Prix des plans (en centimes USD)
-const PLANS = {
-  pro: { name: "Pro Plan", amount: 999 },          // $9.99
-  institution: { name: "Institution Plan", amount: 4999 }, // $49.99
+// Prix des plans (en centimes USD) — lus dynamiquement depuis le fichier.
+const PLAN_NAMES = { pro: "Pro Plan", institution: "Institution Plan" };
+const getPlan = (key) => {
+  const prices = getamount();
+  if (!(key in PLAN_NAMES)) return null;
+  return { name: PLAN_NAMES[key], amount: Number(prices[key]) };
 };
 
 router.use(authenticate);
@@ -33,7 +42,8 @@ router.use(authenticate);
 router.post("/create-checkout-session", async (req, res) => {
   try {
     const { plan } = req.body;
-    if (!PLANS[plan]) return res.status(400).json({ error: "Invalid plan" });
+    const planInfo = getPlan(plan);
+    if (!planInfo) return res.status(400).json({ error: "Invalid plan" });
     if (req.user.plan === "institution") {
       return res.status(400).json({ error: "You already have institution plan" });
     }
@@ -45,8 +55,8 @@ router.post("/create-checkout-session", async (req, res) => {
         {
           price_data: {
             currency: "usd",
-            product_data: { name: PLANS[plan].name },
-            unit_amount: PLANS[plan].amount,
+            product_data: { name: planInfo.name },
+            unit_amount: planInfo.amount,
           },
           quantity: 1,
         },
@@ -72,7 +82,7 @@ router.get("/verify/:sessionId", async (req, res) => {
     }
     const userId = session.metadata?.userId;
     const plan = session.metadata?.plan;
-    if (!userId || !PLANS[plan]) {
+    if (!userId || !PLAN_NAMES[plan]) {
       return res.status(400).json({ error: "Invalid session metadata" });
     }
     if (String(req.user.id) !== String(userId)) {
@@ -84,6 +94,19 @@ router.get("/verify/:sessionId", async (req, res) => {
   } catch (err) {
     console.error("verify session:", err);
     res.status(500).json({ error: "Failed to verify payment" });
+  }
+});
+router.post("/", async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (typeof amount !== "number" || amount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
+    }
+    // Ici tu pourrais faire quelque chose avec le montant, comme créer une session de paiement personnalisée.
+    res.json({ message: `Received amount: ${amount}` });
+  } catch (err) {
+    console.error("changeamount:", err);
+    res.status(500).json({ error: "Failed to change amount" });
   }
 });
 

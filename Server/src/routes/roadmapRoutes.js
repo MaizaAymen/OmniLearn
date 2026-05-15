@@ -235,7 +235,7 @@ router.post("/certificate/issue", authenticate, async (req, res) => {
     ? Math.round(nodes.reduce((sum, n) => sum + (n.bestScore || 0), 0) / nodes.length)
     : 0;
 
-  if (!allCompleted || !allQuizzed || avgScore < 80) {
+  if (!allCompleted ) {
     return res.status(400).json({ error: "Not eligible yet", allCompleted, allQuizzed, avgScore });
   }
 

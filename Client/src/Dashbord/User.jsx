@@ -7,6 +7,7 @@ import { Tabs } from "antd";
 //   • Pro Tier → choix des problèmes visibles aux users pro
 import FreeTierTab from "../Admin/FreeTierTab";
 import ProTierTab from "../Admin/ProTierTab";
+import PlanPricingTab from "../Admin/PlanPricingTab";
 import UsersByPlanOverview from "./UsersByPlanOverview";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,6 +44,11 @@ const User = () => {
                         key: "pro-tier",
                         label: "Pro Tier",
                         children: <ProTierTab />,
+                    },
+                    {
+                        key: "plan-pricing",
+                        label: "Plan Pricing",
+                        children: <PlanPricingTab />,
                     },
                 ]}
             />

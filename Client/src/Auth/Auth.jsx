@@ -15,6 +15,7 @@ import {
   CloseCircleFilled,
 } from "@ant-design/icons";
 import { GoogleLogin } from "@react-oauth/google";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./Auth.css";
 import Cookies from "js-cookie";
@@ -58,15 +59,16 @@ function usePasswordStrength(password) {
 
 /* ── OmniLearn SVG Logo ── */
 const OmniLearnLogo = ({ size = 44 }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 64 64" fill="none">
-    <circle cx="32" cy="32" r="32" fill="#c8cc6b" />
-    <circle cx="36" cy="30" r="14" fill="#5bc4c0" opacity="0.92" />
-    <circle cx="24" cy="24" r="12" fill="#f08baa" opacity="0.92" />
-    <circle cx="30" cy="28" r="5" fill="#fff" opacity="0.2" />
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 100 100" fill="none">
+    <circle cx="50" cy="50" r="44" fill="#d6d690" stroke="#3d2817" strokeWidth="3" />
+    <circle cx="40" cy="40" r="20" fill="#e8a8d4" stroke="#3d2817" strokeWidth="3" />
+    <circle cx="54" cy="60" r="14" fill="#7fd0cc" stroke="#3d2817" strokeWidth="3" />
+    <circle cx="74" cy="46" r="7" fill="#f4b87a" stroke="#3d2817" strokeWidth="3" />
   </svg>
 );
 
 const Auth = () => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
@@ -193,24 +195,6 @@ const Auth = () => {
             className="auth-illustration"
             onError={(e) => { e.target.style.display = "none"; }}
           />
-          <div className="auth-features">
-            <div className="feature-item">
-              <span className="feature-icon">📚</span>
-              <span>Adaptive Course Content</span>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">💻</span>
-              <span>Interactive Code Editor</span>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">🤖</span>
-              <span>AI-Powered Assistance</span>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">📊</span>
-              <span>Real-Time Analytics</span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -331,12 +315,24 @@ const Auth = () => {
                 </Form.Item>
 
                 {isLogin ? (
-                  <Form.Item
-                    name="password"
-                    rules={[{ required: true, message: "Password is required" }]}
-                  >
-                    <Input.Password prefix={<LockOutlined />} placeholder="Password" />
-                  </Form.Item>
+                  <>
+                    <Form.Item
+                      name="password"
+                      rules={[{ required: true, message: "Password is required" }]}
+                      style={{ marginBottom: 8 }}
+                    >
+                      <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+                    </Form.Item>
+                    <div style={{ textAlign: "right", marginBottom: 20 }}>
+                      <Link
+                        strong
+                        onClick={() => navigate("/forgot-password")}
+                        style={{ color: "#7c3aed", fontSize: 13 }}
+                      >
+                        Forgot Password?
+                      </Link>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="pwd-row">

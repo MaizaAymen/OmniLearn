@@ -266,13 +266,23 @@ export default function ProblemCreatePage() {
   const presetScope = searchParams.get("scope") || "";
   const isEditMode = !!editId;
 
+  // Institution admins create problems that are private to their institution.
+  // We force scope to "institution" for them so they cannot accidentally
+  // publish a problem into the public global bank.
+  const isInstitutionAdmin = user?.role === "institution_admin";
+  // Default scope: "institution" if user is institution_admin OR the URL asked for it
+  const defaultScope = isInstitutionAdmin || presetScope === "institution"
+    ? "institution"
+    : (presetScope || "global");
+
   const [tab, setTab] = useState("manual");
   const [modules, setModules] = useState([]);
   const [forkSource, setForkSource] = useState(null);
   const [loadingPrefill, setLoadingPrefill] = useState(isEditMode);
   const [originalStatus, setOriginalStatus] = useState(null);
 
-  const [form, setForm] = useState({ ...EMPTY_FORM, moduleId: presetModuleId });
+  // Start the form with the resolved default scope (so institution_admin lands on "institution")
+  const [form, setForm] = useState({ ...EMPTY_FORM, scope: defaultScope, moduleId: presetModuleId });
   const [examples, setExamples] = useState([]);
   const [codeLang, setCodeLang] = useState("javascript");
   const [roadmap, setRoadmap] = useState(null);
@@ -385,6 +395,10 @@ export default function ProblemCreatePage() {
       roadmap,
       scope: form.scope,
       moduleId: form.scope === "module" && form.moduleId ? parseInt(form.moduleId) : null,
+      // When the chosen scope is "institution", attach the current user's
+      // institutionId so the backend will only show this problem to members
+      // of that institution.
+      institutionId: form.scope === "institution" ? (user?.institutionId || null) : null,
     };
   }
 
@@ -404,7 +418,9 @@ export default function ProblemCreatePage() {
         });
         if (!res.ok) throw new Error();
         toast.success("Changes saved — draft updated");
-        navigate("/problems?status=all");
+        // institution_admin returns to their dashboard (where the Problem Bank
+        // tab lives); everyone else goes to the global problems list.
+        navigate(isInstitutionAdmin ? "/education" : "/problems?status=all");
       } else {
         const res = await fetch(`${API}/problems`, {
           method: "POST",
@@ -413,7 +429,7 @@ export default function ProblemCreatePage() {
         });
         if (!res.ok) throw new Error();
         toast.success("Problem created and published!");
-        navigate("/problems");
+        navigate(isInstitutionAdmin ? "/education" : "/problems");
       }
     } catch {
       toast.error(isEditMode ? "Error saving changes" : "Error creating problem");
@@ -459,11 +475,12 @@ export default function ProblemCreatePage() {
     }
   }
 
-  // AI tab state
+  // AI tab state — aiScope mirrors the same default as the manual form so
+  // institution_admin users start on "institution" automatically.
   const [topic, setTopic] = useState("");
   const [aiDiff, setAiDiff] = useState("");
   const [aiCount, setAiCount] = useState(1);
-  const [aiScope, setAiScope] = useState("global");
+  const [aiScope, setAiScope] = useState(defaultScope);
   const [aiModuleId, setAiModuleId] = useState(presetModuleId);
   const [generating, setGenerating] = useState(false);
   const [drafts, setDrafts] = useState([]);
@@ -494,12 +511,17 @@ export default function ProblemCreatePage() {
       const res = await fetch(`${API}/problems/save-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Top-level scope + institutionId are also read by the backend's
+        // save-draft handler — this keeps the saved problem private to the
+        // institution when aiScope is "institution".
         body: JSON.stringify({
           problem: {
             ...draft,
             scope: aiScope,
             moduleId: aiScope === "module" && aiModuleId ? parseInt(aiModuleId) : null,
           },
+          scope: aiScope,
+          institutionId: aiScope === "institution" ? (user?.institutionId || null) : null,
           createdBy: user.id || null,
         }),
       });
@@ -634,14 +656,31 @@ export default function ProblemCreatePage() {
               </div>
             </Section>
 
-            {/* Scope */}
-            <Section title="Scope" subtitle="Choose where this problem shows up.">
+            {/* Scope — institution_admin is locked to "institution" so they
+                cannot accidentally publish to the global bank. Other staff
+                roles still get the full set of choices. */}
+            <Section
+              title="Scope"
+              subtitle={
+                isInstitutionAdmin
+                  ? "This problem will be private to your institution — students outside it will never see it."
+                  : "Choose where this problem shows up."
+              }
+            >
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Scope</label>
-                  <select className={inputCls} value={form.scope} onChange={e => setField("scope", e.target.value)}>
-                    <option value="global">Global Bank</option>
-                    <option value="module">Module-only</option>
+                  <select
+                    className={inputCls}
+                    value={form.scope}
+                    onChange={e => setField("scope", e.target.value)}
+                    // Lock the dropdown for institution_admin — their only valid choice is "institution"
+                    disabled={isInstitutionAdmin}
+                  >
+                    {/* Global / Module options hidden for institution_admin */}
+                    {!isInstitutionAdmin && <option value="global">Global Bank</option>}
+                    {!isInstitutionAdmin && <option value="module">Module-only</option>}
+                    <option value="institution">Institution (Private)</option>
                   </select>
                 </div>
                 {form.scope === "module" && (
@@ -875,9 +914,16 @@ export default function ProblemCreatePage() {
                   </div>
                   <div>
                     <label className={labelCls}>Scope</label>
-                    <select className={inputCls} value={aiScope} onChange={e => setAiScope(e.target.value)}>
-                      <option value="global">Global Bank</option>
-                      <option value="module">Module-only</option>
+                    {/* Same scope rules as the manual form — institution_admin is locked to "institution" */}
+                    <select
+                      className={inputCls}
+                      value={aiScope}
+                      onChange={e => setAiScope(e.target.value)}
+                      disabled={isInstitutionAdmin}
+                    >
+                      {!isInstitutionAdmin && <option value="global">Global Bank</option>}
+                      {!isInstitutionAdmin && <option value="module">Module-only</option>}
+                      <option value="institution">Institution (Private)</option>
                     </select>
                   </div>
                 </div>

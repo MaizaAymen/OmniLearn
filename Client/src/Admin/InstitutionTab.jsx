@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, List, Modal,
   Popconfirm, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, message,
@@ -7,6 +7,10 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
+// Icons used by the Institution Problem Bank tabs (create / fork / search / edit)
+import { PlusOutlined, ForkOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+// useNavigate lets the panel open the SAME admin /problems/create page (locked to institution scope)
+import { useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
 
 // Palette partagée avec /users pour rester cohérent visuellement.
@@ -14,7 +18,9 @@ const CHART_PALETTE = ["#1677ff", "#52c41a", "#faad14", "#722ed1", "#eb2f96", "#
 const SEAT_COLORS = { used: "#1677ff", free: "#f0f0f0", over: "#ff4d4f" };
 import {
   createInviteLink, fetchInviteLinks, fetchInstitutionMembers, revokeInviteLink, inviteUserByEmail, searchUsers,
-  fetchInstitutionProblems, createInstitutionProblem, deleteInstitutionProblem,
+  // Note: legacy planApi problem helpers were replaced by direct calls to
+  // /api/ai/ai (same routes the admin Problem Bank uses) so the institution
+  // panel supports manual create, AI generate, and forking like the admin.
   fetchInstitution, updateInstitution,
   fetchInstitutionStats, fetchInstitutionClassrooms, fetchClassroomAudit,
   setClassroomActive, removeMember,
@@ -748,89 +754,284 @@ const SettingsPanel = ({ institutionId }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROBLEM BANK (banque de problèmes propres à l'institution)
+// PROBLEM BANK (banque privée de l'institution)
+//
+// Reuses the SAME admin routes (/api/ai/ai/...) used by the global Problem Bank.
+// Everything created / forked here is automatically scoped to "institution" so
+// it stays private to this institution's members.
+//
+// Sub-tabs:
+//   1. My Problems       – list, publish, archive, restore, delete
+//   2. Create manually   – classic admin manual-create form
+//   3. Generate with AI  – topic/difficulty/count → review drafts → save
+//   4. Fork from Global  – browse the public global bank and fork into this institution
 // ─────────────────────────────────────────────────────────────────────────────
-const InstitutionProblemsPanel = ({ institutionId }) => {
+
+// Same base URL the admin Problem Bank uses
+const AI_API = "http://localhost:5000/api/ai/ai";
+// Difficulty options reused everywhere in this panel
+const DIFFS = ["Easy", "Medium", "Hard"];
+const DIFF_COLOR = { Easy: "green", Medium: "orange", Hard: "red" };
+const STATUS_COLOR = { published: "green", draft: "orange", review: "blue", archived: "default" };
+const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 };
+
+// Read the logged-in user (used for createdBy + institutionId on every request)
+const getCurrentUser = () => {
+  try { return JSON.parse(Cookies.get("user") || "null") || {}; }
+  catch { return {}; }
+};
+// Auth header builder — required because /getallproblems?scope=institution
+// needs to know who is asking to filter by their institution.
+const authHeaders = () => {
+  const token = localStorage.getItem("token") || Cookies.get("token") || "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// ── Sub-tab 1: list this institution's problems with status management ───────
+const MyInstProblemsTab = ({ refreshKey }) => {
+  // navigate is used by the "Edit" action to open the shared /problems/create page in edit mode
+  const navigate = useNavigate();
   const [problems, setProblems] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  // Loader fetches problems with scope=institution (backend filters by the
+  // user's institutionId thanks to optionalAuth on this route)
+  const load = () => {
     setLoading(true);
-    try { setProblems(await fetchInstitutionProblems()); }
-    catch (err) { message.error(err.message); }
-    finally { setLoading(false); }
+    fetch(`${AI_API}/getallproblems?scope=institution&status=all`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setProblems(Array.isArray(d) ? d : []))
+      .catch(() => setProblems([]))
+      .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  // Re-run on mount + whenever refreshKey changes (after a create/fork/save)
+  useEffect(() => { load(); }, [refreshKey]);
 
-  const onCreate = async (values) => {
+  // Toggle published / archived / restore via the same admin status endpoint
+  const changeStatus = async (id, newStatus) => {
     try {
-      await createInstitutionProblem({
-        title: values.title,
-        difficulty: values.difficulty,
-        category: values.category,
-        description: { text: values.description || "", notes: [] },
-        institutionId,
+      const res = await fetch(`${AI_API}/problems/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ status: newStatus }),
       });
-      message.success("Problem added");
-      form.resetFields();
-      setOpen(false);
-      load();
-    } catch (err) { message.error(err.message); }
+      if (!res.ok) throw new Error();
+      message.success(`Problem ${newStatus}`);
+      // Optimistic local update — avoids a full refetch
+      setProblems((prev) => prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
+    } catch {
+      message.error("Error updating status");
+    }
   };
 
-  const onDelete = async (pid) => {
-    try { await deleteInstitutionProblem(pid); load(); }
-    catch (err) { message.error(err.message); }
+  // Hard delete via the admin endpoint
+  const removeProblem = async (id, title) => {
+    try {
+      const res = await fetch(`${AI_API}/deletepromblem/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      message.success(`"${title}" deleted`);
+      setProblems((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      message.error("Error deleting problem");
+    }
   };
+
+  const columns = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      render: (t, r) => (
+        <Space direction="vertical" size={0}>
+          <span style={{ fontWeight: 600 }}>{t}</span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>{r.category}</span>
+          {/* Lineage tag when the problem was forked from the global bank */}
+          {r.forkedFrom && <Tag style={{ fontSize: 10 }}>forked from: {r.forkedFrom}</Tag>}
+        </Space>
+      ),
+    },
+    { title: "Difficulty", dataIndex: "difficulty", width: 100, render: (d) => <Tag color={DIFF_COLOR[d]}>{d}</Tag> },
+    { title: "Status", dataIndex: "status", width: 100, render: (s) => <Tag color={STATUS_COLOR[s] || "default"}>{s || "draft"}</Tag> },
+    {
+      title: "Actions",
+      width: 290,
+      render: (_, r) => (
+        <Space size={4}>
+          {/* Edit — opens the same /problems/create page in edit mode (scope locked to institution) */}
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => navigate(`/problems/create?edit=${r.id}&scope=institution`)}
+          >
+            Edit
+          </Button>
+          {/* Draft / review → publish */}
+          {(!r.status || r.status === "draft" || r.status === "review") && (
+            <Button size="small" type="primary" onClick={() => changeStatus(r.id, "published")}>Publish</Button>
+          )}
+          {/* Published → archive */}
+          {r.status === "published" && (
+            <Button size="small" onClick={() => changeStatus(r.id, "archived")}>Archive</Button>
+          )}
+          {/* Archived → restore */}
+          {r.status === "archived" && (
+            <Button size="small" onClick={() => changeStatus(r.id, "published")}>Restore</Button>
+          )}
+          <Popconfirm title={`Delete "${r.title}"?`} okButtonProps={{ danger: true }} onConfirm={() => removeProblem(r.id, r.title)}>
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
-    <Card
-      title={`Institution problems (${problems.length})`}
-      extra={<Button type="primary" onClick={() => setOpen(true)}>+ New problem</Button>}
-    >
-      <Table rowKey="id" dataSource={problems} loading={loading} pagination={{ pageSize: 10 }}
-        columns={[
-          { title: "Title", dataIndex: "title" },
+    <Table
+      rowKey="id"
+      loading={loading}
+      dataSource={problems}
+      columns={columns}
+      size="small"
+      pagination={{ pageSize: 10 }}
+      locale={{ emptyText: "No institution problems yet — create one or fork a global problem." }}
+    />
+  );
+};
+
+// (Manual create and AI-generate sub-tabs were removed — the panel now
+// navigates to /problems/create which is the SAME page admins use; it
+// auto-locks scope to "institution" for institution_admin users.)
+
+// ── Sub-tab 4: fork from the global bank into this institution ───────────────
+const ForkGlobalInstTab = ({ institutionId, onSaved }) => {
+  const user = getCurrentUser();
+  const [problems, setProblems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [forking, setForking] = useState(null);
+
+  // Only PUBLISHED problems are fork candidates. Institution-scoped problems
+  // are hidden to avoid forking the same institution into itself.
+  useEffect(() => {
+    fetch(`${AI_API}/getallproblems?status=published`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setProblems((Array.isArray(d) ? d : []).filter((p) => p.scope !== "institution")))
+      .catch(() => setProblems([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fork into this institution — backend sets scope:"institution" because we
+  // send institutionId in the body.
+  const forkIntoInstitution = async (id) => {
+    setForking(id);
+    try {
+      const res = await fetch(`${AI_API}/problems/${id}/fork`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ institutionId, createdBy: user?.id || null }),
+      });
+      if (!res.ok) throw new Error();
+      message.success("Forked! It's a draft in 'My Problems' — publish it when ready.");
+      onSaved?.();
+    } catch {
+      message.error("Error forking problem");
+    } finally {
+      setForking(null);
+    }
+  };
+
+  // Client-side filter so we don't refetch on every keystroke
+  const filtered = problems.filter((p) =>
+    !search || p.title?.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const columns = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      render: (t, r) => (
+        <Space direction="vertical" size={0}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{t}</span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>{r.category}</span>
+        </Space>
+      ),
+    },
+    { title: "Difficulty", dataIndex: "difficulty", width: 100, render: (d) => <Tag color={DIFF_COLOR[d]}>{d}</Tag> },
+    { title: "Tags", dataIndex: "tags", render: (tags) => (tags || []).slice(0, 3).map((t) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>) },
+    {
+      title: "",
+      width: 180,
+      render: (_, r) => (
+        // The fork button clones the problem under scope:"institution" for this institution only
+        <Button size="small" icon={<ForkOutlined />} loading={forking === r.id} onClick={() => forkIntoInstitution(r.id)}>
+          Fork to Institution
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <Input
+        prefix={<SearchOutlined />}
+        placeholder="Search global problems…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ marginBottom: 12, maxWidth: 360 }}
+        allowClear
+      />
+      <Table rowKey="id" loading={loading} dataSource={filtered} columns={columns} size="small" pagination={{ pageSize: 10 }} />
+    </div>
+  );
+};
+
+// ── Orchestrator: list + fork sub-tabs, plus a header CTA that opens the
+//    shared admin /problems/create page (which auto-locks scope to institution
+//    for institution_admin users, giving them the exact same Manual / AI
+//    Generate experience admins have, with full Examples / Code / Roadmap UI).
+// ─────────────────────────────────────────────────────────────────────────────
+const InstitutionProblemsPanel = ({ institutionId }) => {
+  // navigate is used by the "+ New Problem" button to open the shared create page
+  const navigate = useNavigate();
+  // refreshKey bumps whenever a child saves/forks — used to reload "My Problems"
+  const [refreshKey, setRefreshKey] = useState(0);
+  const bump = () => setRefreshKey((k) => k + 1);
+
+  return (
+    <Card style={{ borderRadius: 8 }}>
+      {/* Header: privacy reminder + the main CTA that opens the same create page admins use */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <Typography.Title level={4} style={{ margin: 0 }}>Institution Problem Bank</Typography.Title>
+          <Typography.Text type="secondary">
+            Problems here are private to your institution — they will never be shown to users outside it.
+          </Typography.Text>
+        </div>
+        {/* Primary CTA — opens the SAME /problems/create page as the admin, with
+            ?scope=institution so manual + AI tabs are pre-locked to institution. */}
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate("/problems/create?scope=institution")}
+        >
+          New Problem
+        </Button>
+      </div>
+
+      <Tabs
+        defaultActiveKey="mine"
+        items={[
           {
-            title: "Difficulty", dataIndex: "difficulty",
-            render: (d) => {
-              const color = d === "Easy" ? "green" : d === "Medium" ? "orange" : "red";
-              return <Tag color={color}>{d}</Tag>;
-            },
+            key: "mine",
+            label: <Space><SearchOutlined /> My Problems</Space>,
+            children: <MyInstProblemsTab refreshKey={refreshKey} />,
           },
-          { title: "Category", dataIndex: "category" },
-          { title: "Status", dataIndex: "status", render: (s) => <Tag>{s}</Tag> },
           {
-            title: "",
-            render: (_, p) => (
-              <Popconfirm title="Delete?" onConfirm={() => onDelete(p.id)}>
-                <Button size="small" danger>Delete</Button>
-              </Popconfirm>
-            ),
+            key: "fork",
+            label: <Space><ForkOutlined /> Fork from Global</Space>,
+            children: <ForkGlobalInstTab institutionId={institutionId} onSaved={bump} />,
           },
         ]}
       />
-
-      <Modal title="New institution problem" open={open}
-        onCancel={() => setOpen(false)} onOk={() => form.submit()} okText="Create">
-        <Form form={form} layout="vertical" onFinish={onCreate}
-          initialValues={{ difficulty: "Easy", category: "General" }}>
-          <Form.Item name="title" label="Title" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="difficulty" label="Difficulty">
-            <Select options={[
-              { value: "Easy", label: "Easy" },
-              { value: "Medium", label: "Medium" },
-              { value: "Hard", label: "Hard" },
-            ]} />
-          </Form.Item>
-          <Form.Item name="category" label="Category"><Input /></Form.Item>
-          <Form.Item name="description" label="Statement">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Card>
   );
 };
