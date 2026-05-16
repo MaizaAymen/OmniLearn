@@ -17,6 +17,10 @@ const Conversation = sequelize.define(
       type: DataTypes.STRING(120),
       allowNull: true,
     },
+    photo: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     members: {
       type: DataTypes.ARRAY(DataTypes.UUID),
       allowNull: false,

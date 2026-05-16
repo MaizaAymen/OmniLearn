@@ -264,18 +264,26 @@ export default function ProblemCreatePage() {
   const sourceId = searchParams.get("source");
   const presetModuleId = searchParams.get("moduleId") || "";
   const presetScope = searchParams.get("scope") || "";
+  // When a teacher opens the editor from inside a classroom, the URL carries
+  // ?classId=<uuid>. Everything created here will be scoped to that class only.
+  const presetClassId = searchParams.get("classId") || "";
+  const presetTab = searchParams.get("tab") || "";
   const isEditMode = !!editId;
+  const isClassMode = !!presetClassId;
 
   // Institution admins create problems that are private to their institution.
   // We force scope to "institution" for them so they cannot accidentally
   // publish a problem into the public global bank.
   const isInstitutionAdmin = user?.role === "institution_admin";
-  // Default scope: "institution" if user is institution_admin OR the URL asked for it
-  const defaultScope = isInstitutionAdmin || presetScope === "institution"
-    ? "institution"
-    : (presetScope || "global");
+  // Default scope priority: explicit classId → "class", then institution_admin /
+  // explicit ?scope=institution → "institution", else the URL preset or "global".
+  const defaultScope = isClassMode
+    ? "class"
+    : isInstitutionAdmin || presetScope === "institution"
+      ? "institution"
+      : (presetScope || "global");
 
-  const [tab, setTab] = useState("manual");
+  const [tab, setTab] = useState(presetTab === "ai" ? "ai" : "manual");
   const [modules, setModules] = useState([]);
   const [forkSource, setForkSource] = useState(null);
   const [loadingPrefill, setLoadingPrefill] = useState(isEditMode);
@@ -399,6 +407,9 @@ export default function ProblemCreatePage() {
       // institutionId so the backend will only show this problem to members
       // of that institution.
       institutionId: form.scope === "institution" ? (user?.institutionId || null) : null,
+      // When scoped to a classroom, the backend forces scope="class" and the
+      // problem is only visible inside that classroom.
+      classId: form.scope === "class" ? presetClassId : null,
     };
   }
 
@@ -418,9 +429,10 @@ export default function ProblemCreatePage() {
         });
         if (!res.ok) throw new Error();
         toast.success("Changes saved — draft updated");
-        // institution_admin returns to their dashboard (where the Problem Bank
-        // tab lives); everyone else goes to the global problems list.
-        navigate(isInstitutionAdmin ? "/education" : "/problems?status=all");
+        // Class-mode → back to the classroom; institution_admin → dashboard;
+        // everyone else → global problems list.
+        if (isClassMode) navigate(`/my-classrooms/${presetClassId}`);
+        else navigate(isInstitutionAdmin ? "/education" : "/problems?status=all");
       } else {
         const res = await fetch(`${API}/problems`, {
           method: "POST",
@@ -428,8 +440,9 @@ export default function ProblemCreatePage() {
           body: JSON.stringify({ ...payload, createdBy: user.id || null }),
         });
         if (!res.ok) throw new Error();
-        toast.success("Problem created and published!");
-        navigate(isInstitutionAdmin ? "/education" : "/problems");
+        toast.success(isClassMode ? "Added to your classroom" : "Problem created and published!");
+        if (isClassMode) navigate(`/my-classrooms/${presetClassId}`);
+        else navigate(isInstitutionAdmin ? "/education" : "/problems");
       }
     } catch {
       toast.error(isEditMode ? "Error saving changes" : "Error creating problem");
@@ -522,6 +535,8 @@ export default function ProblemCreatePage() {
           },
           scope: aiScope,
           institutionId: aiScope === "institution" ? (user?.institutionId || null) : null,
+          // Class-mode forces the AI draft to land inside the classroom.
+          classId: isClassMode ? presetClassId : null,
           createdBy: user.id || null,
         }),
       });
@@ -561,14 +576,31 @@ export default function ProblemCreatePage() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-            {isEditMode ? "Edit Forked Problem" : "Create Problem"}
+            {isEditMode ? "Edit Forked Problem" : isClassMode ? "Create Classroom Problem" : "Create Problem"}
           </h1>
           <p className="text-sm text-gray-500">
             {isEditMode
               ? "This is a draft copy — customize anything you like and save your changes."
-              : "Write manually or let AI generate a draft to review before publishing."}
+              : isClassMode
+                ? "This problem will be private to your classroom — only your enrolled students will see it."
+                : "Write manually or let AI generate a draft to review before publishing."}
           </p>
         </div>
+
+        {/* Classroom banner */}
+        {isClassMode && (
+          <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-6">
+            <SparklesIcon className="size-4 text-indigo-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-indigo-900">
+                <span className="font-medium">Classroom-only</span> — saved to this classroom's bank, hidden from the public catalog.
+              </p>
+            </div>
+            <Link to={`/my-classrooms/${presetClassId}`} className="text-xs text-indigo-700 hover:text-indigo-900">
+              Back to classroom
+            </Link>
+          </div>
+        )}
 
         {/* Fork banner */}
         {forkSource && (
@@ -656,15 +688,17 @@ export default function ProblemCreatePage() {
               </div>
             </Section>
 
-            {/* Scope — institution_admin is locked to "institution" so they
-                cannot accidentally publish to the global bank. Other staff
-                roles still get the full set of choices. */}
+            {/* Scope — institution_admin is locked to "institution" and class
+                mode is locked to "class" so they cannot accidentally publish to
+                the global bank. Other staff roles get the full set of choices. */}
             <Section
               title="Scope"
               subtitle={
-                isInstitutionAdmin
-                  ? "This problem will be private to your institution — students outside it will never see it."
-                  : "Choose where this problem shows up."
+                isClassMode
+                  ? "Locked to this classroom — only your students will ever see this problem."
+                  : isInstitutionAdmin
+                    ? "This problem will be private to your institution — students outside it will never see it."
+                    : "Choose where this problem shows up."
               }
             >
               <div className="grid sm:grid-cols-2 gap-4">
@@ -674,13 +708,14 @@ export default function ProblemCreatePage() {
                     className={inputCls}
                     value={form.scope}
                     onChange={e => setField("scope", e.target.value)}
-                    // Lock the dropdown for institution_admin — their only valid choice is "institution"
-                    disabled={isInstitutionAdmin}
+                    // Lock the dropdown for class-mode and institution_admin
+                    disabled={isInstitutionAdmin || isClassMode}
                   >
-                    {/* Global / Module options hidden for institution_admin */}
-                    {!isInstitutionAdmin && <option value="global">Global Bank</option>}
-                    {!isInstitutionAdmin && <option value="module">Module-only</option>}
-                    <option value="institution">Institution (Private)</option>
+                    {/* Other options hidden when locked to a specific scope */}
+                    {!isInstitutionAdmin && !isClassMode && <option value="global">Global Bank</option>}
+                    {!isInstitutionAdmin && !isClassMode && <option value="module">Module-only</option>}
+                    {!isClassMode && <option value="institution">Institution (Private)</option>}
+                    {isClassMode && <option value="class">Classroom (Private)</option>}
                   </select>
                 </div>
                 {form.scope === "module" && (
@@ -914,16 +949,18 @@ export default function ProblemCreatePage() {
                   </div>
                   <div>
                     <label className={labelCls}>Scope</label>
-                    {/* Same scope rules as the manual form — institution_admin is locked to "institution" */}
+                    {/* Same scope rules as the manual form — institution_admin locked to
+                        "institution", class-mode locked to "class". */}
                     <select
                       className={inputCls}
                       value={aiScope}
                       onChange={e => setAiScope(e.target.value)}
-                      disabled={isInstitutionAdmin}
+                      disabled={isInstitutionAdmin || isClassMode}
                     >
-                      {!isInstitutionAdmin && <option value="global">Global Bank</option>}
-                      {!isInstitutionAdmin && <option value="module">Module-only</option>}
-                      <option value="institution">Institution (Private)</option>
+                      {!isInstitutionAdmin && !isClassMode && <option value="global">Global Bank</option>}
+                      {!isInstitutionAdmin && !isClassMode && <option value="module">Module-only</option>}
+                      {!isClassMode && <option value="institution">Institution (Private)</option>}
+                      {isClassMode && <option value="class">Classroom (Private)</option>}
                     </select>
                   </div>
                 </div>

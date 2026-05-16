@@ -235,6 +235,8 @@
     bottom: 16px;
     padding: 6px 10px;
     gap: 2px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
   }
 
   .tldraw-tool-btn {
@@ -255,6 +257,24 @@
   .tldraw-color-dot {
     width: 16px;
     height: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tldraw-toolbar {
+    bottom: 12px;
+    padding: 4px 6px;
+    border-radius: 10px;
+  }
+
+  .tldraw-tool-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .tldraw-tool-btn svg {
+    width: 14px;
+    height: 14px;
   }
 }
 

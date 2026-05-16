@@ -44,10 +44,23 @@ router.get("/users-search", async (req, res) => {
       : {};
     const users = await User.findAll({
       where,
-      attributes: ["id", "firstname", "lastname", "email", "role"],
+      attributes: ["id", "firstname", "lastname", "email", "role", "avatar", "githubUrl", "linkedinUrl", "problems"],
       limit: 30,
     });
-    res.json(users.filter((u) => u.id !== req.user.id));
+    const shaped = users
+      .filter((u) => u.id !== req.user.id)
+      .map((u) => ({
+        id: u.id,
+        firstname: u.firstname,
+        lastname: u.lastname,
+        email: u.email,
+        role: u.role,
+        avatar: u.avatar,
+        githubUrl: u.githubUrl,
+        linkedinUrl: u.linkedinUrl,
+        problemsSolved: Array.isArray(u.problems) ? u.problems.length : 0,
+      }));
+    res.json(shaped);
   } catch (err) {
     console.error("users-search:", err);
     res.status(500).json({ error: "Search failed" });

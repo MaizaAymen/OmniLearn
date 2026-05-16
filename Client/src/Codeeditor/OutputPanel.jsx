@@ -18,7 +18,7 @@ function OutputPanel({ output }) {
               <CheckCircle2Icon className="size-3.5" />
               Executed Successfully
             </div>
-            <pre className="text-sm font-mono text-base-content whitespace-pre-wrap bg-base-200/50 rounded-lg p-3 border border-base-300">
+            <pre className="text-xs sm:text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-200/50 rounded-lg p-3 border border-base-300">
               {output.output}
             </pre>
           </div>
@@ -29,11 +29,11 @@ function OutputPanel({ output }) {
               Execution Failed
             </div>
             {output.output && (
-              <pre className="text-sm font-mono text-base-content whitespace-pre-wrap bg-base-200/50 rounded-lg p-3 border border-base-300 mb-2">
+              <pre className="text-xs sm:text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-200/50 rounded-lg p-3 border border-base-300 mb-2">
                 {output.output}
               </pre>
             )}
-            <pre className="text-sm font-mono text-error whitespace-pre-wrap bg-error/5 rounded-lg p-3 border border-error/20">
+            <pre className="text-xs sm:text-sm font-mono text-error whitespace-pre-wrap break-words bg-error/5 rounded-lg p-3 border border-error/20">
               {output.error}
             </pre>
           </div>

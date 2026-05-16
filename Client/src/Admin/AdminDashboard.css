@@ -320,6 +320,47 @@
   }
 }
 
+@media (max-width: 768px) {
+  .overview-welcome {
+    padding: 20px 16px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .classroom-card-banner {
+    padding: 16px;
+    min-height: 96px;
+  }
+
+  .classroom-card-title {
+    font-size: 16px;
+  }
+
+  .classroom-card-footer {
+    padding: 10px 12px;
+  }
+
+  .classroom-card-teacher-name {
+    max-width: 110px;
+  }
+}
+
+@media (max-width: 480px) {
+  .overview-welcome {
+    padding: 16px 12px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+}
+
 /* ── Spin ── */
 .ant-spin-dot-item {
   background: #1a73e8 !important;

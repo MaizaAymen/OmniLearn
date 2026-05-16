@@ -113,18 +113,6 @@ const requirePro = (req, res, next) => {
   });
 };
 
-// ÉTAPE 2 : seul un compte "institution" peut accéder aux classrooms.
-const requireInstitution = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: "Authentication required." });
-  if (req.user.role === "admin") return next();
-  if (req.user.plan === "institution") return next();
-  return res.status(402).json({
-    error: "Upgrade required",
-    feature: "Classrooms are part of the Institution plan.",
-    upgradeTo: "institution",
-  });
-};
-
 // ÉTAPE 3 : super admin de la plateforme (alias clair de requireAdmin).
 const requireSuperAdmin = requireAdmin;
 
@@ -142,7 +130,6 @@ module.exports = {
   requireAdmin,
   requireAdminOrTeacher,
   requirePro,
-  requireInstitution,
   requireSuperAdmin,
   requireInstitutionAdmin,
 };

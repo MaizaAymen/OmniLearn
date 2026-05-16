@@ -165,11 +165,12 @@ const Auth = () => {
         credential: credentialResponse.credential,
       });
       Cookies.set("token", res.data.token, { expires: 7, path: "/" });
+      Cookies.set("refreshToken", res.data.refreshToken, { expires: 7, path: "/" });
       Cookies.set("user", JSON.stringify(res.data.user), { expires: 7, path: "/" });
       message.success("Logged in with Google!");
-      window.location.href = "/";
+      window.location.href = "/problems";
     } catch (err) {
-      message.error(err.response?.data?.message || "Google login failed");
+      message.error(err.response?.data?.error || err.response?.data?.message || "Google login failed");
     } finally {
       setLoading(false);
     }

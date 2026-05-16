@@ -480,8 +480,8 @@ const UsersByPlanOverview = () => {
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Row gutter={12}>
-            <Col span={12}>
+          <Row gutter={[12, 0]}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="firstname"
                 label="First name"
@@ -490,7 +490,7 @@ const UsersByPlanOverview = () => {
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="lastname"
                 label="Last name"
@@ -512,8 +512,8 @@ const UsersByPlanOverview = () => {
             <Input />
           </Form.Item>
 
-          <Row gutter={12}>
-            <Col span={12}>
+          <Row gutter={[12, 0]}>
+            <Col xs={24} sm={12}>
               <Form.Item name="role" label="Role" rules={[{ required: true }]}>
                 <Select
                   options={[
@@ -525,7 +525,7 @@ const UsersByPlanOverview = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               {/* Plan = promotion directe. L'admin peut basculer un user
                   entre Free / Pro / Institution. */}
               <Form.Item name="plan" label="Plan" rules={[{ required: true }]}>

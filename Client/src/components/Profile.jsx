@@ -838,7 +838,7 @@ export default function Profile() {
   }
 
   return (
-    <div style={{ background: "#f0f2f5", minHeight: "100vh", padding: 24 }}>
+    <div style={{ background: "#f0f2f5", minHeight: "100vh", padding: "clamp(12px, 3vw, 24px)" }}>
       <div style={{ marginBottom: 24 }}>
         <Title level={3} style={{ margin: 0 }}>
           Settings
@@ -848,16 +848,19 @@ export default function Profile() {
         </Text>
       </div>
 
-      <Layout style={{ background: "transparent" }}>
+      <Layout style={{ background: "transparent" }} hasSider>
         <Sider
           width={240}
+          collapsedWidth={64}
           theme="light"
+          breakpoint="lg"
           style={{
             background: "#fff",
             borderRadius: 10,
             border: "1px solid #f0f0f0",
-            marginRight: 24,
+            marginRight: 16,
             overflow: "hidden",
+            flexShrink: 0,
           }}
         >
           <Menu
@@ -1658,8 +1661,8 @@ export default function Profile() {
                     onFinish={handleSave}
                     onValuesChange={() => setIsDirty(true)}
                   >
-                    <Row gutter={12}>
-                      <Col span={12}>
+                    <Row gutter={[12, 0]}>
+                      <Col xs={24} sm={12}>
                         <Form.Item
                           label="First Name"
                           name="firstname"
@@ -1668,7 +1671,7 @@ export default function Profile() {
                           <Input prefix={<UserOutlined />} />
                         </Form.Item>
                       </Col>
-                      <Col span={12}>
+                      <Col xs={24} sm={12}>
                         <Form.Item
                           label="Last Name"
                           name="lastname"
@@ -1692,8 +1695,8 @@ export default function Profile() {
                         placeholder="Tell others a bit about yourself..."
                       />
                     </Form.Item>
-                    <Row gutter={12}>
-                      <Col span={12}>
+                    <Row gutter={[12, 0]}>
+                      <Col xs={24} sm={12}>
                         <Form.Item
                           label="GitHub URL"
                           name="githubUrl"
@@ -1703,7 +1706,7 @@ export default function Profile() {
                           <Input prefix={<GithubOutlined />} placeholder="https://github.com/username" />
                         </Form.Item>
                       </Col>
-                      <Col span={12}>
+                      <Col xs={24} sm={12}>
                         <Form.Item
                           label="LinkedIn URL"
                           name="linkedinUrl"

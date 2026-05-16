@@ -60,6 +60,7 @@ import {
   deleteLesson,
   uploadLessonFile,
 } from "../Admin/api";
+import ClassroomProblemsTab from "./ClassroomProblemsTab";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import Prism from "prismjs";
@@ -131,9 +132,13 @@ export default function ClassroomView() {
   const [pickerDiff, setPickerDiff] = useState("");
   const [pickerTab, setPickerTab] = useState("all");
   const [newLanguage, setNewLanguage] = useState(null);
+  const [newLockCorrect, setNewLockCorrect] = useState(false);
+  const [newLockMentor, setNewLockMentor] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editAssignment, setEditAssignment] = useState(null);
   const [editLanguage, setEditLanguage] = useState(null);
+  const [editLockCorrect, setEditLockCorrect] = useState(false);
+  const [editLockMentor, setEditLockMentor] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editPids, setEditPids] = useState([]);
   const [editDueDate, setEditDueDate] = useState("");
@@ -143,6 +148,10 @@ export default function ClassroomView() {
   const [rosterTarget, setRosterTarget] = useState(null);
   const [rosterData, setRosterData] = useState(null);
   const [rosterLoading, setRosterLoading] = useState(false);
+  // Submissions viewer (teacher clicks a student name in the roster)
+  const [codeStudent, setCodeStudent] = useState(null); // { id, name }
+  const [codeData, setCodeData] = useState(null);       // { student, problems: [...] }
+  const [codeLoading, setCodeLoading] = useState(false);
 
   const isTeacherOrAdmin = user.role === "teacher" || user.role === "admin";
   const canManage =
@@ -164,10 +173,14 @@ export default function ClassroomView() {
       fetch(`${BASE}/classrooms/${classId}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : null)),
       fetch(`${BASE}/classrooms/${classId}/courses`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API}/ai/ai/getallproblems`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : [])),
+      // Also pull any problems scoped specifically to this classroom so they show up in the picker.
+      fetch(`${API}/ai/ai/getallproblems?classId=${classId}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(async ([clsData, coursesData, problemsData]) => {
+      .then(async ([clsData, coursesData, problemsData, classProblems]) => {
         setClassroom(clsData);
-        setAllProblems(Array.isArray(problemsData) ? problemsData : []);
+        const globalList = Array.isArray(problemsData) ? problemsData : [];
+        const classList = Array.isArray(classProblems) ? classProblems : [];
+        setAllProblems([...globalList, ...classList]);
         const courseList = Array.isArray(coursesData) ? coursesData : [];
         setCourses(courseList);
 
@@ -432,7 +445,7 @@ export default function ClassroomView() {
   // ── Teacher assignment handlers ───────────────────────────────────────────
   const openCreateFor = (m) => {
     setCreateFor(m);
-    setNewTitle(""); setSelectedPids([]); setNewDueDate(""); setNewMaxAttempts(""); setNewLanguage(null);
+    setNewTitle(""); setSelectedPids([]); setNewDueDate(""); setNewMaxAttempts(""); setNewLanguage(null); setNewLockCorrect(false); setNewLockMentor(false);
     setPickerSearch(""); setPickerDiff(""); setPickerTab("all");
   };
 
@@ -454,6 +467,8 @@ export default function ClassroomView() {
           dueDate: newDueDate || null,
           maxAttempts: newMaxAttempts ? Number(newMaxAttempts) : null,
           language: newLanguage || null,
+          lockCorrect: newLockCorrect,
+          lockMentor: newLockMentor,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
@@ -496,6 +511,8 @@ export default function ClassroomView() {
     setEditDueDate(a.dueDate ? new Date(a.dueDate).toISOString().split("T")[0] : "");
     setEditMaxAttempts(a.maxAttempts ?? "");
     setEditLanguage(a.language || null);
+    setEditLockCorrect(!!a.lockCorrect);
+    setEditLockMentor(!!a.lockMentor);
     setEditSearch("");
   };
 
@@ -515,6 +532,8 @@ export default function ClassroomView() {
           dueDate: editDueDate || null,
           maxAttempts: editMaxAttempts ? Number(editMaxAttempts) : null,
           language: editLanguage || null,
+          lockCorrect: editLockCorrect,
+          lockMentor: editLockMentor,
         }),
       });
       if (!res.ok) throw new Error();
@@ -560,8 +579,32 @@ export default function ClassroomView() {
     }
   };
 
+  // Open the modal showing a student's submitted code for each problem
+  // of the currently-open assignment (rosterTarget).
+  const openStudentCode = async (student) => {
+    if (!rosterTarget) return;
+    setCodeStudent(student);
+    setCodeData(null);
+    setCodeLoading(true);
+    try {
+      const res = await fetch(
+        `${API}/assignments/${rosterTarget.id}/student/${student.id}/submissions`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) throw new Error();
+      setCodeData(await res.json());
+    } catch {
+      message.error("Failed to load student code");
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
   const pickerProblems = (search, diff, tab) => {
-    const base = tab === "inst" ? instProblems : allProblems;
+    let base;
+    if (tab === "inst") base = instProblems;
+    else if (tab === "class") base = allProblems.filter((p) => p.scope === "class" && p.classId === classId);
+    else base = allProblems.filter((p) => p.scope !== "class" || p.classId === classId);
     return base.filter((p) =>
       (!diff || p.difficulty === diff) &&
       (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
@@ -1091,6 +1134,8 @@ export default function ClassroomView() {
                               )}
                               {a.maxAttempts && <Tag style={tagStyle}>Max {a.maxAttempts} attempts</Tag>}
                               {a.language && <Tag color="blue" style={{ fontSize: 11 }}>🔒 {a.language}</Tag>}
+                              {a.lockCorrect && <Tag color="red" style={{ fontSize: 11 }}>🔒 Correct off</Tag>}
+                              {a.lockMentor && <Tag color="red" style={{ fontSize: 11 }}>🔒 Mentor off</Tag>}
                               <Text type="secondary" style={{ fontSize: 12 }}>{total} problem{total !== 1 ? "s" : ""}</Text>
                             </Space>
                             <Space size={4}>
@@ -1182,7 +1227,7 @@ export default function ClassroomView() {
                               return (
                                 <div
                                   key={pid}
-                                  onClick={() => navigate(`/problems/${pid}`, a.language ? { state: { lockedLanguage: a.language } } : undefined)}
+                                  onClick={() => navigate(`/problems/${pid}`, (a.language || a.lockCorrect || a.lockMentor) ? { state: { lockedLanguage: a.language || null, lockCorrect: !!a.lockCorrect, lockMentor: !!a.lockMentor } } : undefined)}
                                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, cursor: "pointer", transition: "background 0.15s" }}
                                   onMouseEnter={(e) => (e.currentTarget.style.background = "#eef2f7")}
                                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -1564,6 +1609,36 @@ export default function ClassroomView() {
               ),
               children: assignmentsTab,
             },
+            ...(canManage
+              ? [
+                  {
+                    key: "problems",
+                    label: (
+                      <Space size={6}>
+                        <CodeOutlined /> Problems
+                      </Space>
+                    ),
+                    children: (
+                      <ClassroomProblemsTab
+                        classId={classId}
+                        onBankChanged={() => {
+                          // Refresh the assignment picker so newly-added classroom
+                          // problems show up immediately when the teacher switches tabs.
+                          fetch(`${API}/ai/ai/getallproblems?classId=${classId}`, { headers: authHeaders() })
+                            .then((r) => (r.ok ? r.json() : []))
+                            .then((classProbs) => {
+                              setAllProblems((prev) => {
+                                const globalOnly = prev.filter((p) => p.scope !== "class");
+                                return [...globalOnly, ...(Array.isArray(classProbs) ? classProbs : [])];
+                              });
+                            })
+                            .catch(() => {});
+                        }}
+                      />
+                    ),
+                  },
+                ]
+              : []),
             {
               key: "members",
               label: (
@@ -1593,16 +1668,16 @@ export default function ClassroomView() {
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
           />
-          <Row gutter={12}>
-            <Col span={8}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Due date (optional)</Text>
               <Input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} />
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Max attempts (optional)</Text>
               <Input type="number" min={1} placeholder="Unlimited" value={newMaxAttempts} onChange={(e) => setNewMaxAttempts(e.target.value)} />
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Lock language</Text>
               <Select
                 allowClear
@@ -1621,6 +1696,16 @@ export default function ClassroomView() {
               />
             </Col>
           </Row>
+
+          <Space direction="vertical" size={4}>
+            <Text type="secondary" style={{ fontSize: 12 }}>AI restrictions</Text>
+            <Checkbox checked={newLockCorrect} onChange={(e) => setNewLockCorrect(e.target.checked)}>
+              Lock "Correct with AI"
+            </Checkbox>
+            <Checkbox checked={newLockMentor} onChange={(e) => setNewLockMentor(e.target.checked)}>
+              Lock "AI Mentor"
+            </Checkbox>
+          </Space>
 
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1643,21 +1728,23 @@ export default function ClassroomView() {
               style={{ marginBottom: 8 }}
               allowClear
             />
-            {user.institutionId && (
-              <Space size={0} style={{ marginBottom: 8 }}>
-                {["all", "inst"].map((t) => (
-                  <Button
-                    key={t}
-                    size="small"
-                    type={pickerTab === t ? "primary" : "default"}
-                    onClick={() => setPickerTab(t)}
-                    style={pickerTab === t ? { background: "#111827", borderColor: "#111827" } : {}}
-                  >
-                    {t === "all" ? "Global" : "My Institution"}
-                  </Button>
-                ))}
-              </Space>
-            )}
+            <Space size={0} style={{ marginBottom: 8, flexWrap: "wrap" }}>
+              {[
+                { key: "all", label: "Global" },
+                ...(user.institutionId ? [{ key: "inst", label: "My Institution" }] : []),
+                ...(canManage ? [{ key: "class", label: "This classroom" }] : []),
+              ].map((t) => (
+                <Button
+                  key={t.key}
+                  size="small"
+                  type={pickerTab === t.key ? "primary" : "default"}
+                  onClick={() => setPickerTab(t.key)}
+                  style={pickerTab === t.key ? { background: "#111827", borderColor: "#111827" } : {}}
+                >
+                  {t.label}
+                </Button>
+              ))}
+            </Space>
             <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #eef0f3", borderRadius: 8, padding: 4 }}>
               {pickerProblems(pickerSearch, pickerDiff, pickerTab).length === 0
                 ? <Text type="secondary" style={{ display: "block", textAlign: "center", padding: 16 }}>No problems match</Text>
@@ -1700,16 +1787,16 @@ export default function ClassroomView() {
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
           />
-          <Row gutter={12}>
-            <Col span={8}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Due date</Text>
               <Input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Max attempts</Text>
               <Input type="number" min={1} placeholder="Unlimited" value={editMaxAttempts} onChange={(e) => setEditMaxAttempts(e.target.value)} />
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Lock language</Text>
               <Select
                 allowClear
@@ -1728,6 +1815,15 @@ export default function ClassroomView() {
               />
             </Col>
           </Row>
+          <Space direction="vertical" size={4}>
+            <Text type="secondary" style={{ fontSize: 12 }}>AI restrictions</Text>
+            <Checkbox checked={editLockCorrect} onChange={(e) => setEditLockCorrect(e.target.checked)}>
+              Lock "Correct with AI"
+            </Checkbox>
+            <Checkbox checked={editLockMentor} onChange={(e) => setEditLockMentor(e.target.checked)}>
+              Lock "AI Mentor"
+            </Checkbox>
+          </Space>
           <div>
             <Text strong style={{ fontSize: 13, display: "block", marginBottom: 8 }}>Problems — {editPids.length} selected</Text>
             <Input
@@ -1807,7 +1903,11 @@ export default function ClassroomView() {
                   <tbody>
                     {rosterData.students.map((s) => (
                       <tr key={s.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                        <td style={{ padding: "8px 12px", fontWeight: 500 }}>{s.name}</td>
+                        <td style={{ padding: "8px 12px", fontWeight: 500 }}>
+                          <Button type="link" style={{ padding: 0, fontWeight: 500 }} onClick={() => openStudentCode(s)}>
+                            {s.name}
+                          </Button>
+                        </td>
                         {rosterTarget.problemIds.map((pid) => (
                           <td key={pid} style={{ textAlign: "center", padding: "8px 6px" }}>
                             {s.solvedIds.includes(pid)
@@ -1825,6 +1925,55 @@ export default function ClassroomView() {
               </div>
             )}
           </>
+        ) : null}
+      </Modal>
+
+      {/* ── Student Code Modal (opens when teacher clicks a student name) ── */}
+      <Modal
+        title={
+          <Space>
+            <CodeOutlined style={{ color: "#1677ff" }} />
+            <span>{codeStudent?.name} — Submitted code</span>
+          </Space>
+        }
+        open={!!codeStudent}
+        onCancel={() => { setCodeStudent(null); setCodeData(null); }}
+        footer={null}
+        width={780}
+        destroyOnClose
+      >
+        {codeLoading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 32 }}><Spin /></div>
+        ) : codeData ? (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            {codeData.problems.map((p, i) => (
+              <div key={p.problemId}>
+                <Text strong>P{i + 1}. {p.title}</Text>
+                {p.submission ? (
+                  <>
+                    <div style={{ margin: "4px 0 6px", fontSize: 12, color: "#6b7280" }}>
+                      <Tag color={p.submission.isCorrect ? "green" : "default"}>
+                        {p.submission.isCorrect ? "Correct" : (p.submission.status || "submitted")}
+                      </Tag>
+                      <span>{p.submission.language}</span>
+                      <span style={{ margin: "0 6px" }}>·</span>
+                      <span>{new Date(p.submission.createdAt).toLocaleString()}</span>
+                    </div>
+                    <pre style={{
+                      background: "#1e1e1e", color: "#e5e7eb", padding: 12,
+                      borderRadius: 6, fontSize: 12, overflowX: "auto", margin: 0,
+                    }}>
+                      <code dangerouslySetInnerHTML={{ __html: highlightCode(p.submission.userCode) }} />
+                    </pre>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#9ca3af", padding: "6px 0" }}>
+                    No submission yet.
+                  </div>
+                )}
+              </div>
+            ))}
+          </Space>
         ) : null}
       </Modal>
 

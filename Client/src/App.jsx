@@ -78,6 +78,10 @@ const Guard = ({ allow, children, allowIncompleteProfile = false, profileStatus,
 const ALL = ["admin", "institution_admin", "teacher", "student"];
 const STAFF = ["admin", "institution_admin", "teacher"];
 const ADMIN = ["admin"];
+// /education is the institution control panel — only platform admin and the
+// institution's own admin can open it. Teachers manage their content inside
+// their classroom view, not here.
+const INST_ADMIN = ["admin", "institution_admin"];
 
 function App() {
   const location = useLocation();
@@ -134,7 +138,7 @@ function App() {
       <Route path="/classroom-pdf" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomPdf /></Guard>} />
       <Route path="/learning-dashboard" element={<Guard allow={ALL} profileStatus={profileStatus}><LearningDashboard /></Guard>} />
       <Route path="/roadmap" element={<Guard allow={ALL} profileStatus={profileStatus}><RoadmapPage /></Guard>} />
-      <Route path="/education" element={<Guard allow={STAFF} profileStatus={profileStatus}><AdminDashboard /></Guard>} />
+      <Route path="/education" element={<Guard allow={INST_ADMIN} profileStatus={profileStatus}><AdminDashboard /></Guard>} />
       <Route path="/profile" element={<Guard allow={ALL} allowIncompleteProfile profileStatus={profileStatus}><Profile /></Guard>} />
       <Route path="/my-classrooms" element={<Guard allow={ALL} profileStatus={profileStatus}><MyClassrooms /></Guard>} />
       <Route path="/my-classrooms/:classId" element={<Guard allow={ALL} profileStatus={profileStatus}><ClassroomView /></Guard>} />

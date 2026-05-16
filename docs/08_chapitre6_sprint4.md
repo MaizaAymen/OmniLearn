@@ -8,9 +8,12 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 
 Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant administration** layer:
 
-- The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `@langchain/openai`, `chromadb`, `pdf-parse`, with optional `groq-sdk` / `@huggingface/inference` providers.
-- The **AI Mentor** sidebar (`AIMentor.jsx`) — a general-purpose AI tutor that can reference the student's roadmap, problems and recent submissions, guide without giving the final solution, and provide AI-assisted code correction.
-- **Learning tags** (`/ai`, `/stack-overflow`, `/youtube`) — quick entry points to explanations, references and tutorials for faster self-study with or without the AI mentor.
+- The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `chromadb`, `pdf-parse`, `@huggingface/inference` (embeddings via `sentence-transformers/all-MiniLM-L6-v2`) and `groq-sdk` (completions via `llama-3.3-70b-versatile`). The RAG pipeline lives inline in [pdfRoutes.js](../Server/src/routes/pdfRoutes.js) and is documented in detail in [ai_features_and_rag.md](./ai_features_and_rag.md). A keyword-search fallback fires if Chroma is unreachable.
+- The **AI Mentor** sidebar ([AIMentor.jsx](../Client/src/components/AIMentor.jsx)) — a Socratic streaming tutor over Server-Sent Events. Knows the student's current code, language, problem title, and the last 10 turns; refuses to hand over complete solutions and always closes with a guiding question.
+- **AI-assisted code correction** (`/api/ai/ai/correct-code`) — gated to Pro / Institution plans, returns a JSON diff (`changes[]`) plus a corrected file that must match the problem's `expectedOutput`.
+- **AI problem generation** (`/api/ai/ai/problems/generate-draft`, …) — staff can ask the LLM for 1 / 3 / 5 problems with full roadmaps; a JSON-repair retry pass rescues most invalid responses.
+- **Messenger slash commands** (`/ai`, `/stackoverflow`, `/video`) — quick entry points to explanations, references and tutorials for faster self-study, with answers rendered as bot bubbles inside the conversation.
+- **Workspace code AI** ([workspaceRoutes.js](../Server/src/routes/workspaceRoutes.js)) — analyze / summarize / quiz endpoints over a per-user file workspace with plan-based storage caps (Free = 3, Pro = 200).
 - The **Institution onboarding** flow (`OnboardInstitution.jsx`) — name, slug, logo, and the first super-user becoming `institution_admin`.
 - **Invite links** (`InviteLink` model) used by an institution admin to enroll teachers / students at a specific role (`JoinInstitution.jsx`).
 - The **Institution Admin console** — directory of members, role management, per-institution curriculum management (Grades / Specialities / Levels) through `institutionCurriculumRoutes.js`.
@@ -26,10 +29,10 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 | **PDF Assistant — RAG** | | | | | |
 | 15 | Upload & ingest a PDF | US15.1 | As a student, I want to upload a course PDF. | 15.1 | Build `PdfAssistant.jsx` with drag-and-drop. |
 | | | | | 15.2 | `POST /api/pdf/upload` stores the file (Multer + Cloudinary). |
-| | | | | 15.3 | Server extracts text (`pdf-parse`) and splits into chunks. |
-| | | | | 15.4 | Embeddings indexed in Chroma DB via `Server/src/ai/vectorStore.js`. |
-| | US15.2 | As a student, I want to chat with the AI grounded in that PDF. | 15.5 | `POST /api/pdf/ask` runs a RAG chain with LangChain. |
-| | | | | 15.6 | Stream the answer back to the chat UI. |
+| | | | | 15.3 | Server extracts text (`pdf-parse`) and splits into 800-word chunks (`chunkText()`). |
+| | | | | 15.4 | Embeddings (`sentence-transformers/all-MiniLM-L6-v2` via HuggingFace) indexed in Chroma DB — implemented inline in `Server/src/routes/pdfRoutes.js`. |
+| | US15.2 | As a student, I want to chat with the AI grounded in that PDF. | 15.5 | `POST /api/pdf/chat` runs `similaritySearch(q, 3)` + Groq completion. Falls back to keyword scoring if Chroma is unreachable. |
+| | | | | 15.6 | Additional endpoints: `/explain`, `/summarize`, `/quiz` (10 / 20 MCQs), `/smart-search`, `/highlights`, `/bookmarks`. |
 | **AI Mentor** | | | | | |
 | — | Cross-feature AI tutor | — | As a student, I want an AI mentor that knows my roadmap and submissions. | M.1 | Build `AIMentor.jsx`. |
 | | | | | M.2 | `POST /api/ai/mentor` injects user context into the LLM prompt. |
@@ -85,7 +88,7 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 
 #### 2.1. Sequence diagram — "Ask a question to the PDF assistant"
 
-The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The frontend calls `POST /api/pdf/ask`. The backend retrieves the top-k relevant chunks from Chroma DB (`vectorStore.js`), builds a RAG prompt with the chunks as context, calls the LLM provider (Groq / OpenAI), streams the answer back. The frontend renders the streamed tokens in the chat.
+The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The frontend calls `POST /api/pdf/chat`. The backend retrieves the top-3 relevant chunks from Chroma DB through `vectorStore.similaritySearch(question, 3)` (vector store created at upload time and rebuilt on cache miss by `loadPdfData()`), builds a RAG prompt with those chunks as context, and calls Groq (`llama-3.3-70b-versatile`). If Chroma is unreachable the route silently falls back to a keyword-overlap top-3. The answer is returned as a single JSON `{ answer, sources }` response — see [ai_features_and_rag.md §3](./ai_features_and_rag.md#3-rag--the-pdf-assistant) for the full C4 view of this flow.
 
 > *Figure 56 — Sequence diagram "Ask the PDF assistant".*
 

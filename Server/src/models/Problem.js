@@ -61,7 +61,7 @@ const Problem = sequelize.define(
       defaultValue: 'published',
     },
     scope: {
-      type: DataTypes.ENUM('global', 'module', 'institution'),
+      type: DataTypes.ENUM('global', 'module', 'institution', 'class'),
       allowNull: false,
       defaultValue: 'global',
     },
@@ -70,6 +70,14 @@ const Problem = sequelize.define(
     // Visible uniquement par les membres (étudiants/profs) de cette institution
     // et par leur institution_admin.
     institutionId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
+    },
+    // ── CLASSROOM ──────────────────────────────────────────────────────────
+    // Si non null, ce problème est privé à une classe précise. Visible
+    // uniquement dans cette classe (par le prof qui la possède et ses élèves).
+    classId: {
       type: DataTypes.UUID,
       allowNull: true,
       defaultValue: null,

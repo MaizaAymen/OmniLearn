@@ -92,8 +92,14 @@ app.get("/", (req, res) => {
       `ALTER TYPE "learn"."enum_users_role" ADD VALUE IF NOT EXISTS 'institution_admin';`
     ).catch((e) => console.warn("[enum patch users.role]:", e.message));
 
+    // Add 'class' scope so a teacher can fork/create problems privately into a classroom.
+    await sequelize.query(
+      `ALTER TYPE "learn"."enum_Problems_scope" ADD VALUE IF NOT EXISTS 'class';`
+    ).catch((e) => console.warn("[enum patch Problems.scope]:", e.message));
+
     await sequelize.sync({ alter: true });
     await sequelize.query('ALTER TABLE learn.lessons ALTER COLUMN "moduleId" DROP NOT NULL;').catch(() => {});
+    await sequelize.query('ALTER TABLE learn.announcements ALTER COLUMN "classId" DROP NOT NULL;').catch(() => {});
 
     // ─── SEED FREE-TIER PROBLEMS ──────────────────────────────────────────
     // Au tout premier démarrage (ou tant qu'aucun problème n'est marqué free),

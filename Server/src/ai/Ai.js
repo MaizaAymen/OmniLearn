@@ -414,8 +414,20 @@ Rules:
 
 router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
   try {
-    const { status, scope: scopeFilter } = req.query;
+    const { status, scope: scopeFilter, classId } = req.query;
     let where = {};
+
+    // ─── SCOPE CLASS ──────────────────────────────────────────────────────
+    // Si on demande explicitement les problèmes d'une classe, on filtre dessus
+    // et on s'arrête là (pas de fallback global). Sinon, on cache toujours les
+    // problèmes de scope "class" (privés à leur classroom).
+    if (classId) {
+      const problems = await Problem.findAll({
+        where: { classId, scope: "class" },
+        order: [["createdAt", "DESC"]],
+      });
+      return res.json(problems);
+    }
     if (status === 'all') {
       where = {};
     } else if (status) {
@@ -466,6 +478,14 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
       ];
     }
 
+    // ─── SCOPE CLASS ──────────────────────────────────────────────────────
+    // Les problèmes "class" sont privés à leur classroom. Sans ?classId=...
+    // ils n'apparaissent jamais dans la liste générale.
+    where[Op.and] = [
+      ...(where[Op.and] || []),
+      { scope: { [Op.ne]: "class" } },
+    ];
+
     const problems = await Problem.findAll({ where });
 
     // Attach creator info so the UI can show "Forked by <teacher name>"
@@ -496,15 +516,17 @@ router.get("/ai/getallproblems", optionalAuth, async (req, res) => {
 // ─── Manual Problem Create ────────────────────────────────────────────────────
 router.post("/ai/problems", optionalAuth, async (req, res) => {
   try {
-    const { title, difficulty, category, description, examples, constraints, hints, starterCode, expectedOutput, tags, scope, createdBy, institutionId } = req.body;
+    const { title, difficulty, category, description, examples, constraints, hints, starterCode, expectedOutput, tags, scope, createdBy, institutionId, classId } = req.body;
     if (!title || !difficulty || !category) {
       return res.status(400).json({ error: "title, difficulty, category are required" });
     }
-    // Si scope = institution, on attache l'id de l'institution (du body ou du user connecté).
-    const finalScope = scope || 'global';
+    // Si classId est fourni, le scope est forcé à 'class' et le problème reste
+    // privé à cette classroom. Sinon, on garde la logique scope/institutionId.
+    const finalScope = classId ? 'class' : (scope || 'global');
     const finalInstitutionId = finalScope === 'institution'
       ? (institutionId || req.user?.institutionId || null)
       : null;
+    const finalClassId = finalScope === 'class' ? classId : null;
     const id = slugify(title);
     const problem = await Problem.create({
       id, title, difficulty, category,
@@ -518,13 +540,16 @@ router.post("/ai/problems", optionalAuth, async (req, res) => {
       status: 'published',
       scope: finalScope,
       institutionId: finalInstitutionId,
+      classId: finalClassId,
       tags: Array.isArray(tags) ? tags : [],
       version: 1,
       testCasesValidated: false,
       createdBy: createdBy || null,
       forkedFrom: null,
     });
-    notifyAllOnProblemPublished(req, problem);
+    // On notifie tous les users seulement pour les problèmes publics. Les
+    // problèmes scope:"class" sont privés à leur classroom — pas de notif globale.
+    if (finalScope !== 'class') notifyAllOnProblemPublished(req, problem);
     res.json(problem);
   } catch (error) {
     console.error(error);
@@ -680,24 +705,29 @@ router.get("/ai/problems/check-duplicate", async (req, res) => {
 });
 
 // ─── Fork Problem ─────────────────────────────────────────────────────────────
-// ─── Fork Problem ─────────────────────────────────────────────────────────────
-// Supports three fork targets:
+// Supports four fork targets (priority order):
+//   - classId       → scope:"class"        (teacher forking into a classroom)
 //   - institutionId → scope:"institution"  (institution admin forking into their bank)
 //   - moduleId      → scope:"module"       (teacher forking into a module)
 //   - neither       → scope:"global"
 router.post("/ai/problems/:id/fork", async (req, res) => {
   try {
     const { id } = req.params;
-    // institutionId added so institution admins can fork global problems into their private bank
-    const { moduleId, createdBy, institutionId } = req.body;
+    const { moduleId, createdBy, institutionId, classId } = req.body;
 
     const original = await Problem.findByPk(id);
     if (!original) return res.status(404).json({ error: "Problem not found" });
 
     const forkId = slugify(`${original.title}-copy-${Date.now()}`);
 
-    // Determine scope based on fork target
-    const finalScope = institutionId ? "institution" : moduleId ? "module" : "global";
+    // Determine scope based on fork target. classId is most specific → wins.
+    const finalScope = classId
+      ? "class"
+      : institutionId
+        ? "institution"
+        : moduleId
+          ? "module"
+          : "global";
 
     const forked = await Problem.create({
       id: forkId,
@@ -711,16 +741,17 @@ router.post("/ai/problems/:id/fork", async (req, res) => {
       starterCode: original.starterCode,
       expectedOutput: original.expectedOutput,
       roadmap: original.roadmap,
-      status: "draft",
+      // Class-scoped forks land already-published so the teacher can assign them right away.
+      status: classId ? "published" : "draft",
       scope: finalScope,
-      // Attach institution so the problem is only visible to that institution's members
-      institutionId: institutionId || null,
+      institutionId: finalScope === "institution" ? institutionId : null,
+      classId: finalScope === "class" ? classId : null,
       forkedFrom: id,
       tags: original.tags || [],
       version: 1,
       testCasesValidated: false,
       createdBy: createdBy || null,
-      moduleId: moduleId || null,
+      moduleId: finalScope === "module" ? (moduleId || null) : null,
     });
     res.json({ forkedProblem: forked, original });
   } catch (error) {
@@ -759,13 +790,16 @@ router.patch("/ai/problems/:id", async (req, res) => {
 // ─── Save AI Draft ────────────────────────────────────────────────────────────
 router.post("/ai/problems/save-draft", optionalAuth, async (req, res) => {
   try {
-    const { problem, createdBy, scope, institutionId } = req.body;
+    const { problem, createdBy, scope, institutionId, classId } = req.body;
     if (!problem?.title) return res.status(400).json({ error: "problem with title is required" });
 
-    const finalScope = scope || 'global';
+    // classId est prioritaire : un problème généré pour une classroom devient
+    // automatiquement scope:"class" et reste privé à cette classroom.
+    const finalScope = classId ? 'class' : (scope || 'global');
     const finalInstitutionId = finalScope === 'institution'
       ? (institutionId || req.user?.institutionId || null)
       : null;
+    const finalClassId = finalScope === 'class' ? classId : null;
 
     const id = slugify(problem.title);
     const created = await Problem.create({
@@ -780,9 +814,11 @@ router.post("/ai/problems/save-draft", optionalAuth, async (req, res) => {
       starterCode: problem.starterCode || { javascript: '', python: '', java: '' },
       expectedOutput: problem.expectedOutput || { javascript: '', python: '', java: '' },
       roadmap: normalizeRoadmap(problem.roadmap),
-      status: 'draft',
+      // Class-scoped saves publish immediately so the teacher can assign right away.
+      status: finalScope === 'class' ? 'published' : 'draft',
       scope: finalScope,
       institutionId: finalInstitutionId,
+      classId: finalClassId,
       tags: Array.isArray(problem.tags) ? problem.tags : [],
       version: 1,
       testCasesValidated: false,

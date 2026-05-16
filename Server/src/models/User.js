@@ -28,7 +28,12 @@ const User = sequelize.define(
     },
     password: {
       type: DataTypes.STRING(255),
-      allowNull: false,
+      allowNull: true,
+    },
+    googleId: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true,
     },
     // ── ÉTAPE 1 : rôle de l'utilisateur ────────────────────────────────────
     // "admin"             = super admin de la plateforme (voit TOUT le monde)

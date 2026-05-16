@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import {
   BellOutlined,
   DeploymentUnitOutlined,
-  LoginOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -50,19 +49,14 @@ const ROLE_COLOR = {
 
 // Which roles can see each sidebar key
 const ROLE_MENU = {
-  '/':              ['admin', 'institution_admin', 'teacher', 'student'],
   '/problems':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/classroom-pdf': ['admin', 'institution_admin', 'teacher', 'student'],
-  '/learning-dashboard': ['admin', 'institution_admin', 'teacher', 'student'],
   '/my-classrooms': ['admin', 'institution_admin', 'teacher', 'student'],
   '/messages':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/pdf-assistant': ['admin', 'institution_admin', 'teacher', 'student'],
-  '/roadmaps':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/roadmap':       ['admin', 'institution_admin', 'teacher', 'student'],
-  '/problem-roadmap': ['admin', 'institution_admin', 'teacher', 'student'],
   '/users':         ['admin'],
-  '/education':     ['admin', 'institution_admin', 'teacher'],
-  '/auth':          ['anon'],
+  '/education':     ['admin', 'institution_admin'],
   '/profile':       ['admin', 'institution_admin', 'teacher', 'student'],
 };
 
@@ -98,9 +92,21 @@ const isProfileComplete = (user) => {
 };
 
 const Sidebar = ({ children, profileStatus }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const getIsMobile = () => typeof window !== 'undefined' && window.innerWidth < 768;
+  const [isMobile, setIsMobile] = useState(getIsMobile);
+  const [collapsed, setCollapsed] = useState(getIsMobile);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      setCollapsed((prev) => (mobile ? true : prev));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const storedUser = getStoredUser();
   const role = storedUser?.role ?? null;
   // ÉTAPE 1 : on récupère le plan de l'utilisateur depuis le cookie.
@@ -352,11 +358,6 @@ const Sidebar = ({ children, profileStatus }) => {
         label: 'education',
       },
       {
-        key: '/auth',
-        icon: <LoginOutlined />,
-        label: 'Auth',
-      },
-      {
         key: '/profile',
         icon: <UserOutlined />,
         label: 'Profile',
@@ -385,23 +386,38 @@ const Sidebar = ({ children, profileStatus }) => {
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/problems')) return '/problems';
     if (location.pathname.startsWith('/classroom-pdf')) return '/classroom-pdf';
-    if (location.pathname.startsWith('/learning-dashboard')) return '/learning-dashboard';
     if (location.pathname.startsWith('/my-classrooms')) return '/my-classrooms';
     if (location.pathname.startsWith('/messages')) return '/messages';
     if (location.pathname.startsWith('/pdf-assistant')) return '/pdf-assistant';
-    if (location.pathname.startsWith('/roadmaps')) return '/roadmaps';
     if (location.pathname.startsWith('/roadmap')) return '/roadmap';
-    if (location.pathname.startsWith('/problem-roadmap')) return '/problem-roadmap';
     if (location.pathname.startsWith('/users')) return '/users';
-    if (location.pathname.startsWith('/admin')) return '/admin';
-    if (location.pathname.startsWith('/auth')) return '/auth';
     if (location.pathname.startsWith('/profile')) return '/profile';
     return '/';
   }, [location.pathname]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        collapsedWidth={isMobile ? 0 : 80}
+        breakpoint="md"
+        onBreakpoint={(broken) => setCollapsed(broken)}
+        style={
+          isMobile
+            ? {
+                position: 'fixed',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                height: '100vh',
+                zIndex: 50,
+                boxShadow: collapsed ? 'none' : '0 0 20px rgba(0,0,0,0.25)',
+              }
+            : undefined
+        }
+      >
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
@@ -415,13 +431,25 @@ const Sidebar = ({ children, profileStatus }) => {
               return;
             }
             navigate(key);
+            if (isMobile) setCollapsed(true);
           }}
         />
       </Sider>
+      {isMobile && !collapsed && (
+        <div
+          onClick={() => setCollapsed(true)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            zIndex: 40,
+          }}
+        />
+      )}
       <Layout>
         <Header
           style={{
-            padding: '0 24px 0 0',
+            padding: isMobile ? '0 12px 0 0' : '0 24px 0 0',
             background: '#ffffff',
             display: 'flex',
             alignItems: 'center',
@@ -431,6 +459,7 @@ const Sidebar = ({ children, profileStatus }) => {
             position: 'sticky',
             top: 0,
             zIndex: 10,
+            height: isMobile ? 56 : 64,
           }}
         >
           <Button
@@ -439,14 +468,14 @@ const Sidebar = ({ children, profileStatus }) => {
             onClick={() => setCollapsed(!collapsed)}
             style={{
               fontSize: '16px',
-              width: 64,
-              height: 64,
+              width: isMobile ? 48 : 64,
+              height: isMobile ? 56 : 64,
               color: '#595959',
             }}
           />
 
-          <Space size={12} align="center">
-            {role && (
+          <Space size={isMobile ? 6 : 12} align="center">
+            {role && !isMobile && (
               <Tag
                 color={ROLE_COLOR[role] ?? 'default'}
                 style={{
@@ -526,36 +555,38 @@ const Sidebar = ({ children, profileStatus }) => {
                 >
                   {!avatarSrc && initials}
                 </Avatar>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    lineHeight: 1.15,
-                    maxWidth: 140,
-                  }}
-                >
-                  <Text
-                    strong
-                    ellipsis
-                    style={{ fontSize: 13, color: '#262626' }}
+                {!isMobile && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      lineHeight: 1.15,
+                      maxWidth: 140,
+                    }}
                   >
-                    {fullName}
-                  </Text>
-                  <Text
-                    type="secondary"
-                    style={{ fontSize: 11, textTransform: 'capitalize' }}
-                  >
-                    {role || 'Guest'}
-                  </Text>
-                </div>
+                    <Text
+                      strong
+                      ellipsis
+                      style={{ fontSize: 13, color: '#262626' }}
+                    >
+                      {fullName}
+                    </Text>
+                    <Text
+                      type="secondary"
+                      style={{ fontSize: 11, textTransform: 'capitalize' }}
+                    >
+                      {role || 'Guest'}
+                    </Text>
+                  </div>
+                )}
               </div>
             </Dropdown>
           </Space>
         </Header>
         <Content
           style={{
-            margin: '24px 16px',
-            padding: 24,
+            margin: isMobile ? '12px 8px' : '24px 16px',
+            padding: isMobile ? 12 : 24,
             minHeight: 280,
             background: colorBgContainer,
             borderRadius: borderRadiusLG,

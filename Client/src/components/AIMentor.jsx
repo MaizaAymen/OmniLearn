@@ -189,7 +189,7 @@ export default function AIMentor({ isOpen, onClose, code, language, problemTitle
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-96 bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-96 max-w-full bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

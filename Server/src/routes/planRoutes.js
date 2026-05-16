@@ -15,7 +15,7 @@ cloudinary.config({
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const { Op } = require("sequelize");
-const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification, Message, Conversation, SavedRoadmap } = require("../models");
+const { User, Institution, InviteLink, Problem, Class, Enrollment, Announcement, CodeSubmission, Notification, Conversation, SavedRoadmap } = require("../models");
 const { emitNotification } = require("../realtime/messageHub");
 
 const WORKSPACE_INDEX = path.join(__dirname, "..", "uploads", "workspace.json");
@@ -854,15 +854,45 @@ router.post("/institutions/:id/announcements", requireInstitutionAdmin, async (r
     const { title, content, targetRole, classId, pinned } = req.body;
     if (!content || !content.trim()) return res.status(400).json({ error: "Content is required" });
 
+    const role = ["all", "students", "teachers"].includes(targetRole) ? targetRole : "all";
+
     const ann = await Announcement.create({
       institutionId: id,
       classId: classId || null,
       authorId: req.user.id,
       title: title || null,
       content,
-      targetRole: ["all", "students", "teachers"].includes(targetRole) ? targetRole : "all",
+      targetRole: role,
       pinned: !!pinned,
     });
+
+    // Notify all users in the institution that match the target audience.
+    try {
+      const where = { institutionId: id, id: { [Op.ne]: req.user.id } };
+      if (role === "students") where.role = "student";
+      else if (role === "teachers") where.role = "teacher";
+      else where.role = { [Op.in]: ["student", "teacher"] };
+
+      const recipients = await User.findAll({ where, attributes: ["id"] });
+      if (recipients.length) {
+        const notifs = await Notification.bulkCreate(
+          recipients.map((u) => ({
+            userId: u.id,
+            type: "announcement",
+            title: title || "New announcement",
+            message: content.length > 200 ? content.slice(0, 200) + "…" : content,
+            link: `/institution/${id}/announcements`,
+            data: { announcementId: ann.id, institutionId: id },
+          })),
+          { returning: true }
+        );
+        const io = req.app.get("io");
+        notifs.forEach((n) => emitNotification(io, n.userId, n));
+      }
+    } catch (notifyErr) {
+      console.error("notify announcement:", notifyErr);
+    }
+
     res.status(201).json(ann);
   } catch (err) {
     console.error("create announcement:", err);
@@ -992,7 +1022,6 @@ router.get("/super-admin/users-overview", requireSuperAdmin, async (req, res) =>
     // ÉTAPE 3 : pour les institution_admin on calcule les détails de leur école.
     // On commence par grouper les users par institutionId pour compter
     // facilement les membres / profs.
-    const Class = require("../models").Class;
     const byInstitution = {};
     for (const u of users) {
       if (!u.institutionId) continue;

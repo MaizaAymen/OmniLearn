@@ -16,6 +16,7 @@ import {
 } from "antd";
 import {
   BookOutlined,
+  CameraOutlined,
   CloseOutlined,
   CrownOutlined,
   DeleteOutlined,
@@ -407,12 +408,21 @@ const Messages = () => {
   const [conversations, setConversations] = useState([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [activeId, setActiveId] = useState(null);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth < 768
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [draft, setDraft] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const photoInputRef = useRef(null);
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState("");
   const [usersById, setUsersById] = useState({});
@@ -421,6 +431,7 @@ const Messages = () => {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [profileUser, setProfileUser] = useState(null);
 
   const listEndRef = useRef(null);
   const activeIdRef = useRef(null);
@@ -506,17 +517,25 @@ const Messages = () => {
   };
 
   const conversationAvatar = (conv) => {
+    const photoSrc = conv.photo ? api.fileUrl(conv.photo) : undefined;
     if (conv.type === "group") {
       return (
-        <Avatar style={{ background: PALETTE.accentSoft, color: PALETTE.accent, fontWeight: 600 }}>
+        <Avatar
+          src={photoSrc}
+          style={{ background: PALETTE.accentSoft, color: PALETTE.accent, fontWeight: 600 }}
+        >
           <TeamOutlined />
         </Avatar>
       );
     }
     const otherId = (conv.members || []).find((id) => id !== me?.id);
     const other = usersById[otherId];
+    const fallbackSrc = other?.avatar ? api.fileUrl(other.avatar) : undefined;
     return (
-      <Avatar style={{ background: PALETTE.accent, color: "#fff", fontWeight: 600 }}>
+      <Avatar
+        src={photoSrc || fallbackSrc}
+        style={{ background: PALETTE.accent, color: "#fff", fontWeight: 600 }}
+      >
         {other ? initialsOf(other) : <UserOutlined />}
       </Avatar>
     );
@@ -720,52 +739,69 @@ const Messages = () => {
     }
   };
 
+  const showList = !isMobile || !activeId;
+  const showChat = !isMobile || !!activeId;
+
   return (
     <div
       style={{
         background: PALETTE.bg,
         minHeight: "calc(100vh - 112px)",
-        margin: -24,
-        padding: 24,
+        margin: isMobile ? -12 : -24,
+        padding: isMobile ? 12 : 24,
       }}
     >
       {/* ── Quick docs banner ──────────────────────────────────────────
           Tells the user what the messenger can do and lists the available
           slash commands. Kept compact so it doesn't push the chat down. */}
-      <div
-        style={{
-          background: PALETTE.surface,
-          border: `1px solid ${PALETTE.border}`,
-          borderRadius: 12,
-          padding: "10px 16px",
-          marginBottom: 12,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <Text strong style={{ color: PALETTE.text, fontSize: 13 }}>
-          💬 Messenger
-        </Text>
-        <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
-          Send messages, share files, create groups.
-        </Text>
-        <Tag style={{ background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11 }}>
-          /stackoverflow &lt;query&gt;
-        </Tag>
-        <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
-          → search Stack Overflow inside the chat.
-        </Text>
-      </div>
+      {!isMobile && (
+        <div
+          style={{
+            background: PALETTE.surface,
+            border: `1px solid ${PALETTE.border}`,
+            borderRadius: 12,
+            padding: "10px 16px",
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <Text strong style={{ color: PALETTE.text, fontSize: 13 }}>
+            💬 Messenger
+          </Text>
+          <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+            Send messages, share files, create groups.
+          </Text>
+          <Tag style={{ background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11 }}>
+            /stackoverflow &lt;query&gt;
+          </Tag>
+          <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+            → search Stack Overflow inside the chat.
+          </Text>
+          <Tag style={{ background: "#EEF2FF", color: "#4338CA", border: "1px solid #C7D2FE", fontSize: 11 }}>
+            /ai &lt;question&gt;
+          </Tag>
+          <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+            → ask the AI assistant inside the chat.
+          </Text>
+          <Tag style={{ background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA", fontSize: 11 }}>
+            /video &lt;query&gt;
+          </Tag>
+          <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>
+            → search YouTube videos inside the chat.
+          </Text>
+        </div>
+      )}
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "340px 1fr",
-          gap: 16,
-          height: "calc(100vh - 200px)",
-          minHeight: 560,
+          gridTemplateColumns: isMobile ? "1fr" : "340px 1fr",
+          gap: isMobile ? 0 : 16,
+          height: isMobile ? "calc(100vh - 80px)" : "calc(100vh - 200px)",
+          minHeight: isMobile ? 0 : 560,
         }}
       >
         {/* ── Sidebar: conversation list ─────────────────────── */}
@@ -774,7 +810,7 @@ const Messages = () => {
             background: PALETTE.surface,
             border: `1px solid ${PALETTE.border}`,
             borderRadius: 16,
-            display: "flex",
+            display: showList ? "flex" : "none",
             flexDirection: "column",
             overflow: "hidden",
           }}
@@ -911,7 +947,7 @@ const Messages = () => {
             background: PALETTE.surface,
             border: `1px solid ${PALETTE.border}`,
             borderRadius: 16,
-            display: "flex",
+            display: showChat ? "flex" : "none",
             flexDirection: "column",
             overflow: "hidden",
           }}
@@ -955,7 +991,7 @@ const Messages = () => {
               {/* Conversation header */}
               <div
                 style={{
-                  padding: "16px 24px",
+                  padding: isMobile ? "10px 12px" : "16px 24px",
                   borderBottom: `1px solid ${PALETTE.borderSoft}`,
                   display: "flex",
                   alignItems: "center",
@@ -964,7 +1000,18 @@ const Messages = () => {
                   background: PALETTE.surface,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, minWidth: 0, flex: 1 }}>
+                  {isMobile && (
+                    <Button
+                      type="text"
+                      shape="circle"
+                      onClick={() => setActiveId(null)}
+                      style={{ marginRight: 4, fontSize: 18, lineHeight: 1 }}
+                      aria-label="Back"
+                    >
+                      ‹
+                    </Button>
+                  )}
                   {conversationAvatar(activeConv)}
                   <div>
                     <Space size={6} align="center">
@@ -999,55 +1046,96 @@ const Messages = () => {
                     </div>
                   </div>
                 </div>
-                {activeConv.type === "group" && isOwner && (
-                  <Space>
+                <Space size={isMobile ? 4 : 8} wrap={!isMobile} style={{ flexShrink: 0 }}>
+                  {activeConv.type === "group" && (
                     <Button
                       icon={<TeamOutlined />}
                       onClick={() => setMembersOpen(true)}
                       style={{ borderRadius: 10 }}
+                      size={isMobile ? "small" : "middle"}
                     >
-                      Members
+                      {!isMobile && "Members"}
                     </Button>
-                    <Button
-                      icon={<UserAddOutlined />}
-                      onClick={() => setInviteOpen(true)}
-                      style={{ borderRadius: 10 }}
-                    >
-                      Invite
-                    </Button>
-                    <Button
-                      icon={<FormOutlined />}
-                      onClick={() => setRenameOpen(true)}
-                      style={{ borderRadius: 10 }}
-                    >
-                      Rename
-                    </Button>
+                  )}
+                  {(isOwner || activeConv.type === "private") && (
+                    <>
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) {
+                            antdMessage.warning("Photo too large (5 MB max)");
+                            return;
+                          }
+                          try {
+                            const updated = await api.uploadConversationPhoto(activeConv.id, file);
+                            setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+                            antdMessage.success("Photo updated");
+                          } catch (err) {
+                            antdMessage.error(err?.response?.data?.error || "Failed to upload photo");
+                          }
+                        }}
+                      />
+                      <Button
+                        icon={<CameraOutlined />}
+                        onClick={() => photoInputRef.current?.click()}
+                        style={{ borderRadius: 10 }}
+                        size={isMobile ? "small" : "middle"}
+                      >
+                        {!isMobile && "Photo"}
+                      </Button>
+                    </>
+                  )}
+                  {isOwner && (
+                    <>
+                      <Button
+                        icon={<UserAddOutlined />}
+                        onClick={() => setInviteOpen(true)}
+                        style={{ borderRadius: 10 }}
+                        size={isMobile ? "small" : "middle"}
+                      >
+                        {!isMobile && "Invite"}
+                      </Button>
+                      <Button
+                        icon={<FormOutlined />}
+                        onClick={() => setRenameOpen(true)}
+                        style={{ borderRadius: 10 }}
+                        size={isMobile ? "small" : "middle"}
+                      >
+                        {!isMobile && "Rename"}
+                      </Button>
+                      <Popconfirm
+                        title="Delete this group?"
+                        description="All messages will be removed and members notified."
+                        okText="Delete"
+                        okButtonProps={{ danger: true }}
+                        cancelText="Cancel"
+                        onConfirm={onDelete}
+                      >
+                        <Button danger icon={<DeleteOutlined />} style={{ borderRadius: 10 }} size={isMobile ? "small" : "middle"}>
+                          {!isMobile && "Delete"}
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  )}
+                  {activeConv.type === "group" && !isOwner && (
                     <Popconfirm
-                      title="Delete this group?"
-                      description="All messages will be removed and members notified."
-                      okText="Delete"
-                      okButtonProps={{ danger: true }}
+                      title="Leave this group?"
+                      okText="Leave"
                       cancelText="Cancel"
-                      onConfirm={onDelete}
+                      onConfirm={onLeave}
                     >
-                      <Button danger icon={<DeleteOutlined />} style={{ borderRadius: 10 }}>
-                        Delete
+                      <Button danger icon={<LogoutOutlined />} style={{ borderRadius: 10 }} size={isMobile ? "small" : "middle"}>
+                        {!isMobile && "Leave"}
                       </Button>
                     </Popconfirm>
-                  </Space>
-                )}
-                {activeConv.type === "group" && !isOwner && (
-                  <Popconfirm
-                    title="Leave this group?"
-                    okText="Leave"
-                    cancelText="Cancel"
-                    onConfirm={onLeave}
-                  >
-                    <Button danger icon={<LogoutOutlined />} style={{ borderRadius: 10 }}>
-                      Leave
-                    </Button>
-                  </Popconfirm>
-                )}
+                  )}
+                </Space>
               </div>
 
               {/* Messages */}
@@ -1267,11 +1355,14 @@ const Messages = () => {
                             {showAvatar && (
                               <Avatar
                                 size={32}
+                                src={sender?.avatar ? api.fileUrl(sender.avatar) : undefined}
+                                onClick={() => sender && setProfileUser(sender)}
                                 style={{
                                   background: PALETTE.accent,
                                   color: "#fff",
                                   fontSize: 12,
                                   fontWeight: 600,
+                                  cursor: sender ? "pointer" : "default",
                                 }}
                               >
                                 {sender ? initialsOf(sender) : <UserOutlined />}
@@ -1547,9 +1638,55 @@ const Messages = () => {
         meId={me?.id}
         onBan={onBan}
       />
+      <UserProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
     </div>
   );
 };
+
+const UserProfileModal = ({ user, onClose }) => (
+  <Modal open={!!user} onCancel={onClose} footer={null} centered width={340}>
+    {user && (
+      <div style={{ textAlign: "center", padding: "8px 4px" }}>
+        <Avatar
+          size={72}
+          src={user.avatar ? api.fileUrl(user.avatar) : undefined}
+          style={{ background: PALETTE.accent, color: "#fff", fontSize: 24, fontWeight: 700 }}
+        >
+          {initialsOf(user)}
+        </Avatar>
+        <Title level={5} style={{ marginTop: 12, marginBottom: 0 }}>{fullName(user)}</Title>
+        <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>{user.email}</Text>
+        <div
+          style={{
+            marginTop: 16,
+            padding: "10px 14px",
+            background: PALETTE.accentSoft,
+            color: PALETTE.accent,
+            borderRadius: 10,
+            fontWeight: 600,
+          }}
+        >
+          {user.problemsSolved ?? 0} problems solved
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+          {user.githubUrl && (
+            <a href={user.githubUrl} target="_blank" rel="noopener noreferrer" style={{ color: PALETTE.text }}>
+              GitHub: {user.githubUrl}
+            </a>
+          )}
+          {user.linkedinUrl && (
+            <a href={user.linkedinUrl} target="_blank" rel="noopener noreferrer" style={{ color: PALETTE.text }}>
+              LinkedIn: {user.linkedinUrl}
+            </a>
+          )}
+          {!user.githubUrl && !user.linkedinUrl && (
+            <Text style={{ color: PALETTE.textSoft, fontSize: 12 }}>No social links</Text>
+          )}
+        </div>
+      </div>
+    )}
+  </Modal>
+);
 
 const MembersModal = ({ open, onClose, conversation, usersById, meId, onBan }) => {
   if (!conversation) return null;
@@ -1650,18 +1787,15 @@ const RenameGroupModal = ({ open, onClose, currentName, onRename }) => {
 };
 
 // ── User picker shared by modals ───────────────────────────────────────────
-const UserPicker = ({ value, onChange, mode = "multiple", excludeIds = [], placeholder }) => {
+const UserPicker = ({ value, onChange, mode = "multiple", excludeIds = [], placeholder, extraUsers = [] }) => {
   const [options, setOptions] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
   const exclude = useMemo(() => new Set(excludeIds), [excludeIds]);
 
-  useEffect(() => {
-    api.searchUsers("").then((users) => {
-      setOptions(users.filter((u) => !exclude.has(u.id)));
-    }).catch(() => {});
-  }, [exclude]);
-
   const onSearch = async (q) => {
+    setQuery(q);
+    if (!q.trim()) { setOptions([]); return; }
     setSearching(true);
     try {
       const users = await api.searchUsers(q);
@@ -1670,6 +1804,13 @@ const UserPicker = ({ value, onChange, mode = "multiple", excludeIds = [], place
       setSearching(false);
     }
   };
+
+  const seen = new Set();
+  const allOptions = [...extraUsers, ...options].filter((u) => {
+    if (!u?.id || seen.has(u.id)) return false;
+    seen.add(u.id);
+    return true;
+  });
 
   return (
     <Select
@@ -1681,11 +1822,18 @@ const UserPicker = ({ value, onChange, mode = "multiple", excludeIds = [], place
       showSearch
       loading={searching}
       placeholder={placeholder}
+      notFoundContent={
+        !query.trim()
+          ? <span style={{ color: PALETTE.textSoft }}>Type a name to search</span>
+          : searching
+            ? <Spin size="small" />
+            : <span style={{ color: PALETTE.textSoft }}>No users match "{query}"</span>
+      }
       style={{ width: "100%" }}
       size="large"
       optionLabelProp="label"
     >
-      {options.map((u) => (
+      {allOptions.map((u) => (
         <Select.Option key={u.id} value={u.id} label={fullName(u)}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0" }}>
             <Avatar
@@ -1733,10 +1881,10 @@ const QuickInviteSection = ({ selectedIds, onAdd, excludeIds = [] }) => {
     setLoading(true);
     try {
       const members = await api.getInstitutionMembers();
-      const newIds = members.map((u) => u.id).filter((id) => !excluded.has(id));
-      if (newIds.length === 0) return antdMessage.info("All institution members are already added");
-      onAdd(newIds);
-      antdMessage.success(`Added ${newIds.length} member${newIds.length !== 1 ? "s" : ""}`);
+      const newUsers = members.filter((u) => !excluded.has(u.id));
+      if (newUsers.length === 0) return antdMessage.info("All institution members are already added");
+      onAdd(newUsers);
+      antdMessage.success(`Added ${newUsers.length} member${newUsers.length !== 1 ? "s" : ""}`);
     } catch {
       antdMessage.error("Could not load institution members");
     } finally {
@@ -1749,10 +1897,10 @@ const QuickInviteSection = ({ selectedIds, onAdd, excludeIds = [] }) => {
     setLoading(true);
     try {
       const students = await api.getClassroomStudents(selectedClassroom);
-      const newIds = students.map((u) => u.id).filter((id) => !excluded.has(id));
-      if (newIds.length === 0) return antdMessage.info("All students from this classroom are already added");
-      onAdd(newIds);
-      antdMessage.success(`Added ${newIds.length} student${newIds.length !== 1 ? "s" : ""}`);
+      const newUsers = students.filter((u) => !excluded.has(u.id));
+      if (newUsers.length === 0) return antdMessage.info("All students from this classroom are already added");
+      onAdd(newUsers);
+      antdMessage.success(`Added ${newUsers.length} student${newUsers.length !== 1 ? "s" : ""}`);
     } catch {
       antdMessage.error("Could not load classroom students");
     } finally {
@@ -1882,10 +2030,11 @@ const QuickInviteSection = ({ selectedIds, onAdd, excludeIds = [] }) => {
 const NewGroupModal = ({ open, onClose, onCreate }) => {
   const [name, setName] = useState("");
   const [memberIds, setMemberIds] = useState([]);
+  const [addedUsers, setAddedUsers] = useState([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setName(""); setMemberIds([]); setBusy(false); }
+    if (!open) { setName(""); setMemberIds([]); setAddedUsers([]); setBusy(false); }
   }, [open]);
 
   const submit = async () => {
@@ -1925,10 +2074,14 @@ const NewGroupModal = ({ open, onClose, onCreate }) => {
           value={memberIds}
           onChange={setMemberIds}
           placeholder="Search and add members"
+          extraUsers={addedUsers}
         />
         <QuickInviteSection
           selectedIds={memberIds}
-          onAdd={(ids) => setMemberIds((prev) => [...new Set([...prev, ...ids])])}
+          onAdd={(users) => {
+            setMemberIds((prev) => [...new Set([...prev, ...users.map((u) => u.id)])]);
+            setAddedUsers((prev) => [...prev, ...users]);
+          }}
         />
       </div>
     </Modal>
@@ -1990,10 +2143,11 @@ const NewPrivateModal = ({ open, onClose, onSend }) => {
 
 const InviteModal = ({ open, onClose, onInvite, excludeIds }) => {
   const [userIds, setUserIds] = useState([]);
+  const [addedUsers, setAddedUsers] = useState([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setUserIds([]); setBusy(false); }
+    if (!open) { setUserIds([]); setAddedUsers([]); setBusy(false); }
   }, [open]);
 
   const submit = async () => {
@@ -2026,11 +2180,15 @@ const InviteModal = ({ open, onClose, onInvite, excludeIds }) => {
           onChange={setUserIds}
           excludeIds={excludeIds}
           placeholder="Search and pick people to invite"
+          extraUsers={addedUsers}
         />
         <QuickInviteSection
           selectedIds={userIds}
           excludeIds={excludeIds}
-          onAdd={(ids) => setUserIds((prev) => [...new Set([...prev, ...ids])])}
+          onAdd={(users) => {
+            setUserIds((prev) => [...new Set([...prev, ...users.map((u) => u.id)])]);
+            setAddedUsers((prev) => [...prev, ...users]);
+          }}
         />
       </div>
     </Modal>

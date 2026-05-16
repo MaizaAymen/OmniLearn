@@ -172,8 +172,8 @@ function CodeEditorPanel({
   return (
     <div className="h-full bg-base-300 flex flex-col">
       {/* Header bar with language selector and run button */}
-      <div className="flex items-center justify-between px-4 py-3 bg-base-100 border-t border-base-300">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 px-2 sm:px-4 py-2 sm:py-3 bg-base-100 border-t border-base-300">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <img
             src={
               LANGUAGE_CONFIG[selectedLanguage].icon ||

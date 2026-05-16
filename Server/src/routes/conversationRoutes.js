@@ -1,9 +1,23 @@
 const express = require("express");
 const { Op } = require("sequelize");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
 const router = express.Router();
 const { Conversation, Message, Notification } = require("../models");
 const { authenticate } = require("../middleware/Authmiddleware");
 const { emitNotification } = require("../realtime/messageHub");
+const config = require("../config");
+
+cloudinary.config({
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET,
+});
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 router.use(authenticate);
 
@@ -309,6 +323,45 @@ router.get("/:id/messages", async (req, res) => {
   } catch (err) {
     console.error("list messages:", err);
     res.status(500).json({ error: "Failed to list messages" });
+  }
+});
+
+// POST /api/conversations/:id/photo — upload conversation photo to Cloudinary.
+// Groups: owner only. Private: any participant.
+router.post("/:id/photo", photoUpload.single("photo"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const conversation = await Conversation.findByPk(req.params.id);
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+
+    if (conversation.type === "group") {
+      if (conversation.ownerId !== req.user.id) {
+        return res.status(403).json({ error: "Only the owner can change the group photo" });
+      }
+    } else if (!conversation.members.includes(req.user.id)) {
+      return res.status(403).json({ error: "Not a member of this conversation" });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "conversation_photos",
+          public_id: `conv_${conversation.id}`,
+          overwrite: true,
+          transformation: [{ width: 300, height: 300, crop: "fill" }],
+        },
+        (error, uploaded) => (error ? reject(error) : resolve(uploaded))
+      );
+      stream.end(req.file.buffer);
+    });
+
+    conversation.photo = result.secure_url;
+    await conversation.save();
+    res.json(conversation);
+  } catch (err) {
+    console.error("conversation photo upload:", err);
+    res.status(500).json({ error: "Failed to upload photo" });
   }
 });
 

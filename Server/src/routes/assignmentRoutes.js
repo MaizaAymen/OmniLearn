@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { ClassAssignment, StudentProblemSet, Enrollment, User, Notification } = require("../models");
+const { ClassAssignment, StudentProblemSet, Enrollment, User, Notification, CodeSubmission, Problem } = require("../models");
 const { authenticate, requireAdminOrTeacher } = require("../middleware/Authmiddleware");
 const { emitNotification } = require("../realtime/messageHub");
 
@@ -9,7 +9,7 @@ router.use(authenticate);
 // POST /api/assignments — teacher creates a draft assignment
 router.post("/", requireAdminOrTeacher, async (req, res) => {
   try {
-    const { moduleId, classId, title, problemIds, dueDate, maxAttempts, language } = req.body;
+    const { moduleId, classId, title, problemIds, dueDate, maxAttempts, language, lockCorrect, lockMentor } = req.body;
     if (!title || !problemIds?.length) {
       return res.status(400).json({ error: "title and problemIds are required" });
     }
@@ -21,6 +21,8 @@ router.post("/", requireAdminOrTeacher, async (req, res) => {
       dueDate: dueDate || null,
       maxAttempts: maxAttempts || null,
       language: language || null,
+      lockCorrect: !!lockCorrect,
+      lockMentor: !!lockMentor,
       isPublished: false,
     });
     res.status(201).json(assignment);
@@ -61,6 +63,8 @@ router.get("/student/:studentId/module/:moduleId", async (req, res) => {
       maxAttempts: a.maxAttempts,
       isPublished: a.isPublished,
       language: a.language,
+      lockCorrect: a.lockCorrect,
+      lockMentor: a.lockMentor,
       solvedIds: a.problemIds.filter((pid) => solvedSet.has(pid)),
       solved: a.problemIds.filter((pid) => solvedSet.has(pid)).length,
       total: a.problemIds.length,
@@ -76,13 +80,15 @@ router.put("/:id", requireAdminOrTeacher, async (req, res) => {
   try {
     const a = await ClassAssignment.findByPk(req.params.id);
     if (!a) return res.status(404).json({ error: "Not found" });
-    const { title, problemIds, dueDate, maxAttempts, language } = req.body;
+    const { title, problemIds, dueDate, maxAttempts, language, lockCorrect, lockMentor } = req.body;
     await a.update({
       title: title ?? a.title,
       problemIds: problemIds ?? a.problemIds,
       dueDate: dueDate !== undefined ? (dueDate || null) : a.dueDate,
       maxAttempts: maxAttempts !== undefined ? (maxAttempts || null) : a.maxAttempts,
       language: language !== undefined ? (language || null) : a.language,
+      lockCorrect: lockCorrect !== undefined ? !!lockCorrect : a.lockCorrect,
+      lockMentor: lockMentor !== undefined ? !!lockMentor : a.lockMentor,
     });
     res.json(a);
   } catch (err) {
@@ -149,6 +155,46 @@ router.get("/:id/roster", requireAdminOrTeacher, async (req, res) => {
     }));
 
     res.json({ students, total: enrollments.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/assignments/:id/student/:studentId/submissions
+// Returns the latest submission per problem of the assignment for one student.
+// Shape: { student, problems: [{ problemId, title, submission }] }
+router.get("/:id/student/:studentId/submissions", requireAdminOrTeacher, async (req, res) => {
+  try {
+    const { id, studentId } = req.params;
+    const assignment = await ClassAssignment.findByPk(id);
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+
+    const [student, submissions, problems] = await Promise.all([
+      User.findByPk(studentId, { attributes: ["id", "firstname", "lastname", "email"] }),
+      CodeSubmission.findAll({
+        where: { userId: studentId, exerciseTitle: assignment.problemIds },
+        order: [["createdAt", "DESC"]],
+      }),
+      Problem.findAll({
+        where: { id: assignment.problemIds },
+        attributes: ["id", "title"],
+      }),
+    ]);
+
+    // Keep only the latest submission per problemId
+    const latestByProblem = {};
+    for (const s of submissions) {
+      if (!latestByProblem[s.exerciseTitle]) latestByProblem[s.exerciseTitle] = s;
+    }
+    const titleById = Object.fromEntries(problems.map((p) => [p.id, p.title]));
+
+    const result = assignment.problemIds.map((pid) => ({
+      problemId: pid,
+      title: titleById[pid] || pid,
+      submission: latestByProblem[pid] || null,
+    }));
+
+    res.json({ student, problems: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

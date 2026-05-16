@@ -13,6 +13,8 @@ const ClassAssignment = sequelize.define(
     maxAttempts: { type: DataTypes.INTEGER, allowNull: true },
     isPublished: { type: DataTypes.BOOLEAN, defaultValue: false },
     language: { type: DataTypes.STRING(30), allowNull: true }, // locked language, null = any
+    lockCorrect: { type: DataTypes.BOOLEAN, defaultValue: false }, // when true, hide "Correct with AI" for students
+    lockMentor: { type: DataTypes.BOOLEAN, defaultValue: false },  // when true, hide "AI Mentor" for students
   },
   { tableName: "class_assignments", timestamps: true }
 );

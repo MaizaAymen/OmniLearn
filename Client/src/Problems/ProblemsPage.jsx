@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
-import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, LockIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
+import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, LockIcon, PlusIcon, SearchIcon, SparklesIcon, BookOpenIcon } from "lucide-react";
 import { getDifficultyBadgeClass } from "./utils";
 import Navbar from "../components/Navbar";
 
@@ -27,7 +27,12 @@ function ProblemsPage() {
   const user = getUser();
   const isTeacher = user.role === "teacher";
   const isAdmin = user.role === "admin";
-  const isStaff = isTeacher || isAdmin;
+  const isInstitutionAdmin = user.role === "institution_admin";
+  const isStaff = isTeacher || isAdmin || isInstitutionAdmin;
+  // Only platform admin and institution admin are allowed to author into the
+  // public catalog or change a problem's published status. Regular teachers can
+  // fork into their own classroom (private) but cannot publish here.
+  const canPublish = isAdmin || isInstitutionAdmin;
   // ÉTAPE 1 : on lit le plan depuis le cookie (rempli au login).
   // Si rien → "free" par défaut. Sert à afficher la bannière d'upgrade.
   const isFreeUser = !isStaff && (user.plan ?? "free") === "free";
@@ -40,6 +45,9 @@ function ProblemsPage() {
   const [statusFilter, setStatusFilter] = useState(
     isStaff ? (searchParams.get("status") || "all") : "published"
   );
+  // Classrooms owned by the current teacher — populates the fork target menu.
+  // Empty for non-teachers or teachers with no classroom yet.
+  const [myClassrooms, setMyClassrooms] = useState([]);
 
   async function fetchProblems(status) {
     setIsLoading(true);
@@ -75,6 +83,21 @@ function ProblemsPage() {
       .catch(() => {});
   }, [user?.id]);
 
+  // Load the teacher's classrooms once so the Fork button can offer them as
+  // targets. The /admin/classrooms endpoint already filters to the caller's
+  // own classrooms when the role is "teacher".
+  useEffect(() => {
+    if (!isTeacher) return;
+    const token = Cookies.get("token");
+    if (!token) return;
+    fetch("http://localhost:5000/api/admin/classrooms", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setMyClassrooms(Array.isArray(d) ? d : []))
+      .catch(() => setMyClassrooms([]));
+  }, [isTeacher]);
+
   async function forkProblem(id) {
     try {
       const res = await fetch(`${API}/problems/${id}/fork`, {
@@ -88,6 +111,25 @@ function ProblemsPage() {
       navigate(`/problems/create?edit=${forkedProblem.id}&source=${original.id}`);
     } catch {
       toast.error("Error forking problem");
+    }
+  }
+
+  // Fork an existing problem into a teacher's classroom, then open the
+  // customize editor pre-filled with the fork. The teacher reviews/edits and
+  // saves — the problem stays private to the classroom (scope="class").
+  async function forkIntoClassroom(problemId, classroom) {
+    try {
+      const res = await fetch(`${API}/problems/${problemId}/fork`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId: classroom.id, createdBy: user.id || null }),
+      });
+      if (!res.ok) throw new Error();
+      const { forkedProblem, original } = await res.json();
+      toast.success(`Forked into "${classroom.name}" — customize before assigning`);
+      navigate(`/problems/create?edit=${forkedProblem.id}&source=${original.id}&classId=${classroom.id}`);
+    } catch {
+      toast.error("Error forking to classroom");
     }
   }
 
@@ -167,7 +209,7 @@ function ProblemsPage() {
             <h1 className="text-4xl font-bold mb-2">Practice Problems</h1>
             <p className="text-base-content/70">Sharpen your coding skills with curated problems</p>
           </div>
-          {isStaff && (
+          {canPublish && (
             <button
               className="btn btn-primary gap-2"
               onClick={() => navigate("/problems/create")}
@@ -324,15 +366,49 @@ function ProblemsPage() {
 
                     {isStaff && (() => {
                       const isFork = !!problem.forkedFrom;
-                      const isOwnFork = isFork && problem.createdBy && problem.createdBy === user.id;
-                      // Teachers can publish/archive/restore ONLY on their own forks.
-                      // Admins can publish/archive/restore on any problem.
-                      const canChangeStatus = isAdmin || (isTeacher && isOwnFork);
+                      // Only platform admin and institution admin can publish /
+                      // archive / restore problems in the public catalog.
+                      // Regular teachers can fork but never change status here.
+                      const canChangeStatus = canPublish;
                       // Forking a fork is not useful — only allow forking originals.
                       const canFork = !isFork;
                       return (
                         <div className="flex gap-1 flex-wrap justify-end">
-                          {canFork && (
+                          {canFork && isTeacher && myClassrooms.length > 0 ? (
+                            <div className="dropdown dropdown-end dropdown-top">
+                              <button tabIndex={0} className="btn btn-xs btn-ghost gap-1" title="Fork to a classroom">
+                                <GitForkIcon className="size-3" /> Fork
+                              </button>
+                              <ul tabIndex={0} className="dropdown-content menu bg-base-100 rounded-box z-10 w-56 p-2 shadow border border-base-300">
+                                <li className="menu-title text-[10px] uppercase tracking-wide">Add to classroom</li>
+                                {myClassrooms.map((c) => (
+                                  <li key={c.id}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.currentTarget.blur();
+                                        forkIntoClassroom(problem.id, c);
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      <BookOpenIcon className="size-3.5" />
+                                      <span className="truncate">{c.name}</span>
+                                    </button>
+                                  </li>
+                                ))}
+                                <li>
+                                  <button
+                                    onClick={(e) => {
+                                      e.currentTarget.blur();
+                                      forkProblem(problem.id);
+                                    }}
+                                    className="text-xs text-base-content/60"
+                                  >
+                                    Fork & customize (no classroom)
+                                  </button>
+                                </li>
+                              </ul>
+                            </div>
+                          ) : canFork ? (
                             <button
                               className="btn btn-xs btn-ghost gap-1"
                               onClick={() => forkProblem(problem.id)}
@@ -340,7 +416,7 @@ function ProblemsPage() {
                             >
                               <GitForkIcon className="size-3" /> Fork
                             </button>
-                          )}
+                          ) : null}
                           {canChangeStatus && (problem.status === "draft" || problem.status === "review" || !problem.status) && (
                             <button className="btn btn-xs btn-success" onClick={() => changeStatus(problem.id, "published")}>
                               Publish

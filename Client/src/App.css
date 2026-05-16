@@ -1,0 +1,52 @@
+/* ============================================================
+   Global responsive base
+   ============================================================ */
+html, body, #root {
+  min-height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+img, svg, video, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Anything that overflows on a phone gets a horizontal scroll
+   instead of breaking the layout. */
+.ant-table-wrapper {
+  overflow-x: auto;
+}
+
+/* AntD modals should never exceed the viewport on small screens. */
+@media (max-width: 640px) {
+  .ant-modal {
+    max-width: calc(100vw - 24px) !important;
+    margin: 12px auto !important;
+  }
+
+  .ant-modal-body {
+    padding: 16px !important;
+  }
+
+  .ant-drawer-content-wrapper {
+    max-width: 90vw !important;
+  }
+
+  /* AntD card padding compression for phones */
+  .ant-card-body {
+    padding: 16px !important;
+  }
+
+  /* Tabs avoid horizontal cramping */
+  .ant-tabs-nav {
+    overflow-x: auto;
+  }
+}

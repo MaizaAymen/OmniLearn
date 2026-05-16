@@ -8,8 +8,71 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
-const { JWT_SECRET, JWT_REFRESH_SECRET } = require("../config");
+const { OAuth2Client } = require("google-auth-library");
+const { JWT_SECRET, JWT_REFRESH_SECRET, GOOGLE_CLIENT_ID } = require("../config");
 const { authenticate } = require("../middleware/Authmiddleware");
+
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+function issueTokens(user) {
+  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+  const refreshToken = jwt.sign({ id: user.id, email: user.email }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
+  return {
+    token,
+    refreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstname: user.firstname,
+      lastname: user.lastname,
+      role: user.role,
+      plan: user.plan,
+      institutionId: user.institutionId,
+      avatar: user.avatar,
+    },
+  };
+}
+
+// ─── Google Sign-In / Sign-Up ────────────────────────────────────────────────
+// Frontend sends the Google ID token (credential). We verify it with Google,
+// find or create the user, and return our own JWT.
+router.post("/google", async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ error: "Missing Google credential" });
+    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: "Google login not configured" });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, given_name, family_name, picture } = payload;
+
+    let user = await User.findOne({ where: { email } });
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = googleId;
+        if (!user.avatar && picture) user.avatar = picture;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        firstname: given_name || "User",
+        lastname: family_name || "",
+        email,
+        googleId,
+        avatar: picture || null,
+        role: "student",
+      });
+    }
+
+    res.json(issueTokens(user));
+  } catch (err) {
+    console.error("Google auth error:", err);
+    res.status(401).json({ error: "Google authentication failed" });
+  }
+});
 
 
 

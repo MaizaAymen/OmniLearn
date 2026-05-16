@@ -48,6 +48,8 @@ function ProblemPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const assignmentLanguageLock = location.state?.lockedLanguage || null;
+  const lockCorrect = !!location.state?.lockCorrect;
+  const lockMentor = !!location.state?.lockMentor;
 
   const isFreeTier = (() => {
     try { return (JSON.parse(Cookies.get("user") || "{}").plan || "free") === "free"; }
@@ -74,10 +76,19 @@ function ProblemPage() {
 
   const [leftWidth, setLeftWidth] = useState(40);
   const [editorHeight, setEditorHeight] = useState(60);
-  const isLeftCollapsed = false;
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth < 900
+  );
+  const [activeMobileTab, setActiveMobileTab] = useState("description");
 
   const containerRef = useRef(null);
   const rightPanelRef = useRef(null);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 900);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const allProblemsById = useMemo(() => {
     const mergedProblems = { ...PROBLEMS };
@@ -85,9 +96,7 @@ function ProblemPage() {
     return mergedProblems;
   }, [apiProblem]);
 
-  const problemIds = Object.keys(allProblemsById).filter((pid) => Boolean(allProblemsById[pid]));
   const currentProblem = allProblemsById[currentProblemId] || null;
-  const currentIndex = problemIds.indexOf(currentProblemId);
 
   useEffect(() => {
     if (isFreeTier && selectedLanguage !== "javascript") setSelectedLanguage("javascript");
@@ -398,7 +407,7 @@ function ProblemPage() {
     <>
       <div className="problem-page h-screen flex flex-col overflow-hidden bg-base-300">
         {/* TOP BAR */}
-        <div className="problem-topbar flex items-center justify-between px-3 py-1.5 bg-base-100 border-b border-base-300 gap-2">
+        <div className="problem-topbar flex items-center justify-between flex-wrap px-2 sm:px-3 py-1.5 bg-base-100 border-b border-base-300 gap-2">
           {/* Left: Problems nav */}
           <div className="flex items-center gap-2">
             <button
@@ -421,7 +430,7 @@ function ProblemPage() {
               {isRunning ? <Loader2Icon className="size-3.5 animate-spin" /> : <PlayIcon className="size-3.5" />}
               Run
             </button>
-            {!isFreeTier && (
+            {!isFreeTier && !lockCorrect && (
               <button
                 className="btn btn-sm btn-primary gap-1.5"
                 onClick={handleCorrectCode}
@@ -450,14 +459,16 @@ function ProblemPage() {
             >
               <RotateCcwIcon className="size-3.5" />
             </button>
-            <button
-              className={`btn btn-xs gap-1 tooltip tooltip-bottom ${aiMentorOpen ? "btn-secondary" : "btn-ghost"}`}
-              data-tip="AI Mentor"
-              onClick={() => setAiMentorOpen((o) => !o)}
-            >
-              <SparklesIcon className="size-3.5" />
-              <span className="hidden sm:inline">Mentor</span>
-            </button>
+            {!lockMentor && (
+              <button
+                className={`btn btn-xs gap-1 tooltip tooltip-bottom ${aiMentorOpen ? "btn-secondary" : "btn-ghost"}`}
+                data-tip="AI Mentor"
+                onClick={() => setAiMentorOpen((o) => !o)}
+              >
+                <SparklesIcon className="size-3.5" />
+                <span className="hidden sm:inline">Mentor</span>
+              </button>
+            )}
             <div
               className="flex items-center gap-1.5 text-xs font-mono text-base-content/60 cursor-pointer select-none"
               onClick={() => setTimerRunning((r) => !r)}
@@ -469,12 +480,44 @@ function ProblemPage() {
           </div>
         </div>
 
+        {/* MOBILE TABS */}
+        {isMobile && (
+          <div className="flex items-center gap-1 bg-base-100 border-b border-base-300 px-2 py-1 overflow-x-auto">
+            {[
+              { key: "description", label: "Problem" },
+              { key: "editor", label: "Code" },
+              { key: "output", label: "Output" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveMobileTab(tab.key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md whitespace-nowrap transition-colors ${
+                  activeMobileTab === tab.key
+                    ? "bg-primary text-primary-content"
+                    : "text-base-content/60 hover:bg-base-200"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* MAIN CONTENT */}
-        <div ref={containerRef} className="flex flex-1 min-h-0 gap-1 p-1">
+        <div
+          ref={containerRef}
+          className={`flex flex-1 min-h-0 gap-1 p-1 ${isMobile ? "flex-col" : "flex-row"}`}
+        >
           {/* LEFT PANEL — Problem Description */}
           <div
-            style={{ width: isLeftCollapsed ? "0%" : `${leftWidth}%` }}
-            className={`problem-panel h-full rounded-xl overflow-hidden transition-[width] duration-200 ${isLeftCollapsed ? "hidden" : ""}`}
+            style={isMobile ? { width: "100%", height: "100%" } : { width: `${leftWidth}%` }}
+            className={`problem-panel rounded-xl overflow-hidden transition-[width] duration-200 ${
+              isMobile
+                ? activeMobileTab === "description"
+                  ? "flex-1 min-h-0"
+                  : "hidden"
+                : "h-full"
+            }`}
           >
             <ProblemDescription
               problem={currentProblem}
@@ -485,7 +528,7 @@ function ProblemPage() {
           </div>
 
           {/* HORIZONTAL GUTTER */}
-          {!isLeftCollapsed && (
+          {!isMobile && (
             <div
               onMouseDown={startHorizontalResize}
               className="gutter-h group flex items-center justify-center w-2 cursor-col-resize rounded-full hover:bg-primary/20 transition-colors"
@@ -501,13 +544,29 @@ function ProblemPage() {
           {/* RIGHT PANEL — Editor + Output */}
           <div
             ref={rightPanelRef}
-            style={{ width: isLeftCollapsed ? "100%" : `${100 - leftWidth - 1}%` }}
-            className="flex flex-col h-full gap-1"
+            style={
+              isMobile
+                ? { width: "100%", height: "100%" }
+                : { width: `${100 - leftWidth - 1}%` }
+            }
+            className={`flex flex-col gap-1 ${
+              isMobile
+                ? activeMobileTab === "description"
+                  ? "hidden"
+                  : "flex-1 min-h-0"
+                : "h-full"
+            }`}
           >
             {/* EDITOR PANEL */}
             <div
-              style={{ height: `${editorHeight}%` }}
-              className="problem-panel rounded-xl overflow-hidden"
+              style={isMobile ? undefined : { height: `${editorHeight}%` }}
+              className={`problem-panel rounded-xl overflow-hidden ${
+                isMobile
+                  ? activeMobileTab === "editor"
+                    ? "flex-1 min-h-0"
+                    : "hidden"
+                  : ""
+              }`}
             >
               <CodeEditorPanel
                 selectedLanguage={selectedLanguage}
@@ -525,21 +584,29 @@ function ProblemPage() {
             </div>
 
             {/* VERTICAL GUTTER */}
-            <div
-              onMouseDown={startVerticalResize}
-              className="gutter-v group flex items-center justify-center h-2 cursor-row-resize rounded-full hover:bg-primary/20 transition-colors"
-            >
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
-                <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
-                <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
+            {!isMobile && (
+              <div
+                onMouseDown={startVerticalResize}
+                className="gutter-v group flex items-center justify-center h-2 cursor-row-resize rounded-full hover:bg-primary/20 transition-colors"
+              >
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
+                  <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
+                  <span className="block w-0.5 h-0.5 bg-primary rounded-full" />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* OUTPUT / TEST PANEL */}
             <div
-              style={{ height: `${100 - editorHeight - 1}%` }}
-              className="problem-panel rounded-xl overflow-hidden"
+              style={isMobile ? undefined : { height: `${100 - editorHeight - 1}%` }}
+              className={`problem-panel rounded-xl overflow-hidden ${
+                isMobile
+                  ? activeMobileTab === "output"
+                    ? "flex-1 min-h-0 flex flex-col"
+                    : "hidden"
+                  : ""
+              }`}
             >
               <div className="flex items-center gap-0 bg-base-100 border-b border-base-300 px-2">
                 <button

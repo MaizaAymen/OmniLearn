@@ -59,6 +59,14 @@ export const api = {
       .then((r) => r.data);
   },
 
+  uploadConversationPhoto: (conversationId, file) => {
+    const fd = new FormData();
+    fd.append("photo", file);
+    return axios
+      .post(`${API_BASE}/conversations/${conversationId}/photo`, fd, { headers: authHeaders() })
+      .then((r) => r.data);
+  },
+
   fileUrl: (urlOrPath) =>
     !urlOrPath ? "" : urlOrPath.startsWith("http") ? urlOrPath : `${FILE_BASE}${urlOrPath}`,
 

@@ -14,4 +14,5 @@ module.exports = {
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "dngl3p2vl",
   CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || "672928921445773",
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || "zM_yDgc9kxci-smkbJbrxyU5dNI",
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
 };

@@ -13,9 +13,3 @@ export const STATUS_META = {
   in_progress: { label: "In progress", color: "#f59e0b" },
   completed:   { label: "Completed",   color: "#10b981" },
 };
-
-export const STATUS_PCT = {
-  pending: 0,
-  in_progress: 50,
-  completed: 100,
-};
