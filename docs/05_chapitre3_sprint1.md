@@ -19,52 +19,43 @@ The main objective of Sprint 1 is to deliver the building blocks that all later 
 
 ### Table 5 — Sprint 1 Backlog
 
-#### A. Visitor
-
-| PBI | Main functionality | US Code | User story | Task ID | Task |
-|:---:|---|:---:|---|:---:|---|
+| PBI | Main functionality | US Code | User story | Task ID | Tasks |
+|---|---|---|---|---|---|
+| **Visitor** | | | | | |
 | 1 | Landing page | US1.1 | As a visitor, I want to browse the public landing page. | 1.1 | Build the `Home` page in `Client/src/Home/Home.jsx`. |
-| 1 | Landing page | US1.1 | As a visitor, I want to browse the public landing page. | 1.2 | Display the three plans (Free / Pro / Institution) with CTAs. |
+| | | | | 1.2 | Display the three plans (Free / Pro / Institution) with CTAs. |
 | 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.1 | Create the `Auth` page (`Client/src/Auth/Auth.jsx`) with sign-up tab. |
-| 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.2 | Add input validation (email, password strength). |
-| 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.3 | Implement the `User` Sequelize model in `Server/src/models/User.js`. |
-| 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.4 | Implement the `POST /api/auth/register` route in `authRoutes.js`. |
-| 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.5 | Hash passwords with bcryptjs (`BCRYPT_ROUNDS` from config). |
-| 2 | Sign up | US2.1 | As a visitor, I want to create an account. | 2.6 | Send a verification email (Nodemailer) with `emailVerificationToken`. |
+| | | | | 2.2 | Add input validation (email, password strength). |
+| | | | | 2.3 | Implement the `User` Sequelize model in `Server/src/models/User.js`. |
+| | | | | 2.4 | Implement the `POST /api/auth/register` route in `authRoutes.js`. |
+| | | | | 2.5 | Hash passwords with bcryptjs (`BCRYPT_ROUNDS` from config). |
+| | | | | 2.6 | Send a verification email (Nodemailer) with `emailVerificationToken`. |
 | 3 | Verify email | US3.1 | As a visitor, I want to verify my email. | 3.1 | Build the `VerifyEmail` page (`Client/src/Auth/VerifyEmail.jsx`). |
-| 3 | Verify email | US3.1 | As a visitor, I want to verify my email. | 3.2 | Implement `GET /api/auth/verify-email?token=...` and clear the expiry. |
+| | | | | 3.2 | Implement `GET /api/auth/verify-email?token=...` and clear the expiry. |
 | 4 | Choose a plan | US4.1 | As a visitor, I want to choose between Free, Pro and Institution. | 4.1 | Plan selector on the sign-up form; default = `free`. |
-| 4 | Choose a plan | US4.1 | As a visitor, I want to choose between Free, Pro and Institution. | 4.2 | Pro and Institution route to Stripe Checkout after signup. |
-
-#### B. Student / Authenticated user
-
-| PBI | Main functionality | US Code | User story | Task ID | Task |
-|:---:|---|:---:|---|:---:|---|
+| | | | | 4.2 | Pro and Institution route to Stripe Checkout after signup. |
+| **Student / Authenticated user** | | | | | |
 | 5 | Sign in | US5.1 | As a student, I want to sign in. | 5.1 | Sign-in tab in the `Auth` page. |
-| 5 | Sign in | US5.1 | As a student, I want to sign in. | 5.2 | `POST /api/auth/login` returning a JWT and the user object. |
-| 5 | Sign in | US5.1 | As a student, I want to sign in. | 5.3 | Store `token` and `user` in cookies via `js-cookie`. |
+| | | | | 5.2 | `POST /api/auth/login` returning a JWT and the user object. |
+| | | | | 5.3 | Store `token` and `user` in cookies via `js-cookie`. |
 | 6 | Profile management | US6.1 | As a student, I want to view my profile. | 6.1 | Build `Profile` page (`Client/src/components/Profile.jsx`). |
-| 6 | Profile management | US6.1 | As a student, I want to view my profile. | 6.2 | `GET /api/profile/:id` returns the current user. |
-| 6 | Profile management | US6.2 | As a student, I want to update my profile. | 6.3 | Avatar upload (Cloudinary), bio, GitHub URL, LinkedIn URL. |
-| 6 | Profile management | US6.2 | As a student, I want to update my profile. | 6.4 | `PATCH /api/profile/:id` validates and updates the user. |
-| 6 | Profile management | US6.2 | As a student, I want to update my profile. | 6.5 | Emit a `profile-updated` event so `Guard` re-checks profile completeness. |
-| 6 | Profile management | US6.3 | As a student, I want to delete my account. | 6.6 | Add a destructive action in the profile page. |
-| 6 | Profile management | US6.3 | As a student, I want to delete my account. | 6.7 | `DELETE /api/profile/:id`. |
+| | | | | 6.2 | `GET /api/profile/:id` returns the current user. |
+| | US6.2 | As a student, I want to update my profile. | 6.3 | Avatar upload (Cloudinary), bio, GitHub URL, LinkedIn URL. |
+| | | | | 6.4 | `PATCH /api/profile/:id` validates and updates the user. |
+| | | | | 6.5 | Emit a `profile-updated` event so `Guard` re-checks profile completeness. |
+| | US6.3 | As a student, I want to delete my account. | 6.6 | Add a destructive action in the profile page. |
+| | | | | 6.7 | `DELETE /api/profile/:id`. |
 | 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.1 | Forgot-password link in the sign-in tab. |
-| 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.2 | `POST /api/auth/forgot-password` generates `passwordResetToken`. |
-| 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.3 | Send the reset email via Nodemailer. |
-| 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.4 | `POST /api/auth/reset-password` validates the token and rehashes. |
+| | | | | 7.2 | `POST /api/auth/forgot-password` generates `passwordResetToken`. |
+| | | | | 7.3 | Send the reset email via Nodemailer. |
+| | | | | 7.4 | `POST /api/auth/reset-password` validates the token and rehashes. |
 | 8 | Two-factor authentication | US8.1 | As a student, I want to enable 2FA. | 8.1 | Toggle in the profile page. |
-| 8 | Two-factor authentication | US8.1 | As a student, I want to enable 2FA. | 8.2 | `POST /api/auth/2fa/setup` generates the Speakeasy secret + QR. |
-| 8 | Two-factor authentication | US8.1 | As a student, I want to enable 2FA. | 8.3 | `POST /api/auth/2fa/verify` confirms the TOTP and sets `is2FAEnabled`. |
-
-#### C. Cross-cutting
-
-| PBI | Main functionality | US Code | User story | Task ID | Task |
-|:---:|---|:---:|---|:---:|---|
+| | | | | 8.2 | `POST /api/auth/2fa/setup` generates the Speakeasy secret + QR. |
+| | | | | 8.3 | `POST /api/auth/2fa/verify` confirms the TOTP and sets `is2FAEnabled`. |
+| **Cross-cutting** | | | | | |
 | 33 (partial) | Stripe checkout — Pro upgrade | US33.1 | As a Free user, I want to upgrade to Pro. | 33.1 | Add `stripeRoutes.js` and a `/api/stripe/checkout-pro` endpoint. |
-| 33 (partial) | Stripe checkout — Pro upgrade | US33.1 | As a Free user, I want to upgrade to Pro. | 33.2 | Build the `PlanSection` component (`Client/src/components/PlanSection.jsx`). |
-| 33 (partial) | Stripe checkout — Pro upgrade | US33.1 | As a Free user, I want to upgrade to Pro. | 33.3 | Update `users.plan` to `pro` on a successful Stripe webhook. |
+| | | | | 33.2 | Build the `PlanSection` component (`Client/src/components/PlanSection.jsx`). |
+| | | | | 33.3 | Update `users.plan` to `pro` on a successful Stripe webhook. |
 
 ## IV. Design
 
