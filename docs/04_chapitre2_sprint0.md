@@ -110,6 +110,25 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 | **Sprint 3 — Classrooms, assignments, messaging** | 4 weeks | PBI 14, 17, 20, 21, 22, 23 |
 | **Sprint 4 — PDF assistant, AI mentor, institution & super admin** | 4 weeks | PBI 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30 (mgmt), 31, 32, 33, 34, 48, 49 |
 
+#### Release plan at a glance
+
+The diagram below lays out the four sprints on a single timeline so the overall release plan can be read at a glance. Each bar covers one sprint of four weeks, in the order they are delivered — from the authentication foundations of Sprint 1 to the AI surfaces and admin consoles that close the project in Sprint 4. Sprints run back-to-back without overlap: every sprint builds directly on the artifacts produced by the previous one.
+
+```mermaid
+gantt
+    title OmniLearn — Release plan at a glance
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+    section Sprint 1
+    Authentication, profile, plans foundation          :s1, 2025-02-03, 4w
+    section Sprint 2
+    Roadmap, problems, code editor, coding dashboard   :s2, after s1, 4w
+    section Sprint 3
+    Classrooms, assignments, messaging                 :s3, after s2, 4w
+    section Sprint 4
+    PDF assistant, AI mentor, institution & super admin :s4, after s3, 4w
+```
+
 > See [sprint_planning_and_backlog.md](./sprint_planning_and_backlog.md) for the detailed sprint-by-sprint backlog with story points and acceptance criteria.
 
 ## IV. Work Environment
