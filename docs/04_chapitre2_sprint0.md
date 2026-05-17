@@ -128,6 +128,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.1. Languages & markup
 
+The core languages every layer of the platform is written in — one runtime language (JavaScript) shared between client and server, with HTML/CSS for the rendered output.
+
 | Technology | Version | Role |
 |---|---|---|
 | **HTML5** | living standard | Page markup. |
@@ -136,6 +138,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 | **JSX** | React 19 | Component templating on the frontend. |
 
 #### 2.2. Frontend
+
+The React 19 single-page application built with Vite — UI libraries, the in-browser code editor, the diagramming canvases, and the client-side networking stack.
 
 | Technology | Version | Role |
 |---|---|---|
@@ -164,6 +168,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.3. Backend
 
+The Node.js runtime hosting the Express 5 REST API, the Socket.IO real-time hub, and the request-level utilities (uploads, validation, logging, env config).
+
 | Technology | Version | Role |
 |---|---|---|
 | **Node.js** | 18+ LTS | JavaScript runtime hosting the API. |
@@ -179,6 +185,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.4. Database & storage
 
+The persistence layer — PostgreSQL accessed through Sequelize for relational data, Chroma DB for vector embeddings, plus cloud and local disk storage for files.
+
 | Technology | Version | Role |
 |---|---|---|
 | **PostgreSQL** | 14+ | Primary relational database — users, institutions, classrooms, problems, submissions, conversations, notifications. |
@@ -190,6 +198,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.5. Authentication & security
 
+The pieces that protect user accounts and sessions — password hashing, JWT-based auth, two-factor TOTP, and federated Google sign-in.
+
 | Technology | Version | Role |
 |---|---|---|
 | **jsonwebtoken** | 9.0 | Stateless JWT auth across REST and Socket.IO. |
@@ -199,6 +209,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 | **google-auth-library** | 10.6 | Google OAuth sign-in. |
 
 #### 2.6. AI plane (LLMs, embeddings, RAG)
+
+Everything that powers the seven AI surfaces (PDF assistant RAG, AI Mentor, code correction, problem generation, roadmap, workspace AI, slash commands) — completions, embeddings, vector store and the external knowledge feeds.
 
 | Technology | Version | Role |
 |---|---|---|
@@ -212,6 +224,8 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.7. Realtime, live sessions & video
 
+The bidirectional transport layer — Socket.IO for messages and live coding sessions, Stream for the audio/video feature inside those sessions.
+
 | Technology | Version | Role |
 |---|---|---|
 | **Socket.IO** | 4.8 | Message hub, notification push, live coding sessions (permissions, playlists, identity masking, post-session snapshots). |
@@ -219,12 +233,16 @@ OmniLearn is a JavaScript-only stack — the same language runs on the client an
 
 #### 2.8. Payments & email
 
+The external services that drive the plan-upgrade flow (Stripe Checkout + webhooks) and the transactional notifications sent to users.
+
 | Technology | Version | Role |
 |---|---|---|
 | **Stripe** | 22.1 | Checkout for Pro and Institution plans + webhook handling. |
 | **Nodemailer** | 8.0 | Transactional emails (email verification, password reset, invite links). |
 
 #### 2.9. Tooling & ecosystem
+
+The developer-side tools used to build, version, test and operate the platform — IDE, source control, API tester, DB admin UI, payment/vector-store sidecars.
 
 | Tool | Role |
 |---|---|
