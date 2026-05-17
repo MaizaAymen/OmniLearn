@@ -59,32 +59,42 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 The student can: join a classroom via code, view classrooms, see announcements, submit assignments, send messages and receive notifications.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Student((Student))
-  Join(["Join classroom (with code)"])
-  ListMine(["View my classrooms"])
-  ViewClass(["Open classroom view"])
-  ReadAnn(["Read announcements"])
-  ViewLesson(["View modules / lessons"])
-  ViewAss(["View assignments"])
-  Submit(["Submit assignment"])
-  Conv(["Open conversations"])
-  Send(["Send message"])
-  Recv(["Receive real-time message"])
-  Notif(["See notifications"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Student((Student)):::actor
+
+  subgraph S["OmniLearn — Sprint 3 (Student scope)"]
+    direction TB
+    Join(["Join classroom (with code)"]):::uc
+    ListMine(["View my classrooms"]):::uc
+    ViewClass(["Open classroom view"]):::uc
+    ReadAnn(["Read announcements"]):::uc
+    ViewLesson(["View modules / lessons"]):::uc
+    ViewAss(["View assignments"]):::uc
+    Submit(["Submit assignment"]):::uc
+    Conv(["Open conversations"]):::uc
+    Send(["Send message"]):::uc
+    Recv(["Receive real-time message"]):::uc
+    Notif(["See notifications"]):::uc
+  end
+  class S sys
 
   Student --- Join
   Student --- ListMine
   Student --- ViewClass
   Student --- Conv
   Student --- Notif
-  ViewClass -. "&laquo;include&raquo;" .-> ReadAnn
-  ViewClass -. "&laquo;include&raquo;" .-> ViewLesson
-  ViewClass -. "&laquo;include&raquo;" .-> ViewAss
-  ViewAss   -. "&laquo;extend&raquo;"  .-> Submit
-  Conv      -. "&laquo;include&raquo;" .-> Send
-  Conv      -. "&laquo;include&raquo;" .-> Recv
-  Send      -. "&laquo;extend&raquo;"  .-> Notif
+  ViewClass -. "«include»" .-> ReadAnn
+  ViewClass -. "«include»" .-> ViewLesson
+  ViewClass -. "«include»" .-> ViewAss
+  ViewAss   -. "«extend»"  .-> Submit
+  Conv      -. "«include»" .-> Send
+  Conv      -. "«include»" .-> Recv
+  Send      -. "«extend»"  .-> Notif
 ```
 
 > *Figure 38 — Use-case diagram of Sprint 3 — Student side.*
@@ -94,19 +104,29 @@ flowchart LR
 The teacher can: create a class, generate a class code, list enrolled students, create courses / modules / lessons, create assignments, attach problems to an assignment, post announcements and respond to messages.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Teacher((Teacher))
-  CreateClass(["Create class"])
-  Code(["Generate class code"])
-  Members(["List enrolled students"])
-  CRUDCourse(["Manage courses"])
-  CRUDModule(["Manage modules"])
-  CRUDLesson(["Manage lessons"])
-  CreateAss(["Create assignment"])
-  AttachP(["Attach problems to assignment"])
-  Grade(["Grade submissions"])
-  PostAnn(["Post announcement"])
-  Reply(["Reply in conversations"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Teacher((Teacher)):::actor
+
+  subgraph S["OmniLearn — Sprint 3 (Teacher scope)"]
+    direction TB
+    CreateClass(["Create class"]):::uc
+    Code(["Generate class code"]):::uc
+    Members(["List enrolled students"]):::uc
+    CRUDCourse(["Manage courses"]):::uc
+    CRUDModule(["Manage modules"]):::uc
+    CRUDLesson(["Manage lessons"]):::uc
+    CreateAss(["Create assignment"]):::uc
+    AttachP(["Attach problems to assignment"]):::uc
+    Grade(["Grade submissions"]):::uc
+    PostAnn(["Post announcement"]):::uc
+    Reply(["Reply in conversations"]):::uc
+  end
+  class S sys
 
   Teacher --- CreateClass
   Teacher --- Members
@@ -115,10 +135,10 @@ flowchart LR
   Teacher --- Grade
   Teacher --- PostAnn
   Teacher --- Reply
-  CreateClass -. "&laquo;include&raquo;" .-> Code
-  CRUDCourse  -. "&laquo;include&raquo;" .-> CRUDModule
-  CRUDModule  -. "&laquo;include&raquo;" .-> CRUDLesson
-  CreateAss   -. "&laquo;include&raquo;" .-> AttachP
+  CreateClass -. "«include»" .-> Code
+  CRUDCourse  -. "«include»" .-> CRUDModule
+  CRUDModule  -. "«include»" .-> CRUDLesson
+  CreateAss   -. "«include»" .-> AttachP
 ```
 
 > *Figure 39 — Use-case diagram of Sprint 3 — Teacher side.*
@@ -327,6 +347,107 @@ classDiagram
 ```
 
 > *Figure 44 — Class diagram of Sprint 3.*
+
+### 5. C4 architecture views
+
+Sprint 3 introduces the **collaboration plane** (classrooms, courses, assignments, announcements) and the **real-time plane** (`messageHub.js` Socket.IO server). The C4 model isolates both at three levels.
+
+#### 5.1. Level 1 — System Context
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  Student((Student))
+  Teacher((Teacher))
+  Sys[["OmniLearn\n(Web application + Realtime hub)"]]
+  PG[(PostgreSQL)]
+  Cloud[(Cloudinary\nlesson PDFs)]
+
+  Student -- "join class, view content,\nsubmit assignments" --> Sys
+  Teacher -- "create class, courses,\nmodules, assignments,\npost announcements" --> Sys
+  Student <-. "real-time messages\n+ notifications (WS)" .-> Sys
+  Teacher <-. "real-time messages\n+ notifications (WS)" .-> Sys
+  Sys --> PG
+  Sys -- "upload lesson PDF" --> Cloud
+```
+
+> *Figure 44.1 — Sprint 3 — C4 Level 1 (System Context).*
+
+#### 5.2. Level 2 — Containers
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Browser["Browser — React 19 SPA"]
+    Join["JoinClassroom.jsx"]
+    MyC["MyClassrooms.jsx"]
+    View["ClassroomView.jsx"]
+    AssUI["ClassAssignmentsPage.jsx"]
+    Msg["Messages.jsx"]
+    NotifUI["Notifications dropdown"]
+    SocketClient["socket.io-client"]
+  end
+
+  subgraph Server["Express API + Realtime"]
+    ClassR["classRoutes.js"]
+    CourseR["courseRoutes.js"]
+    ModR["moduleRoutes.js"]
+    LessonR["lessonRoutes.js"]
+    AssR["assignmentRoutes.js"]
+    AnnR["announcementRoutes.js"]
+    ConvR["conversationRoutes.js"]
+    MsgR["messageRoutes.js"]
+    NotifR["notificationRoutes.js"]
+    Hub["messageHub.js — Socket.IO server"]
+  end
+
+  subgraph Data["Data plane"]
+    PG[(PostgreSQL\nClass, Enrollment, Course,\nModule, Lesson, Assignment,\nAnnouncement, Conversation,\nMessage, Notification)]
+  end
+
+  Join --> ClassR --> PG
+  MyC --> ClassR
+  View --> CourseR --> PG
+  View --> ModR --> PG
+  View --> LessonR --> PG
+  View --> AnnR --> PG
+  AssUI --> AssR --> PG
+  Msg --> ConvR --> PG
+  Msg --> MsgR --> PG
+  MsgR --> Hub
+  Hub <-. "WS upgrade\n(JWT handshake)" .-> SocketClient
+  NotifUI --> NotifR --> PG
+  Hub -. "notification:new" .-> SocketClient
+```
+
+> *Figure 44.2 — Sprint 3 — C4 Level 2 (Containers).*
+
+#### 5.3. Level 3 — Components inside `messageHub.js`
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Hub["Component view — messageHub.js"]
+    direction TB
+    Hand["Auth handshake\n(verify JWT cookie)"]
+    Rooms["Room manager\n(one room per conversationId)"]
+    Presence["Presence tracker\n(userId → socketId[])"]
+    Broadcast["Message broadcaster\nemit('message:new', msg)"]
+    Notify["Notification fan-out\n(offline → INSERT notifications)"]
+    DC["Disconnect handler\nroom + presence cleanup"]
+  end
+
+  Conn[/"io.on('connection')"/] --> Hand --> Rooms
+  Hand --> Presence
+  Inbound[/"POST /api/messages\n→ hub.emit(...)"/] --> Broadcast
+  Broadcast --> Rooms
+  Broadcast --> Notify
+  Notify --> Presence
+  DC --> Rooms
+  DC --> Presence
+```
+
+> *Figure 44.3 — Sprint 3 — C4 Level 3 (Realtime hub components).*
 
 ## V. Implementation
 

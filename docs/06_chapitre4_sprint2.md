@@ -64,38 +64,45 @@ This second sprint focuses on the **core learning loop**: roadmaps, problems and
 The student can: complete the roadmap onboarding, view the roadmap, click a node, track progress, download a certificate, browse problems, open a problem, run code, submit code and see the coding dashboard.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Student((Student))
-  Onb(["Fill onboarding (goal, interests, languages)"])
-  Gen(["Generate personalized roadmap"])
-  View(["View roadmap graph"])
-  Node(["Open node detail"])
-  Prog(["Track progress"])
-  Cert(["Download certificate (PDF)"])
-  Browse(["Browse problem catalogue"])
-  Filter(["Filter / search problems"])
-  Open(["Open a problem"])
-  Run(["Run code"])
-  Submit(["Submit code"])
-  Dash(["View coding dashboard"])
-  LLM(["Call LLM (Groq)"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Student((Student)):::actor
+  Groq((LLM provider\nGroq)):::actor
+
+  subgraph S["OmniLearn — Sprint 2 (Student scope)"]
+    direction TB
+    Onb(["Onboarding (goal / interests / languages)"]):::uc
+    Gen(["Generate personalized roadmap"]):::uc
+    View(["View roadmap graph"]):::uc
+    Node(["Open node detail"]):::uc
+    Prog(["Track progress"]):::uc
+    Cert(["Download PDF certificate"]):::uc
+    Browse(["Browse problem catalogue"]):::uc
+    Filter(["Filter / search"]):::uc
+    Open(["Open a problem"]):::uc
+    Run(["Run code"]):::uc
+    Submit(["Submit code"]):::uc
+    Dash(["View coding dashboard"]):::uc
+  end
+  class S sys
 
   Student --- Onb
   Student --- View
   Student --- Node
   Student --- Prog
-  Student --- Cert
   Student --- Browse
   Student --- Open
-  Student --- Run
-  Student --- Submit
   Student --- Dash
-  Onb -. "&laquo;include&raquo;" .-> Gen
-  Gen -. "&laquo;include&raquo;" .-> LLM
-  Browse -. "&laquo;extend&raquo;" .-> Filter
-  Open -. "&laquo;include&raquo;" .-> Run
-  Open -. "&laquo;include&raquo;" .-> Submit
-  Prog -. "&laquo;extend&raquo;" .-> Cert
+  Onb -. "«include»" .-> Gen
+  Gen -. "«include»" .-> Groq
+  Browse -. "«extend»" .-> Filter
+  Open -. "«include»" .-> Run
+  Open -. "«include»" .-> Submit
+  Prog -. "«extend»"  .-> Cert
 ```
 
 > *Figure 22 — Use-case diagram of Sprint 2 — Student side.*
@@ -105,16 +112,26 @@ flowchart LR
 The super admin can: CRUD problems, toggle Free-tier, toggle Pro-tier, and import / export the problem dataset.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Admin((Super Admin))
-  Create(["Create problem"])
-  Read(["List / read problems"])
-  Update(["Update problem"])
-  Delete(["Delete problem"])
-  Free(["Toggle isFreeTier"])
-  Pro(["Toggle isProTier"])
-  Imp(["Import problems (JSON)"])
-  Exp(["Export problems (JSON)"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Admin((Super Admin)):::actor
+
+  subgraph S["OmniLearn — Sprint 2 (Catalogue management)"]
+    direction TB
+    Create(["Create problem"]):::uc
+    Read(["List / read problems"]):::uc
+    Update(["Update problem"]):::uc
+    Delete(["Delete problem"]):::uc
+    Free(["Toggle isFreeTier"]):::uc
+    Pro(["Toggle isProTier"]):::uc
+    Imp(["Import problems (JSON)"]):::uc
+    Exp(["Export problems (JSON)"]):::uc
+  end
+  class S sys
 
   Admin --- Create
   Admin --- Read
@@ -312,6 +329,122 @@ classDiagram
 ```
 
 > *Figure 28 — Class diagram of Sprint 2.*
+
+### 5. C4 architecture views
+
+The Sprint 2 architecture is centered on two new sub-systems: the **AI roadmap generator** (`RoadmapService`) and the **code-execution pipeline** (run / submit). The C4 model exposes them at three levels of zoom.
+
+#### 5.1. Level 1 — System Context
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  Student((Student))
+  Admin((Super Admin))
+  Sys[["OmniLearn\n(Web application)"]]
+  Groq[(Groq Cloud — LLM)]
+  SO[(Stack Exchange API)]
+  YT[(YouTube Data API v3)]
+  Sandbox[(Code sandbox runner)]
+
+  Student -- "onboarding, view roadmap,\nsolve / run / submit code" --> Sys
+  Admin -- "CRUD problems, import/export,\ntoggle Free/Pro tier" --> Sys
+  Sys -- "chat.completions" --> Groq
+  Sys -- "search/advanced (votes)" --> SO
+  Sys -- "search (viewCount)" --> YT
+  Sys -- "execute code\n(stdin → stdout)" --> Sandbox
+```
+
+> *Figure 28.1 — Sprint 2 — C4 Level 1 (System Context).*
+
+#### 5.2. Level 2 — Containers
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Browser["Browser — React 19 SPA"]
+    Onb["OnboardingForm.jsx"]
+    RoadUI["RoadmapPage.jsx (@xyflow/react)"]
+    Probs["ProblemsPage.jsx"]
+    Prob["ProblemPage.jsx (CodeMirror 6)"]
+    Out["OutputPanel.jsx"]
+    Dash["CodingDashboard.jsx (recharts)"]
+    AdminUI["AdminDashboard.jsx\nFreeTierTab / ProTierTab"]
+  end
+
+  subgraph Server["Express API"]
+    RoadR["roadmapRoutes.js"]
+    Svc["RoadmapService.js — AI orchestrator"]
+    ProbR["problemRoutes.js"]
+    RunR["POST /api/code/run"]
+    SubR["submissionRoutes.js"]
+    AdminR["admin/problemsRoutes.js"]
+  end
+
+  subgraph Data["Data plane"]
+    PG[(PostgreSQL\nProblem, CodeSubmission,\nSavedRoadmap, StudentProblemSet)]
+  end
+
+  subgraph AI["AI plane"]
+    Groq[(Groq llama-3.3-70b)]
+  end
+
+  subgraph Ext["External enrichment"]
+    SO[(StackExchange)]
+    YT[(YouTube)]
+  end
+
+  subgraph Exec["Execution plane"]
+    Sandbox[(Sandbox runner)]
+  end
+
+  Onb --> RoadR --> Svc
+  RoadUI --> RoadR
+  Probs --> ProbR --> PG
+  Prob --> RunR --> Sandbox
+  Prob --> SubR --> Sandbox
+  SubR --> PG
+  Out -.-> RunR
+  Dash --> SubR
+  AdminUI --> AdminR --> PG
+
+  Svc --> Groq
+  Svc --> SO
+  Svc --> YT
+  Svc --> PG
+```
+
+> *Figure 28.2 — Sprint 2 — C4 Level 2 (Containers).*
+
+#### 5.3. Level 3 — Components inside `RoadmapService.js`
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Svc["Component view — RoadmapService.js"]
+    direction TB
+    Build["buildPrompt(profile)\n15-node / 5-level pyramid"]
+    LLM["groq.chat.completions.create"]
+    Parse["JSON parse\n+ repair pass (temperature 0.1)"]
+    Norm["normalizeRoadmap()\nshape validator"]
+    Backfill["generateProblemRoadmap()\nbackfill missing nodes"]
+    Batch["Enrichment batcher\n(batches of 5 nodes)"]
+    SO["fetchStackOverflow(query, 5)"]
+    YT["fetchYouTube(query, 3)"]
+    Docs["fetchDocs(title)\nLLM, real URLs only"]
+    Quiz["generateQuiz(title)\n5 MCQs, passingScore 80"]
+    Save["save SavedRoadmap (Sequelize)"]
+  end
+
+  Build --> LLM --> Parse --> Norm --> Backfill --> Batch
+  Batch --> SO
+  Batch --> YT
+  Batch --> Docs
+  Batch --> Quiz
+  Batch --> Save
+```
+
+> *Figure 28.3 — Sprint 2 — C4 Level 3 (RoadmapService components).*
 
 ## V. Implementation
 

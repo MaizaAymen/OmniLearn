@@ -75,18 +75,28 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 #### Super Admin side
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Admin((Super Admin))
-  Inst(["Manage institutions"])
-  SuspI(["Suspend / delete institution"])
-  Ban(["Ban / unban users"])
-  Stats(["View global statistics"])
-  Free(["Toggle Free-tier flags"])
-  Pro(["Toggle Pro-tier flags"])
-  Curr(["Manage global curriculum templates"])
-  Probs(["Manage problem catalogue"])
-  Imp(["Import / export problems"])
-  GenAI(["Generate problems via AI"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Admin((Super Admin)):::actor
+
+  subgraph S["OmniLearn — Sprint 4 (Super Admin scope)"]
+    direction TB
+    Inst(["Manage institutions"]):::uc
+    SuspI(["Suspend / delete institution"]):::uc
+    Ban(["Ban / unban users"]):::uc
+    Stats(["View global statistics"]):::uc
+    Free(["Toggle Free-tier flags"]):::uc
+    Pro(["Toggle Pro-tier flags"]):::uc
+    Curr(["Manage curriculum templates"]):::uc
+    Probs(["Manage problem catalogue"]):::uc
+    Imp(["Import / export problems"]):::uc
+    GenAI(["Generate problems via AI"]):::uc
+  end
+  class S sys
 
   Admin --- Inst
   Admin --- Ban
@@ -96,8 +106,8 @@ flowchart LR
   Admin --- Curr
   Admin --- Probs
   Admin --- GenAI
-  Inst -. "&laquo;extend&raquo;" .-> SuspI
-  Probs -. "&laquo;extend&raquo;" .-> Imp
+  Inst -. "«extend»" .-> SuspI
+  Probs -. "«extend»" .-> Imp
 ```
 
 > *Figure 53 — Use-case diagram of Sprint 4 — Super Admin side.*
@@ -105,24 +115,34 @@ flowchart LR
 #### Institution Admin side
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  IA((Institution Admin))
-  Onb(["Onboard institution"])
-  Inv(["Generate invite links"])
-  Rev(["Revoke invite link"])
-  Dir(["Browse member directory"])
-  Role(["Change member role"])
-  Cur(["Manage Grades / Specialities / Levels"])
-  Pay(["Pay Institution plan (Stripe)"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  IA((Institution Admin)):::actor
+
+  subgraph S["OmniLearn — Sprint 4 (Institution Admin scope)"]
+    direction TB
+    Onb(["Onboard institution"]):::uc
+    Inv(["Generate invite links"]):::uc
+    Rev(["Revoke invite link"]):::uc
+    Dir(["Browse member directory"]):::uc
+    Role(["Change member role"]):::uc
+    Cur(["Manage Grades / Specialities / Levels"]):::uc
+    Pay(["Pay Institution plan (Stripe)"]):::uc
+  end
+  class S sys
 
   IA --- Onb
   IA --- Inv
   IA --- Dir
   IA --- Cur
   IA --- Pay
-  Inv -. "&laquo;extend&raquo;" .-> Rev
-  Dir -. "&laquo;extend&raquo;" .-> Role
-  Onb -. "&laquo;include&raquo;" .-> Pay
+  Inv -. "«extend»" .-> Rev
+  Dir -. "«extend»" .-> Role
+  Onb -. "«include»" .-> Pay
 ```
 
 > *Figure 54 — Use-case diagram of Sprint 4 — Institution Admin side.*
@@ -130,31 +150,44 @@ flowchart LR
 #### Student side — AI features
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  S((Student / Teacher))
-  Up(["Upload PDF"])
-  Ask(["Chat with PDF (RAG)"])
-  Exp(["Explain a passage"])
-  Sum(["Summarize PDF"])
-  Quiz(["Generate quiz"])
-  Search(["Smart-search highlights"])
-  Mentor(["Ask AI Mentor (SSE stream)"])
-  Correct(["AI-correct my code"])
-  Slash(["Use messenger slash command (/ai /stackoverflow /video)"])
-  WS(["Workspace: analyze / summarize / quiz code"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
-  S --- Up
-  S --- Ask
-  S --- Exp
-  S --- Sum
-  S --- Quiz
-  S --- Search
-  S --- Mentor
-  S --- Correct
-  S --- Slash
-  S --- WS
-  Up -. "&laquo;include&raquo;" .-> Ask
-  Correct -. "Pro / Institution only" .- S
+  Stu((Student / Teacher)):::actor
+  AI((LLM provider\nGroq)):::actor
+
+  subgraph Sys["OmniLearn — Sprint 4 (Student AI scope)"]
+    direction TB
+    Up(["Upload PDF"]):::uc
+    Ask(["Chat with PDF (RAG)"]):::uc
+    Exp(["Explain a passage"]):::uc
+    Sum(["Summarize PDF"]):::uc
+    Quiz(["Generate quiz"]):::uc
+    Search(["Smart-search highlights"]):::uc
+    Mentor(["Ask AI Mentor (SSE stream)"]):::uc
+    Correct(["AI-correct my code (Pro only)"]):::uc
+    Slash(["Slash command (/ai /stackoverflow /video)"]):::uc
+    WS(["Workspace: analyze / summarize / quiz code"]):::uc
+  end
+  class Sys sys
+
+  Stu --- Up
+  Stu --- Ask
+  Stu --- Exp
+  Stu --- Sum
+  Stu --- Quiz
+  Stu --- Search
+  Stu --- Mentor
+  Stu --- Correct
+  Stu --- Slash
+  Stu --- WS
+  Up -. "«include»" .-> Ask
+  Ask -. "«include»" .-> AI
+  Mentor -. "«include»" .-> AI
+  Correct -. "«include»" .-> AI
 ```
 
 > *Figure 55 — Use-case diagram of Sprint 4 — Student (AI features).*
@@ -409,6 +442,172 @@ classDiagram
 ```
 
 > *Figure 60 — Class diagram of Sprint 4.*
+
+### 5. C4 architecture views (sprint-level)
+
+Sprint 4 introduces both an **AI plane** (PDF assistant, AI Mentor, AI code correction, AI problem generation, workspace AI) and a **multi-tenant administration plane** (institutions, invite links, curriculum, super-admin console). The C4 views below describe the **whole sprint** at three levels; Section V.1 zooms further into the PDF assistant pipeline with its own C4 Levels 1–4.
+
+#### 5.1. Level 1 — System Context
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  Stud((Student / Teacher))
+  IA((Institution Admin))
+  SA((Super Admin))
+  Sys[["OmniLearn\n(Web app + Realtime + AI plane)"]]
+
+  Stripe[(Stripe\nCheckout + webhook)]
+  Groq[(Groq — LLM\ncompletions + streaming)]
+  HF[(HuggingFace\nembeddings)]
+  Chroma[(Chroma DB\nvector store)]
+  SO[(StackExchange API)]
+  YT[(YouTube Data API)]
+  PG[(PostgreSQL)]
+  Cloud[(Cloudinary)]
+  SMTP[(SMTP)]
+
+  Stud -- "PDF chat, AI mentor,\nAI code correction,\nslash commands" --> Sys
+  IA -- "onboard, invite links,\ncurriculum, members" --> Sys
+  SA -- "manage institutions,\nban, stats, AI problem gen" --> Sys
+  Sys --> Groq
+  Sys --> HF
+  Sys --> Chroma
+  Sys --> SO
+  Sys --> YT
+  Sys --> Stripe
+  Sys --> PG
+  Sys --> Cloud
+  Sys --> SMTP
+  Stripe -. "checkout.session.completed" .-> Sys
+```
+
+> *Figure 60.1 — Sprint 4 — C4 Level 1 (System Context).*
+
+#### 5.2. Level 2 — Containers
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Browser["Browser — React 19 SPA"]
+    PdfUI["PdfAssistant.jsx\nClassroomPdf.jsx"]
+    Mentor["AIMentor.jsx (SSE)"]
+    Prob["ProblemPage.jsx + AI correct diff"]
+    MsgSlash["Messages.jsx — slash commands"]
+    OnbInst["OnboardInstitution.jsx"]
+    InvUI["Invite-link forms\nJoinInstitution.jsx"]
+    InstTab["InstitutionTab.jsx"]
+    AdminUI["AdminDashboard.jsx\nFreeTier / ProTier / UsersByPlan"]
+    PlanUI["PlanSection.jsx"]
+  end
+
+  subgraph Server["Express API"]
+    PdfR["pdfRoutes.js (RAG)"]
+    AiR["aiRoutes.js\nmentor / correct-code /\nproblem generation"]
+    WsR["workspaceRoutes.js"]
+    PlanR["planRoutes.js\ninstitution + invite-links"]
+    CurR["institutionCurriculumRoutes.js"]
+    AdminR["adminRoutes.js"]
+    StripeR["stripeRoutes.js"]
+    NotifR["notificationRoutes.js"]
+    Hub["messageHub.js (Socket.IO)"]
+  end
+
+  subgraph Data["Data plane"]
+    PG[(PostgreSQL)]
+    Disk[("uploads/*.pdf + index.json")]
+    Chroma[(Chroma DB)]
+  end
+
+  subgraph AI["AI plane"]
+    HF[(HuggingFace)]
+    Groq[(Groq)]
+  end
+
+  subgraph Ext["External"]
+    Stripe[(Stripe)]
+    SO[(StackExchange)]
+    YT[(YouTube)]
+  end
+
+  PdfUI --> PdfR --> Disk
+  PdfR --> HF
+  PdfR --> Chroma
+  PdfR --> Groq
+  Mentor -. "SSE" .-> AiR --> Groq
+  Prob --> AiR
+  MsgSlash --> AiR
+  MsgSlash --> SO
+  MsgSlash --> YT
+  Prob --> WsR
+  OnbInst --> PlanR --> PG
+  InvUI --> PlanR
+  InstTab --> CurR --> PG
+  InstTab --> AdminR --> PG
+  AdminUI --> AdminR
+  PlanUI --> StripeR --> Stripe
+  Stripe -. "webhook" .-> StripeR --> PG
+  Hub --> NotifR --> PG
+```
+
+> *Figure 60.2 — Sprint 4 — C4 Level 2 (Containers).*
+
+#### 5.3. Level 3 — Components inside the AI plane
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph AI["Component view — Sprint 4 AI plane"]
+    direction TB
+
+    subgraph PdfMod["pdfRoutes.js (RAG)"]
+      Up["upload (multer + %PDF + pdf-parse)"]
+      Chunk["chunkText(800)"]
+      Embed["HF embeddings\nall-MiniLM-L6-v2"]
+      VS["Chroma vector store\nsimilaritySearch(q, 3)"]
+      KW["keyword fallback"]
+      RAG["RAG prompt builder"]
+    end
+
+    subgraph MentorMod["aiRoutes.js — AI Mentor"]
+      Sys2["Socratic system prompt (8 rules)"]
+      Stream["Groq stream → SSE\ndata: {text}"]
+    end
+
+    subgraph CorrectMod["aiRoutes.js — AI code correction"]
+      Gate["authenticate + requirePro"]
+      JsonF["response_format: json_object"]
+      Diff["{ correctedCode, changes[], summary }"]
+    end
+
+    subgraph GenMod["aiRoutes.js — Problem generation"]
+      Schema["Strict JSON schema\n(title, examples, hints, roadmap)"]
+      Repair["JSON-repair retry\n(temperature 0.1)"]
+      Norm["normalizeRoadmap()\nauto-backfill"]
+    end
+
+    subgraph Shared["Cross-cutting"]
+      Race["Promise.race(call, 8s/5s)"]
+      Cache["pdfCache (Map) + index.json"]
+      History["history.json (50 entries / user)"]
+    end
+
+    Up --> Chunk --> Embed --> VS
+    VS -. "Chroma down" .-> KW
+    VS --> RAG
+    KW --> RAG
+    RAG --> Stream
+    Sys2 --> Stream
+    Gate --> JsonF --> Diff
+    Schema --> Repair --> Norm
+    Embed --> Race
+    VS --> Race
+    Up --> Cache
+    GenMod --> History
+  end
+```
+
+> *Figure 60.3 — Sprint 4 — C4 Level 3 (AI plane components). For a deeper zoom on the PDF assistant pipeline alone, see Section V.1 (C4 Levels 1–4).*
 
 ## V. Implementation
 

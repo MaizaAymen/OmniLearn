@@ -59,7 +59,7 @@ The main objective of Sprint 1 is to deliver the building blocks that all later 
 
 ## IV. Design
 
-In this section we elaborate the use-case diagram, the sequence diagrams, the activity diagrams and the class diagram for Sprint 1.
+In this section we elaborate the use-case diagram, the sequence diagrams, the activity diagrams, the class diagram and the C4 architecture views (Context, Container, Component) for Sprint 1.
 
 ### 1. Use-Case Diagram
 
@@ -68,23 +68,33 @@ In this section we elaborate the use-case diagram, the sequence diagrams, the ac
 The visitor can: browse the landing page, sign up, verify the email, choose a plan and sign in.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Visitor((Visitor))
-  UC1(["Browse landing page"])
-  UC2(["Sign up"])
-  UC3(["Verify email"])
-  UC4(["Choose a plan"])
-  UC5(["Sign in"])
-  UC6(["Pay via Stripe"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Visitor((Visitor)):::actor
+
+  subgraph S["OmniLearn — Sprint 1 (Visitor scope)"]
+    direction TB
+    UC1(["Browse landing page"]):::uc
+    UC2(["Sign up"]):::uc
+    UC3(["Verify email"]):::uc
+    UC4(["Choose a plan"]):::uc
+    UC5(["Sign in"]):::uc
+    UC6(["Pay via Stripe Checkout"]):::uc
+  end
+  class S sys
 
   Visitor --- UC1
   Visitor --- UC2
   Visitor --- UC3
   Visitor --- UC4
   Visitor --- UC5
-  UC2 -. "&laquo;include&raquo;" .-> UC4
-  UC2 -. "&laquo;include&raquo;" .-> UC3
-  UC4 -. "&laquo;extend&raquo;" .-> UC6
+  UC2 -. "«include»" .-> UC4
+  UC2 -. "«include»" .-> UC3
+  UC4 -. "«extend»"  .-> UC6
 ```
 
 > *Figure 6 — Use-case diagram of Sprint 1 — Visitor side.*
@@ -94,16 +104,26 @@ flowchart LR
 The student can: sign in, manage profile (view / update / delete), reset password and enable 2FA.
 
 ```mermaid
+%%{init: {"theme":"neutral"} }%%
 flowchart LR
-  Student((Student))
-  L(["Sign in"])
-  VP(["View profile"])
-  UP(["Update profile"])
-  DP(["Delete account"])
-  R(["Reset password"])
-  T(["Enable 2FA (TOTP)"])
-  U(["Upload avatar (Cloudinary)"])
-  CT(["Confirm TOTP code"])
+  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Student((Student)):::actor
+
+  subgraph S["OmniLearn — Sprint 1 (Authenticated user scope)"]
+    direction TB
+    L(["Sign in"]):::uc
+    VP(["View profile"]):::uc
+    UP(["Update profile"]):::uc
+    DP(["Delete account"]):::uc
+    R(["Reset password"]):::uc
+    T(["Enable 2FA (TOTP + QR)"]):::uc
+    U(["Upload avatar (Cloudinary)"]):::uc
+    CT(["Verify TOTP code"]):::uc
+  end
+  class S sys
 
   Student --- L
   Student --- VP
@@ -111,9 +131,9 @@ flowchart LR
   Student --- DP
   Student --- R
   Student --- T
-  UP -. "&laquo;include&raquo;" .-> U
-  L  -. "&laquo;extend&raquo;" .-> CT
-  T  -. "&laquo;include&raquo;" .-> CT
+  UP -. "«include»" .-> U
+  L  -. "«extend»"  .-> CT
+  T  -. "«include»" .-> CT
 ```
 
 > *Figure 7 — Use-case diagram of Sprint 1 — Student side.*
@@ -316,6 +336,118 @@ classDiagram
 ```
 
 > *Figure 13 — Class diagram of Sprint 1.*
+
+### 5. C4 architecture views
+
+The C4 model (Context → Container → Component → Code) describes the Sprint 1 architecture at three levels of zoom. The Code level is already covered by the class diagram above.
+
+#### 5.1. Level 1 — System Context
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  Visitor((Visitor))
+  Student((Student))
+  Sys[["OmniLearn\n(Web application)"]]
+  Stripe[(Stripe\nCheckout + webhook)]
+  SMTP[(SMTP provider\nNodemailer)]
+  Cloud[(Cloudinary\nAvatar uploads)]
+
+  Visitor -- "browses, signs up,\nchooses a plan" --> Sys
+  Student -- "signs in, manages profile,\nenables 2FA" --> Sys
+  Sys -- "checkout-pro session" --> Stripe
+  Sys -- "verification & reset emails" --> SMTP
+  Sys -- "PUT avatar" --> Cloud
+  Stripe -. "webhook" .-> Sys
+```
+
+> *Figure 13.1 — Sprint 1 — C4 Level 1 (System Context).*
+
+#### 5.2. Level 2 — Containers
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph Browser["Browser — React 19 SPA"]
+    Home["Home.jsx (landing)"]
+    Auth["Auth.jsx — sign-up / sign-in / 2FA prompt"]
+    Verify["VerifyEmail.jsx"]
+    Reset["Forgot- / Reset-password pages"]
+    Profile["Profile.jsx"]
+    Guard["Guard (App.jsx)"]
+  end
+
+  subgraph Server["Node.js / Express 5"]
+    AuthMW["Authmiddleware.js\nJWT + isActive check"]
+    AuthR["authRoutes.js"]
+    ProfileR["profileRoutes.js"]
+    StripeR["stripeRoutes.js (Pro checkout + webhook)"]
+  end
+
+  subgraph Data["Data plane"]
+    PG[(PostgreSQL — User table)]
+  end
+
+  subgraph Third["External services"]
+    Stripe[(Stripe)]
+    SMTP[(SMTP)]
+    Cloud[(Cloudinary)]
+  end
+
+  Browser -- "REST + JWT cookie" --> AuthMW
+  AuthMW --> AuthR
+  AuthMW --> ProfileR
+  Browser --> StripeR
+  AuthR  --> PG
+  ProfileR --> PG
+  StripeR --> PG
+  AuthR  --> SMTP
+  ProfileR --> Cloud
+  StripeR --> Stripe
+  Stripe -. "checkout.session.completed" .-> StripeR
+```
+
+> *Figure 13.2 — Sprint 1 — C4 Level 2 (Containers).*
+
+#### 5.3. Level 3 — Components inside the Auth module
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart TB
+  subgraph AuthMod["Component view — authRoutes.js + supporting helpers"]
+    direction TB
+    Reg["POST /register"]
+    Log["POST /login"]
+    Ver["GET  /verify-email"]
+    For["POST /forgot-password"]
+    Rst["POST /reset-password"]
+    Setup["POST /2fa/setup"]
+    Vfy2["POST /2fa/verify"]
+
+    Hash["bcryptjs (hash + compare)"]
+    JWT["jsonwebtoken (sign + verify)"]
+    TOTP["Speakeasy (secret + verify)"]
+    QR["qrcode (otpauth URL → QR)"]
+    Mailer["Nodemailer mailer"]
+    UserM["User (Sequelize model)"]
+    MW["authenticate middleware"]
+  end
+
+  Reg --> Hash --> UserM
+  Reg --> Mailer
+  Log --> Hash
+  Log --> JWT
+  Log --> TOTP
+  Ver --> UserM
+  For --> Mailer
+  Rst --> Hash --> UserM
+  Setup --> TOTP --> QR
+  Vfy2 --> TOTP --> UserM
+  MW --> JWT
+  MW --> UserM
+```
+
+> *Figure 13.3 — Sprint 1 — C4 Level 3 (Components inside Auth).*
 
 ## V. Implementation
 
