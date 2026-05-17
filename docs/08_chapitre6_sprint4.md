@@ -8,7 +8,7 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 
 Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant administration** layer:
 
-- The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `chromadb`, `pdf-parse`, `@huggingface/inference` (embeddings via `sentence-transformers/all-MiniLM-L6-v2`) and `groq-sdk` (completions via `llama-3.3-70b-versatile`). The RAG pipeline lives inline in [pdfRoutes.js](../Server/src/routes/pdfRoutes.js) and is documented in detail in [ai_features_and_rag.md](./ai_features_and_rag.md). A keyword-search fallback fires if Chroma is unreachable.
+- The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `chromadb`, `pdf-parse`, `@huggingface/inference` (embeddings via `sentence-transformers/all-MiniLM-L6-v2`) and `groq-sdk` (completions via `llama-3.3-70b-versatile`). The RAG pipeline lives inline in [pdfRoutes.js](../Server/src/routes/pdfRoutes.js). A keyword-search fallback fires if Chroma is unreachable.
 - The **AI Mentor** sidebar ([AIMentor.jsx](../Client/src/components/AIMentor.jsx)) — a Socratic streaming tutor over Server-Sent Events. Knows the student's current code, language, problem title, and the last 10 turns; refuses to hand over complete solutions and always closes with a guiding question.
 - **AI-assisted code correction** (`/api/ai/ai/correct-code`) — gated to Pro / Institution plans, returns a JSON diff (`changes[]`) plus a corrected file that must match the problem's `expectedOutput`.
 - **AI problem generation** (`/api/ai/ai/problems/generate-draft`, …) — staff can ask the LLM for 1 / 3 / 5 problems with full roadmaps; a JSON-repair retry pass rescues most invalid responses.
@@ -88,9 +88,90 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 
 #### 2.1. Sequence diagram — "Ask a question to the PDF assistant"
 
-The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The frontend calls `POST /api/pdf/chat`. The backend retrieves the top-3 relevant chunks from Chroma DB through `vectorStore.similaritySearch(question, 3)` (vector store created at upload time and rebuilt on cache miss by `loadPdfData()`), builds a RAG prompt with those chunks as context, and calls Groq (`llama-3.3-70b-versatile`). If Chroma is unreachable the route silently falls back to a keyword-overlap top-3. The answer is returned as a single JSON `{ answer, sources }` response — see [ai_features_and_rag.md §3](./ai_features_and_rag.md#3-rag--the-pdf-assistant) for the full C4 view of this flow.
+The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The frontend calls `POST /api/pdf/chat`. The backend retrieves the top-3 relevant chunks from Chroma DB through `vectorStore.similaritySearch(question, 3)` (vector store created at upload time and rebuilt on cache miss by `loadPdfData()`), builds a RAG prompt with those chunks as context, and calls Groq (`llama-3.3-70b-versatile`). If Chroma is unreachable the route silently falls back to a keyword-overlap top-3. The answer is returned as a single JSON `{ answer, sources }` response.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Student
+  participant FE as PdfAssistant.jsx
+  participant API as Express (pdfRoutes.js)
+  participant HF as HuggingFace (embeddings)
+  participant VS as Chroma DB
+  participant LLM as Groq llama-3.3-70b
+
+  U->>FE: Upload PDF
+  FE->>API: POST /api/pdf/upload
+  API->>API: %PDF header check + pdf-parse + chunkText(800)
+  API->>HF: embed(chunks)
+  HF-->>API: vectors
+  API->>VS: addDocuments(collection="pdf_<id>")
+  API-->>FE: { pdfId, totalPages, chunksCount }
+
+  U->>FE: Ask a question
+  FE->>API: POST /api/pdf/chat { pdfId, question }
+  alt vector store ready
+    API->>VS: similaritySearch(question, k=3)
+    VS-->>API: top-3 chunks
+  else Chroma down / timed out
+    API->>API: keyword-overlap fallback → top-3 chunks
+  end
+  API->>LLM: chat.completions(system + RAG prompt)
+  LLM-->>API: answer
+  API-->>FE: { answer, sources }
+```
 
 > *Figure 56 — Sequence diagram "Ask the PDF assistant".*
+
+#### 2.3. Sequence diagram — "AI Mentor (Socratic streaming)"
+
+```mermaid
+sequenceDiagram
+  participant S as Student
+  participant FE as AIMentor.jsx
+  participant API as /api/ai/ai/mentor
+  participant LLM as Groq
+
+  S->>FE: type question (or click a quick-action)
+  FE->>API: POST { code, language, problemTitle, question, history[] }
+  API->>API: build system prompt (Socratic rules) + context blocks
+  API->>LLM: chat.completions({ stream: true })
+  loop tokens
+    LLM-->>API: delta.content
+    API-->>FE: data: { text }   (SSE frame)
+    FE-->>S: append to bubble + pulsing cursor
+  end
+  LLM-->>API: end of stream
+  API-->>FE: data: [DONE]
+```
+
+> *Figure 56.2 — Sequence diagram "AI Mentor".*
+
+#### 2.4. Sequence diagram — "AI code correction (Pro only)"
+
+```mermaid
+sequenceDiagram
+  participant S as Student
+  participant FE as ProblemPage.jsx
+  participant Auth as authenticate + requirePro
+  participant API as /api/ai/ai/correct-code
+  participant LLM as Groq
+
+  S->>FE: click "Corriger avec IA" after a failed run
+  FE->>Auth: POST with JWT cookie
+  alt plan == free
+    Auth-->>FE: 402 Upgrade required
+    FE-->>S: show PlanSection upsell
+  else plan ∈ pro|institution
+    Auth->>API: forward
+    API->>LLM: chat.completions(response_format = json_object)
+    LLM-->>API: { correctedCode, changes[], summary }
+    API-->>FE: 200 JSON
+    FE-->>S: render side-by-side diff
+  end
+```
+
+> *Figure 56.3 — Sequence diagram "AI code correction".*
 
 #### 2.2. Sequence diagram — "Join an institution via invite link"
 
@@ -125,48 +206,290 @@ Sprint 4 adds:
 
 ## V. Implementation
 
-### 1. PDF Assistant
+### 1. PDF Assistant — RAG deep dive
 
-The PDF assistant page lets the student drag a PDF, ingest it and ask questions grounded in its content. The answer references the page numbers it came from.
+The PDF assistant lets a Pro / Institution student drag a PDF (≤ 50 MB), ingest it, and ask grounded questions. The whole pipeline lives inline in [pdfRoutes.js](../Server/src/routes/pdfRoutes.js) and is best understood through the **C4 model** (Context → Container → Component → Code).
+
+#### 1.1. C4 Level 1 — System Context
+
+```mermaid
+flowchart LR
+  Student((Student / Teacher\nPro or Institution))
+  OmniLearn[["OmniLearn\nWeb Application"]]
+  Groq[("Groq Cloud\nLLM provider")]
+  HF[("HuggingFace\nInference API")]
+  Chroma[("Chroma DB\nvector store")]
+  PG[("PostgreSQL")]
+
+  Student -- "uploads PDFs, asks questions" --> OmniLearn
+  OmniLearn -- "completions" --> Groq
+  OmniLearn -- "embeddings" --> HF
+  OmniLearn -- "vectors + similarity search" --> Chroma
+  OmniLearn -- "user / plan / classroom data" --> PG
+```
+
+The student talks only to OmniLearn. Two managed providers (Groq, HuggingFace) and one self-hosted store (Chroma) are the only external dependencies.
+
+#### 1.2. C4 Level 2 — Containers
+
+```mermaid
+flowchart TB
+  subgraph Browser["Browser — React 19 SPA"]
+    PdfUI["PdfAssistant.jsx /\nClassroomPdf.jsx"]
+  end
+
+  subgraph Server["Node.js / Express 5 API"]
+    PdfRouter["pdfRoutes.js\n/api/pdf/*"]
+    AuthMW["Authmiddleware.js\nauthenticate + requirePro"]
+  end
+
+  subgraph Data["Data plane"]
+    Disk[("uploads/*.pdf\n+ index.json")]
+    Chroma[("Chroma DB")]
+  end
+
+  subgraph AI["AI plane"]
+    HF[("HuggingFace\nall-MiniLM-L6-v2")]
+    Groq[("Groq\nllama-3.3-70b-versatile")]
+  end
+
+  PdfUI -- "HTTPS / JSON\nmultipart" --> AuthMW --> PdfRouter
+  PdfRouter -- "fs" --> Disk
+  PdfRouter -- "embed" --> HF
+  PdfRouter -- "addDocuments /\nsimilaritySearch" --> Chroma
+  PdfRouter -- "chat.completions" --> Groq
+```
+
+The PDF router owns three outbound clients (HF, Chroma, Groq) and persists PDFs to disk plus a small `index.json` so the in-memory cache can be rebuilt after a restart (`loadPdfData()`).
+
+#### 1.3. C4 Level 3 — Components inside `pdfRoutes.js`
+
+```mermaid
+flowchart TB
+  subgraph PDF["Component view of pdfRoutes.js"]
+    Upload["upload handler\n(multer + %PDF check + pdf-parse)"]
+    Chunker["chunkText()\n800-word chunker"]
+    Embed["HuggingFaceInferenceEmbeddings"]
+    Vector["Chroma vector store"]
+    Cache["pdfCache (Map)\n+ index.json"]
+    Loader["loadPdfData() /\nloadPdfTextOnly()"]
+    Retriever["similaritySearch(q, k)"]
+    Keyword["keyword fallback\n(word overlap)"]
+    Prompt["RAG prompt builder"]
+    GroqC["groq.chat.completions"]
+    Highlights["highlights /\nbookmarks (Map)"]
+  end
+
+  Upload --> Chunker --> Embed --> Vector
+  Upload --> Cache --> Loader
+  Loader --> Retriever
+  Retriever -. "Chroma down / timeout" .-> Keyword
+  Retriever --> Prompt --> GroqC
+  Keyword --> Prompt
+```
+
+A few design choices are worth calling out:
+
+- `chunkText()` is **fixed-size** (no sentence-aware splitter). The prompt re-injects each chunk verbatim, so a ragged boundary costs nothing and saves a dependency.
+- `pdfCache` is the hot path. After a server restart, `loadPdfData()` rebuilds it from `index.json` so users don't have to re-upload.
+- The retriever has a **two-tier strategy**: vector search when the store was built successfully, keyword scoring when it wasn't. They feed the same downstream prompt — the UI never knows which one fired.
+- `loadPdfTextOnly()` exists for `/summarize` and `/quiz`, which don't need similarity search — it skips the Chroma round-trip entirely.
+
+#### 1.4. C4 Level 4 — Code paths
+
+**Ingestion** (`POST /api/pdf/upload`):
+
+```
+multer.diskStorage           → uploads/<ts>-<safeName>.pdf
+%PDF header check            → 400 if not a real PDF
+pdfParse(buffer)             → { text, numpages }    (best-effort)
+chunkText(text, 800)         → string[]
+chunks.map(new Document(…))  → LangChain Document[]
+Promise.race(
+  Chroma.fromDocuments(docs, embeddings, {
+    collectionName: "pdf_<sanitised pdfId>",
+    persistDirectory: process.env.CHROMA_PERSIST_DIR || "./chroma_db",
+    url: process.env.CHROMA_URL || "http://127.0.0.1:8000",
+  }),
+  8s-timeout
+)                            → vectorStore | null
+pdfCache.set(pdfId, payload)
+writeIndex([{ pdfId, filename, storedName, fileUrl, … }, …])
+```
+
+**Query** (`POST /api/pdf/chat`):
+
+```
+loadPdfData(pdfId)
+context = vectorStore
+  ? vectorStore.similaritySearch(q, 3).map(r => r.pageContent).join("\n\n")
+  : top-3 chunks by word-overlap score
+groq.chat.completions({
+  model: "llama-3.3-70b-versatile",
+  messages: [system, `Context:\n${context}\n\nQuestion: ${q}`],
+})
+```
+
+#### 1.5. Numerical defaults
+
+| Constant | Value | Where |
+|---|---|---|
+| Max PDF size | **50 MB** | `multer` `limits.fileSize` |
+| Chunk size | **800 words** | `chunkText(text, maxWords = 800)` |
+| Top-k retrieved chunks (chat) | **3** | `similaritySearch(q, 3)` |
+| Top-k retrieved chunks (smart search) | **5** | `similaritySearch(q, 5)` |
+| Chroma upload timeout | **8 s** | `Promise.race` in `/upload` |
+| Chroma read timeout | **5 s** | `Promise.race` in `loadPdfData` |
+| Quiz max context | **12 000 chars** | `quizContext.slice(0, 12000)` |
+| Summary context | **first 5 chunks** | `chunks.slice(0, 5).join(...)` |
+| Embedding model | `sentence-transformers/all-MiniLM-L6-v2` | `HuggingFaceInferenceEmbeddings` |
+| Completion model | `llama-3.3-70b-versatile` | `groq.chat.completions.create` |
+| Plan gate | `authenticate` + `requirePro` | top of `pdfRoutes.js` |
+
+#### 1.6. Failure modes
+
+| Failure | Symptom | Behaviour |
+|---|---|---|
+| Uploaded file isn't a real PDF | bytes don't start with `%PDF` | 400, file deleted |
+| `pdf-parse` throws on a weird PDF | empty text | upload still succeeds, `textExtracted: false`, AI features degrade gracefully |
+| HuggingFace key invalid / rate-limited | embedding call hangs | 8 s timeout, `vectorStore` stays `null`, keyword fallback fires on query |
+| Chroma server down | `fromDocuments` hangs | same as above |
+| LLM returns invalid JSON | `JSON.parse` throws | catch + regex-extract `{…}`/`[…]` + retry pass at `temperature: 0.1` |
+| LLM returns empty content | `summary` is `undefined` | 502 "AI returned an empty summary" |
 
 > *Figure 61 — PDF assistant — upload and chat view.*
 > *Figure 62 — PDF assistant — answer with grounded citations.*
 
 ### 2. Classroom PDF
 
-`ClassroomPdf.jsx` is a variant of the PDF assistant scoped to a classroom's lesson PDF, so all students of the same class share a common knowledge base.
+`ClassroomPdf.jsx` is a variant of the PDF assistant scoped to a classroom's lesson PDF, so all students of the same class share a common knowledge base. Same router, same RAG pipeline.
 
 > *Figure 63 — Classroom PDF assistant.*
 
-### 3. AI Mentor
+### 3. AI Mentor — Socratic streaming tutor
 
-`AIMentor.jsx` is a sidebar that follows the student across pages — it answers questions, explains concepts, suggests the next roadmap step, and provides AI-assisted code correction without revealing the final solution.
+`AIMentor.jsx` is a sidebar inside `ProblemPage.jsx`. It calls `POST /api/ai/ai/mentor` and streams the answer back over **Server-Sent Events** (`text/event-stream`, `data: { text }` frames, terminated by `data: [DONE]`).
 
-`/ai`, `/stack-overflow`, `/youtube` tags provide quick access to explanations and references for learners who want to study with or without the AI mentor.
+The endpoint accepts `{ code, language, question, problemTitle, history }`, injects the current code (truncated to 2 000 chars) as a fenced block, replays the last 10 turns of `history`, and calls Groq with `stream: true`. The system prompt is the design — it pins eight rules, the first three of which are non-negotiable:
+
+> 1. NEVER give a complete solution or write the full corrected code.
+> 2. Always teach the WHY behind concepts and bugs.
+> 3. Ask a guiding reflective question at the end of each response.
+
+The frontend renders tokens with a pulsing cursor glyph until it sees `[DONE]`. The UI also exposes five **quick actions** ("Explain this", "Why wrong?", "Give a hint", "Improve it", "What concept?") that simply prefill the prompt — the server still sees them as normal user questions.
 
 > *Figure 64 — AI Mentor side panel.*
 
-### 4. Institution onboarding
+### 4. AI-assisted code correction (Pro only)
+
+`POST /api/ai/ai/correct-code` is gated by `authenticate + requirePro`. Free users get a `402 Upgrade required` that the UI catches and turns into an upsell. The route takes the student's failing code, the language, the problem statement, and the **actual stdout** the code currently produced; it then asks Groq with `response_format: { type: "json_object" }` for:
+
+```jsonc
+{
+  "correctedCode": "...full file...",
+  "changes": [
+    { "lineNumber": 12, "type": "fix", "description": "off-by-one in loop", "oldCode": "...", "newCode": "..." }
+  ],
+  "summary": "Fixed loop bound and switched test inputs to match Example 2."
+}
+```
+
+The prompt pins three critical rules: keep every `print` / test invocation at the bottom of the file; keep the original test inputs unless they cannot produce the expected output (in which case use inputs from `examples`); produce stdout that — after trimming each line and ignoring blank lines and case — **matches `expectedOutput` exactly**. The UI uses `changes[]` to drive a side-by-side diff view.
+
+### 5. AI problem generation
+
+Staff can ask the LLM for full problems with a single click. Routes ([Ai.js](../Server/src/ai/Ai.js)):
+
+- `POST /ai/ai/problems/generate-draft` — topic + difficulty + `count ∈ {1,3,5}` → **non-persisted draft(s)**, each with a complete learning roadmap.
+- `POST /ai/ai/problems/save-draft` — save a draft after the teacher edits it.
+- `POST /ai/ai/generate/problem-roadmap` — single problem → structured roadmap (theory → practice → implementation → optimization → final).
+- `POST /ai/ai/problems/:id/fork` — fork a problem into a `global / institution / module / class` scope.
+
+The prompt pins a strict JSON schema (title, difficulty, category, description.text, description.notes, examples[], constraints[], hints[], starterCode.{javascript,python,java}, expectedOutput.{...}, roadmap{...}). After parsing, every roadmap is normalised by `normalizeRoadmap()` and **auto-backfilled** with `generateProblemRoadmap()` if the model skipped it. A safety net runs when `JSON.parse` throws: the route re-asks the same model to *"fix this malformed JSON"* at `temperature: 0.1` before giving up — in practice this rescues ~95% of failures observed on `count: 5` batches.
+
+### 6. Personalised roadmap
+
+The roadmap service ([RoadmapService.js](../Server/src/ai/RoadmapService.js)) takes the student's onboarding profile (career goal, interests, programming languages, weaknesses) and asks Groq for a **15-node, 5-level pyramid**:
+
+```
+Level 1 (foundations)     1 node    n1
+Level 2 (core skills)     2 nodes   n2, n3
+Level 3 (applied)         3 nodes   n4, n5, n6
+Level 4 (integration)     4 nodes   n7..n10
+Level 5 (advanced)        5 nodes   n11..n15
+```
+
+Each node has a `type ∈ { concept, debugging, challenge, project, stackoverflow, youtube }` plus a `stackoverflowQuery` and a `youtubeQuery`. The graph is then enriched in **batches of 5** with four parallel out-of-LLM calls per node:
+
+1. `fetchStackOverflow(query, 5)` — Stack Exchange `search/advanced`, ordered by votes (no API key needed).
+2. `fetchYouTube(query, 3)` — YouTube Data API v3, ordered by `viewCount` (needs `YOUTUBE_API_KEY`, otherwise returns `[]`).
+3. `fetchDocs(title, youtubeQuery)` — Groq call that returns 3 **real** official-docs URLs; the prompt forbids the model from inventing URLs.
+4. `generateQuiz(title, description)` — 5 MCQs per node, letter-coded answers, `passingScore: 80`.
+
+Each user can keep multiple roadmaps (`SavedRoadmap`, `isActive` flag for the current one). When `roadmapProgress` hits 100 % the certificate button unlocks (`Certificate.jsx` → html2canvas → jsPDF).
+
+### 7. Workspace code AI
+
+`workspaceRoutes.js` (`/api/workspace/*`) is a per-user scratchpad of saved PDFs and pasted code. Plan caps: Free = 3 PDFs + 3 code files, Pro = 200, Institution = unlimited. On top of plain CRUD it exposes three AI endpoints that share a `loadCodeForUser()` helper (loads, validates ownership, truncates to 12 000 chars):
+
+| Route | Purpose | Output |
+|---|---|---|
+| `POST /workspace/code/analyze` | Multi-turn code-review chat — the file goes into the system prompt once, then `history` replays user/assistant turns. Default first turn returns a 4-section overview (What it does / Key parts / Possible issues / Suggestions). | Markdown |
+| `POST /workspace/code/summarize` | Single-shot summary with fixed sections (Purpose / Main pieces / How it works / Notable details), capped at 250 words. | Markdown |
+| `POST /workspace/code/quiz` | 1–20 MCQs with letter-coded answers (`{question, options[4], answer: "A"}`). Falls back to a JSON-substring extraction if the model wraps the array in prose. | JSON array |
+
+A **study history** is kept on disk (`history.json`, 50 entries per user max). Every quiz attempt and every PDF "explain" is appended so the dashboard can show recent activity.
+
+### 8. Messenger slash commands
+
+In `Messages.jsx`, typing `/` opens an autocomplete dropdown with three commands. The bot reply is persisted as a message in the conversation, so a teacher can see what the student asked.
+
+| Command | What it does | Backend / API |
+|---|---|---|
+| `/ai <question>` | Single-shot LLM answer rendered as a "bot" bubble. | `POST /api/ai/ai/chat` → Groq |
+| `/stackoverflow <query>` | Top 5 answered SO questions by votes, rendered as cards. | Stack Exchange `search/advanced` |
+| `/video <query>` | 3 YouTube videos ordered by `viewCount`. | YouTube Data API v3 |
+
+### 9. Shared building blocks across the AI plane
+
+Two design rules apply to every AI call in the codebase:
+
+1. **Strict JSON contracts.** Every prompt that asks the LLM for structured data appends explicit JSON rules (no markdown fences, no trailing commas, escape rules); the route then strips fences and extracts the first balanced `{...}` or `[...]` substring before parsing. Two endpoints (`/ai/generate/problems`, `/ai/correct-code`) additionally implement a **JSON-repair fallback** — on first parse failure they re-ask the same model to "fix this malformed JSON" with `temperature: 0.1`.
+2. **Time-boxed external calls.** Anything that talks to Chroma or HuggingFace is wrapped in `Promise.race(call, timeout)` so a hanging embeddings call or a down Chroma server never blocks the response. The PDF upload races against 8 s, the chat path against 5 s, and falls back to keyword search when the timeout fires.
+
+### 10. Environment variables
+
+| Variable | Used by | Default if missing |
+|---|---|---|
+| `GROQ_API_KEY` | every AI feature | hard-coded fallback in source (rotate before production) |
+| `HF_API_KEY` | PDF assistant embeddings | hard-coded fallback in source |
+| `CHROMA_URL` | PDF assistant | `http://127.0.0.1:8000` |
+| `CHROMA_PERSIST_DIR` | PDF assistant | `./chroma_db` |
+| `YOUTUBE_API_KEY` | `/video` slash, roadmap enrichment | feature returns `[]` silently |
+
+The Groq and HuggingFace fallback keys committed in the source are **placeholders** — rotate them and move into `.env` before any production deployment, since both providers expose chargeable APIs.
+
+### 11. Institution onboarding
 
 After upgrading to the Institution plan, the user is redirected to `/onboarding/institution` to register the institution.
 
 > *Figure 66 — Institution onboarding form.*
 
-### 5. Invite links
+### 12. Invite links
 
 The institution admin generates invite links scoped to a target role (teacher or student), with an expiration date and a maximum number of uses.
 
 > *Figure 67 — Invite-link generation form.*
 > *Figure 68 — Public "Join institution" page (`JoinInstitution.jsx`).*
 
-### 6. Institution Admin console
+### 13. Institution Admin console
 
 The institution-admin tabs show the member directory, the per-institution curriculum (Grades / Specialities / Levels), the institution's classes, and basic statistics.
 
 > *Figure 69 — Institution member directory (`InstitutionTab.jsx`).*
 > *Figure 70 — Per-institution curriculum management.*
 
-### 7. Super Admin console
+### 14. Super Admin console
 
 The super admin dashboard centralizes the management of institutions, the global problem catalogue, the Free-tier / Pro-tier flags, the ban / unban actions and the platform statistics.
 
@@ -176,7 +499,7 @@ The super admin dashboard centralizes the management of institutions, the global
 > *Figure 74 — Pro-tier management tab.*
 > *Figure 75 — Module assignments management.*
 
-### 8. Pricing / Plan section
+### 15. Pricing / Plan section
 
 The `PlanSection` component shows the three plans side-by-side with Stripe Checkout CTAs.
 

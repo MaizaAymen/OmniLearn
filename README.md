@@ -62,8 +62,8 @@ output contract:
 7. **Messenger Slash Commands** — `/ai`, `/stackoverflow`, `/video`.
 
 The complete deep-dive (with a four-level **C4 model** of the RAG
-pipeline, the sequence diagrams, the numerical defaults and the failure
-modes) lives in [docs/ai_features_and_rag.md](docs/ai_features_and_rag.md).
+pipeline, the numerical defaults and the failure modes) lives in
+[docs/08_chapitre6_sprint4.md §V](docs/08_chapitre6_sprint4.md).
 
 A high-level system map plus use-case / class / sequence / activity
 diagrams for the whole platform is in

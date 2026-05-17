@@ -124,28 +124,117 @@ We split the work into four sprints of approximately 4 weeks each. Items are ref
 
 ### 2. Technologies and Languages Used
 
-- **HTML5:** the markup language used to write web pages.
-- **CSS3 / Tailwind CSS / DaisyUI:** styling and utility-first CSS framework (`@tailwindcss/vite` with `daisyui`).
-- **JavaScript (ES2022+):** the language used both on the frontend and the backend (with `type: module` on the client).
-- **React 19:** the frontend library, used with Vite as the build tool.
-- **React Router 7:** client-side routing.
-- **Ant Design 6 / Chakra UI / shadcn / Lucide / Framer Motion:** UI component libraries and animation framework used throughout the interface.
-- **CodeMirror 6:** the in-browser code editor (Java / Python / PHP / JavaScript language modes, One Dark theme).
-- **@xyflow/react / tldraw / Excalidraw:** the diagramming libraries used in the roadmap canvas.
-- **Socket.IO (client + server):** the real-time engine used for messaging and notifications.
-- **Node.js + Express 5:** the backend runtime and HTTP framework.
-- **Sequelize 6 + PostgreSQL:** the ORM and the relational database engine.
-- **bcryptjs:** password hashing.
-- **JSON Web Tokens (jsonwebtoken):** stateless authentication.
-- **Speakeasy:** TOTP-based two-factor authentication.
-- **Nodemailer:** transactional emails (verification, password reset, invitations).
-- **Multer:** file uploads.
-- **pdf-parse:** PDF text extraction for the PDF assistant.
-- **LangChain (`@langchain/community`, `@langchain/core`, `@langchain/openai`, `langchain`):** RAG orchestration for the PDF assistant.
-- **Chroma DB (`chromadb`):** the vector store used by the PDF assistant.
-- **Groq SDK + Hugging Face Inference:** LLM providers for the AI features (PDF assistant, roadmap generation).
-- **Cloudinary:** asset hosting for avatars and uploaded media.
-- **Stripe:** subscriptions and payments for the Pro and Institution plans.
+OmniLearn is a JavaScript-only stack — the same language runs on the client and the server. The tables below group every technology by layer so each tier of the application can be reviewed independently.
+
+#### 2.1. Languages & markup
+
+| Technology | Version | Role |
+|---|---|---|
+| **HTML5** | living standard | Page markup. |
+| **CSS3** | level 3 | Styling primitives. |
+| **JavaScript (ES2022+)** | ES2022+ | The single application language — used both client- and server-side. The Client sets `"type": "module"`. |
+| **JSX** | React 19 | Component templating on the frontend. |
+
+#### 2.2. Frontend
+
+| Technology | Version | Role |
+|---|---|---|
+| **React** | 19.2 | UI library. |
+| **Vite** | 7.3 | Dev server + production bundler. |
+| **React Router** | 7.13 | Client-side routing & route guards. |
+| **Tailwind CSS** | 4.2 (via `@tailwindcss/vite`) | Utility-first styling. |
+| **DaisyUI** | 5.5 | Component classes layered on Tailwind. |
+| **Ant Design** | 6.3 (+ `@ant-design/icons`, `@ant-design/plots`) | Form controls, tables, charts. |
+| **Chakra UI** | 3.33 | Layout primitives. |
+| **shadcn / ui** | 4.0 | Headless component recipes. |
+| **Lucide React** | 0.575 | Icon set. |
+| **Framer Motion** | 12.38 | Animations & transitions. |
+| **CodeMirror** | 6 (`@uiw/react-codemirror` + `lang-{javascript,java,python,php}`, One Dark theme) | In-browser code editor. |
+| **@xyflow/react** | 12.10 | Roadmap graph (React Flow). |
+| **tldraw** | 4.4 | Whiteboard canvas. |
+| **Excalidraw** | 0.18 | Diagram authoring. |
+| **react-pdf + pdfjs-dist** | 10.4 / 3.11 | PDF rendering inside `PdfAssistant.jsx`. |
+| **socket.io-client** | 4.8 | Real-time client transport. |
+| **Axios** | 1.13 | HTTP client. |
+| **js-cookie** | 3.0 | JWT cookie storage. |
+| **jsPDF + html2canvas** | 4.2 / 1.4 | Certificate export to PDF. |
+| **Recharts** | 3.8 | Dashboard charts. |
+| **react-hot-toast** | 2.6 | Toast notifications. |
+| **ESLint** | 9.39 | Linting (`eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`). |
+
+#### 2.3. Backend
+
+| Technology | Version | Role |
+|---|---|---|
+| **Node.js** | 18+ LTS | JavaScript runtime hosting the API. |
+| **Express** | 5.2 | HTTP framework (routes + middleware pipeline). |
+| **Socket.IO (server)** | 4.8 | Real-time hub for messaging, notifications, live sessions. |
+| **Multer** | 2.1 | Multipart file uploads (PDFs, avatars, code). |
+| **Morgan** | 1.10 | HTTP request logging. |
+| **CORS** | 2.8 | Cross-origin policy. |
+| **dotenv** | 17.3 | Environment-variable loading. |
+| **express-validator** | 7.3 | Request validation. |
+| **Zod** | 4.4 | Schema validation for AI payloads. |
+| **nodemon** | 3.1 (dev) | Hot-reload during development. |
+
+#### 2.4. Database & storage
+
+| Technology | Version | Role |
+|---|---|---|
+| **PostgreSQL** | 14+ | Primary relational database — users, institutions, classrooms, problems, submissions, conversations, notifications. |
+| **pg / pg-hstore** | 8.13 / 2.3 | Native PostgreSQL driver for Node. |
+| **Sequelize** | 6.37 | ORM + schema migrations (`sequelize.sync({ alter: true })`). |
+| **Chroma DB** | 3.3 (`chromadb`) | Persistent vector store for the PDF assistant. |
+| **Cloudinary** | 2.10 | Cloud asset hosting (avatars, classroom media). |
+| **Local disk (`uploads/`)** | — | PDFs, code workspace, `index.json`, `workspace.json`, `history.json`. |
+
+#### 2.5. Authentication & security
+
+| Technology | Version | Role |
+|---|---|---|
+| **jsonwebtoken** | 9.0 | Stateless JWT auth across REST and Socket.IO. |
+| **bcrypt** + **bcryptjs** | 6.0 / 3.0 | Password hashing. |
+| **Speakeasy** | 2.0 | TOTP-based 2FA. |
+| **qrcode** | 1.5 | TOTP QR provisioning. |
+| **google-auth-library** | 10.6 | Google OAuth sign-in. |
+
+#### 2.6. AI plane (LLMs, embeddings, RAG)
+
+| Technology | Version | Role |
+|---|---|---|
+| **Groq SDK** | 0.37 | All LLM completions — model `llama-3.3-70b-versatile`. Used by PDF assistant, AI Mentor (SSE streaming), code correction, problem generation, roadmap service, slash commands. |
+| **HuggingFace Inference** | 4.13 (`@huggingface/inference`) | Embeddings — model `sentence-transformers/all-MiniLM-L6-v2`, called via `HuggingFaceInferenceEmbeddings`. |
+| **Chroma DB** | 3.3 | Vector store for similarity search (collection per PDF). |
+| **LangChain** | 1.2 (`langchain`, `@langchain/core` 1.1, `@langchain/community` 1.1, `@langchain/openai` 1.2) | Glue between embeddings + Chroma + LLM (Document wrapper, vector store API). |
+| **pdf-parse** | 1.1 | PDF text extraction prior to chunking. |
+| **Stack Exchange API** | v2.3 (public, no key) | Stack Overflow enrichment for the roadmap and the `/stackoverflow` slash. |
+| **YouTube Data API** | v3 (needs `YOUTUBE_API_KEY`) | Video enrichment for the roadmap and the `/video` slash. |
+
+#### 2.7. Realtime, live sessions & video
+
+| Technology | Version | Role |
+|---|---|---|
+| **Socket.IO** | 4.8 | Message hub, notification push, live coding sessions (permissions, playlists, identity masking, post-session snapshots). |
+| **@stream-io/node-sdk + @stream-io/video-react-sdk** | 0.7 / 1.34 | Audio/video conferencing for live sessions. |
+
+#### 2.8. Payments & email
+
+| Technology | Version | Role |
+|---|---|---|
+| **Stripe** | 22.1 | Checkout for Pro and Institution plans + webhook handling. |
+| **Nodemailer** | 8.0 | Transactional emails (email verification, password reset, invite links). |
+
+#### 2.9. Tooling & ecosystem
+
+| Tool | Role |
+|---|---|
+| **Visual Studio Code** | Main IDE. |
+| **Git + GitHub** | Source control & hosting. |
+| **Postman** | REST endpoint design & manual testing. |
+| **pgAdmin** | PostgreSQL administration. |
+| **Stripe CLI** | Local webhook tunnelling for plan-upgrade testing. |
+| **Docker (optional)** | Used to run the Chroma DB server locally (`chromadb/chroma` image). |
+| **slugify** | 1.6 | Stable, URL-safe IDs for problems and modules. |
 
 ### 3. Hardware Environment
 
