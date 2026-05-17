@@ -153,33 +153,40 @@ The student opens the `OnboardingForm`, fills in career goal / interests / langu
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor S as Student
-  participant FE as OnboardingForm.jsx
-  participant API as roadmapRoutes.js
-  participant Svc as RoadmapService
-  participant LLM as Groq llama-3.3-70b
-  participant SO as StackExchange
-  participant YT as YouTube Data API
-  participant DB as PostgreSQL
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant Svc as RoadmapService
+    participant LLM as Groq LLM
+    participant SO as StackExchange
+    participant YT as YouTube API
+    participant DB as Database
 
-  S->>FE: Fill goal, interests, languages
-  FE->>API: POST /api/roadmap/onboarding
-  API->>DB: UPDATE users SET careerGoal, interests, languages
-  API->>Svc: generateRoadmap(profile)
-  Svc->>LLM: chat.completions (15 nodes / 5 levels)
-  LLM-->>Svc: roadmap JSON
-  Svc->>Svc: normalizeRoadmap + validate
-  loop batches of 5 nodes
-    Svc->>SO: search/advanced (top 5 by votes)
-    Svc->>YT: search (top 3 by viewCount)
-    Svc->>LLM: official-docs URLs + 5 MCQs
-  end
-  Svc->>DB: INSERT INTO saved_roadmaps (graphJson, userId)
-  DB-->>Svc: roadmap row
-  Svc-->>API: roadmap
-  API-->>FE: 201 { roadmap }
-  FE-->>S: Navigate to /roadmap (React Flow render)
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Fill onboarding form
+    FE->>+API: POST /roadmap/onboarding
+    API->>+DB: Save profile fields
+    DB-->>-API: Saved
+    API->>+Svc: generateRoadmap(profile)
+    Svc->>+LLM: Prompt (15 nodes / 5 levels)
+    LLM-->>-Svc: Roadmap JSON
+    Svc->>Svc: Normalize + validate
+
+    loop Batches of 5 nodes
+        Svc->>+SO: Search top answers
+        SO-->>-Svc: Threads
+        Svc->>+YT: Search top videos
+        YT-->>-Svc: Videos
+        Svc->>+LLM: Generate docs + MCQs
+        LLM-->>-Svc: Resources
+    end
+
+    Svc->>+DB: Insert SavedRoadmap
+    DB-->>-Svc: Saved
+    Svc-->>-API: Roadmap
+    API-->>-FE: 201 roadmap
+    FE-->>-Student: Render React Flow graph
 ```
 
 > *Figure 24 — Sequence diagram "Generate personalized roadmap".*
@@ -190,29 +197,35 @@ The student writes code in the CodeMirror editor and clicks "Submit". The fronte
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor S as Student
-  participant FE as ProblemPage.jsx (CodeMirror)
-  participant API as submissionRoutes.js
-  participant Sandbox as Code runner (sandbox)
-  participant DB as PostgreSQL
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant Sandbox as CodeRunner
+    participant DB as Database
 
-  S->>FE: Write code, click "Submit"
-  FE->>API: POST /api/submissions { problemId, sourceCode, language }
-  API->>DB: INSERT CodeSubmission (verdict = "pending")
-  API->>Sandbox: run(sourceCode, language, stdin)
-  Sandbox-->>API: { stdout, stderr, runtimeMs }
-  API->>API: compare(stdout, problem.expectedOutput)
-  alt match
-    API->>DB: UPDATE submission SET verdict = "accepted"
-  else mismatch
-    API->>DB: UPDATE submission SET verdict = "wrong_answer"
-  else error
-    API->>DB: UPDATE submission SET verdict = "runtime_error"
-  end
-  DB-->>API: submission row
-  API-->>FE: 201 { verdict, stdout, stderr, runtimeMs }
-  FE-->>S: Update OutputPanel + refresh CodingDashboard
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Write code, click "Submit"
+    FE->>+API: POST /submissions
+    API->>+DB: Insert submission (pending)
+    DB-->>-API: Row created
+    API->>+Sandbox: Run code
+    Sandbox-->>-API: stdout, stderr, runtimeMs
+    API->>API: Compare expected output
+
+    alt Output matches
+        API->>+DB: Update verdict = accepted
+        DB-->>-API: Updated
+    else Output differs
+        API->>+DB: Update verdict = wrong_answer
+        DB-->>-API: Updated
+    else Runtime error
+        API->>+DB: Update verdict = runtime_error
+        DB-->>-API: Updated
+    end
+
+    API-->>-FE: 201 verdict + output
+    FE-->>-Student: Update OutputPanel + dashboard
 ```
 
 > *Figure 25 — Sequence diagram "Submit code".*

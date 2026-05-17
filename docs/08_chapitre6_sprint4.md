@@ -200,33 +200,39 @@ The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The fr
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  participant U as Student
-  participant FE as PdfAssistant.jsx
-  participant API as Express (pdfRoutes.js)
-  participant HF as HuggingFace (embeddings)
-  participant VS as Chroma DB
-  participant LLM as Groq llama-3.3-70b
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant HF as HuggingFace
+    participant VS as Chroma DB
+    participant LLM as Groq LLM
 
-  U->>FE: Upload PDF
-  FE->>API: POST /api/pdf/upload
-  API->>API: %PDF header check + pdf-parse + chunkText(800)
-  API->>HF: embed(chunks)
-  HF-->>API: vectors
-  API->>VS: addDocuments(collection="pdf_<id>")
-  API-->>FE: { pdfId, totalPages, chunksCount }
+    Note over Student,VS: ref: Authenticate
 
-  U->>FE: Ask a question
-  FE->>API: POST /api/pdf/chat { pdfId, question }
-  alt vector store ready
-    API->>VS: similaritySearch(question, k=3)
-    VS-->>API: top-3 chunks
-  else Chroma down / timed out
-    API->>API: keyword-overlap fallback → top-3 chunks
-  end
-  API->>LLM: chat.completions(system + RAG prompt)
-  LLM-->>API: answer
-  API-->>FE: { answer, sources }
+    Student->>+FE: Upload PDF
+    FE->>+API: POST /pdf/upload
+    API->>API: Check %PDF header + parse + chunk(800)
+    API->>+HF: Embed chunks
+    HF-->>-API: Vectors
+    API->>+VS: addDocuments(pdf_<id>)
+    VS-->>-API: Indexed
+    API-->>-FE: { pdfId, pages, chunks }
+    FE-->>-Student: PDF ready
+
+    Student->>+FE: Ask a question
+    FE->>+API: POST /pdf/chat
+
+    alt Vector store ready
+        API->>+VS: similaritySearch(k=3)
+        VS-->>-API: Top-3 chunks
+    else Chroma down / timeout
+        API->>API: Keyword-overlap fallback
+    end
+
+    API->>+LLM: Chat (system + RAG prompt)
+    LLM-->>-API: Answer
+    API-->>-FE: { answer, sources }
+    FE-->>-Student: Render answer
 ```
 
 > *Figure 56 — Sequence diagram "Ask the PDF assistant".*
@@ -235,22 +241,27 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as AIMentor.jsx
-  participant API as /api/ai/ai/mentor
-  participant LLM as Groq
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant LLM as Groq LLM
 
-  S->>FE: type question (or click a quick-action)
-  FE->>API: POST { code, language, problemTitle, question, history[] }
-  API->>API: build system prompt (Socratic rules) + context blocks
-  API->>LLM: chat.completions({ stream: true })
-  loop tokens
-    LLM-->>API: delta.content
-    API-->>FE: data: { text }   (SSE frame)
-    FE-->>S: append to bubble + pulsing cursor
-  end
-  LLM-->>API: end of stream
-  API-->>FE: data: [DONE]
+    Note over Student,LLM: ref: Authenticate
+
+    Student->>+FE: Type question
+    FE->>+API: POST /ai/mentor { code, lang, history }
+    API->>API: Build Socratic prompt + context
+    API->>+LLM: Chat (stream = true)
+
+    loop Streaming tokens
+        LLM-->>API: delta.content
+        API-->>FE: SSE { text }
+        FE-->>Student: Append to bubble
+    end
+
+    LLM-->>-API: End of stream
+    API-->>-FE: SSE [DONE]
+    FE-->>-Student: Done streaming
 ```
 
 > *Figure 56.2 — Sequence diagram "AI Mentor".*
@@ -259,24 +270,29 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as ProblemPage.jsx
-  participant Auth as authenticate + requirePro
-  participant API as /api/ai/ai/correct-code
-  participant LLM as Groq
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant LLM as Groq LLM
 
-  S->>FE: click "Corriger avec IA" after a failed run
-  FE->>Auth: POST with JWT cookie
-  alt plan == free
-    Auth-->>FE: 402 Upgrade required
-    FE-->>S: show PlanSection upsell
-  else plan ∈ pro|institution
-    Auth->>API: forward
-    API->>LLM: chat.completions(response_format = json_object)
-    LLM-->>API: { correctedCode, changes[], summary }
-    API-->>FE: 200 JSON
-    FE-->>S: render side-by-side diff
-  end
+    Note over Student,LLM: ref: Authenticate
+
+    Student->>+FE: Click "Corriger avec IA"
+    FE->>+API: POST /ai/correct-code (JWT)
+    API->>API: Verify JWT + check plan
+
+    alt Plan = free
+        API-->>FE: 402 Upgrade required
+        FE-->>Student: Show PlanSection upsell
+    else Plan ∈ pro | institution
+        API->>+LLM: Chat (response_format = json_object)
+        LLM-->>-API: { correctedCode, changes, summary }
+        API-->>FE: 200 JSON
+        FE-->>Student: Render side-by-side diff
+    end
+
+    API-->>-FE: Response sent
+    FE-->>-Student: Done
 ```
 
 > *Figure 56.3 — Sequence diagram "AI code correction".*
@@ -287,32 +303,38 @@ A visitor opens the invite URL `/join-institution/:token`. `JoinInstitution.jsx`
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor V as Visitor
-  participant FE as JoinInstitution.jsx
-  participant API as planRoutes.js
-  participant DB  as PostgreSQL
+    actor Visitor
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
 
-  V->>FE: Open /join-institution/:token
-  FE->>API: GET /api/plan/invite-links/:token
-  API->>DB: SELECT inviteLink WHERE token = ?
-  alt token unknown / expired / maxUses reached
-    DB-->>API: invalid
-    API-->>FE: 404 / 410
-    FE-->>V: Show "Invite link no longer valid"
-  else valid
-    DB-->>API: { institution, role, expiresAt, usedCount }
-    API-->>FE: { institutionName, role }
-    FE-->>V: Show institution + role, prompt sign-up / login
-    V->>FE: Authenticate
-    FE->>API: POST /api/plan/join-institution { token }
-    API->>DB: BEGIN TX
-    API->>DB: UPDATE users SET institutionId, role
-    API->>DB: UPDATE invite_links SET usedCount = usedCount + 1
-    API->>DB: COMMIT
-    API-->>FE: 200 { user }
-    FE-->>V: Redirect to role-based dashboard
-  end
+    Visitor->>+FE: Open /join-institution/:token
+    FE->>+API: GET /plan/invite-links/:token
+    API->>+DB: Find invite link
+    DB-->>-API: Link or null
+
+    alt Token invalid / expired / exhausted
+        API-->>FE: 404 / 410
+        FE-->>Visitor: "Invite link no longer valid"
+    else Valid
+        API-->>FE: { institutionName, role }
+        FE-->>Visitor: Show institution + role
+
+        Note over Visitor,DB: ref: Authenticate
+
+        Visitor->>FE: Sign up or sign in
+        FE->>API: POST /plan/join-institution { token }
+        API->>+DB: BEGIN TX
+        API->>DB: Update users (institutionId, role)
+        API->>DB: Increment usedCount
+        API->>DB: COMMIT
+        DB-->>-API: TX ok
+        API-->>FE: 200 user
+        FE-->>Visitor: Redirect to dashboard
+    end
+
+    API-->>-FE: Response
+    FE-->>-Visitor: Done
 ```
 
 > *Figure 57 — Sequence diagram "Join an institution via invite link".*

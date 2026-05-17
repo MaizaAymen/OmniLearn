@@ -333,132 +333,160 @@ classDiagram
 
 ```mermaid
 sequenceDiagram
-  participant V as Visitor
-  participant FE as Frontend (React)
-  participant API as Express API
-  participant DB as PostgreSQL
-  participant SMTP as Nodemailer
+    actor Visitor
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
+    participant Mail as Mailer
 
-  V->>FE: Open /auth, fill signup form
-  FE->>FE: client-side validation
-  FE->>API: POST /api/auth/register
-  API->>API: bcrypt.hash(password)
-  API->>API: generate emailVerificationToken
-  API->>DB: INSERT INTO users(...)
-  API->>SMTP: send verification email
-  API-->>FE: 201 + user
-  V->>FE: click verification link
-  FE->>API: GET /api/auth/verify-email?token=...
-  API->>DB: SELECT user WHERE token=...
-  API->>DB: UPDATE users SET isEmailVerified=true
-  API-->>FE: 200
-  FE->>V: redirect to dashboard
+    Visitor->>+FE: Fill sign-up form
+    FE->>FE: Validate inputs
+    FE->>+API: POST /auth/register
+    API->>API: bcrypt.hash + generate token
+    API->>+DB: Insert user
+    DB-->>-API: User row
+
+    opt Send verification email
+        API->>Mail: Send verification link
+    end
+
+    API-->>-FE: 201 user
+    FE-->>-Visitor: "Check your inbox"
+
+    Note over Visitor,DB: ref: Verify email
+
+    Visitor->>+FE: Click verification link
+    FE->>+API: GET /auth/verify-email?token=...
+    API->>+DB: Find user by token
+    DB-->>-API: User row
+    API->>+DB: Set isEmailVerified = true
+    DB-->>-API: Updated
+    API-->>-FE: 200 OK
+    FE-->>-Visitor: Redirect to dashboard
 ```
 
 ### 4.2. Sign in (with optional 2FA)
 
 ```mermaid
 sequenceDiagram
-  participant U as User
-  participant FE as Frontend
-  participant API as Express API
-  participant DB as PostgreSQL
+    actor User
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
 
-  U->>FE: Submit credentials
-  FE->>API: POST /api/auth/login
-  API->>DB: SELECT user WHERE email=?
-  API->>API: bcrypt.compare(password)
-  alt is2FAEnabled
-    API-->>FE: { challenge: "totp" }
-    U->>FE: enter TOTP code
-    FE->>API: POST /api/auth/login/2fa { code }
-    API->>API: speakeasy.totp.verify(secret, code)
-  end
-  API-->>FE: { token, user }
-  FE->>FE: js-cookie.set("token") / set("user")
-  FE->>U: redirect to role-based dashboard
+    User->>+FE: Submit credentials
+    FE->>+API: POST /auth/login
+    API->>+DB: Find user by email
+    DB-->>-API: User row
+    API->>API: bcrypt.compare
+
+    alt 2FA enabled
+        API-->>FE: { challenge: "totp" }
+        User->>FE: Enter TOTP code
+        FE->>API: POST /auth/login/2fa
+        API->>API: speakeasy.verify
+    end
+
+    API->>API: Sign JWT
+    API-->>-FE: { token, user }
+    FE->>FE: Set cookies
+    FE-->>-User: Redirect to role dashboard
 ```
 
 ### 4.3. Generate personalized roadmap
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as Frontend
-  participant API as Express API
-  participant DB as PostgreSQL
-  participant SVC as RoadmapService
-  participant LLM as LLM provider
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant Svc as RoadmapService
+    participant LLM as LLM Provider
+    participant DB as Database
 
-  S->>FE: Fill OnboardingForm
-  FE->>API: POST /api/roadmap/onboarding
-  API->>DB: UPDATE users SET careerGoal, interests, programmingLanguages
-  API->>SVC: generateRoadmap(user)
-  SVC->>LLM: prompt(career goal, interests, languages)
-  LLM-->>SVC: JSON { nodes, edges, levels }
-  SVC->>SVC: validate + sanitize
-  SVC->>DB: INSERT SavedRoadmap
-  SVC-->>API: roadmap
-  API-->>FE: 200 + roadmap
-  FE->>S: render React Flow graph
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Fill OnboardingForm
+    FE->>+API: POST /roadmap/onboarding
+    API->>+DB: Update profile fields
+    DB-->>-API: Saved
+    API->>+Svc: generateRoadmap(user)
+    Svc->>+LLM: Prompt (goal, interests, languages)
+    LLM-->>-Svc: Roadmap JSON
+    Svc->>Svc: Validate + sanitize
+    Svc->>+DB: Insert SavedRoadmap
+    DB-->>-Svc: Saved
+    Svc-->>-API: Roadmap
+    API-->>-FE: 200 roadmap
+    FE-->>-Student: Render React Flow graph
 ```
 
 ### 4.4. Solve a problem (run + submit)
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as Frontend
-  participant API as Express API
-  participant DB as PostgreSQL
-  participant SBX as Code sandbox
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant Sandbox as CodeRunner
+    participant DB as Database
 
-  S->>FE: write code in CodeMirror, click Run
-  FE->>API: POST /api/code/run { code, language }
-  API->>SBX: spawn(language, code)
-  SBX-->>API: { stdout, stderr, runtimeMs }
-  API-->>FE: result
-  FE->>S: show in OutputPanel
-  S->>FE: click Submit
-  FE->>API: POST /api/submissions { problemId, code, language }
-  API->>SBX: run + compare with expectedOutput
-  API->>DB: INSERT CodeSubmission(verdict)
-  API-->>FE: verdict
-  FE->>S: update OutputPanel + CodingDashboard
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Write code, click "Run"
+    FE->>+API: POST /code/run
+    API->>+Sandbox: Spawn(language, code)
+    Sandbox-->>-API: stdout, stderr, runtimeMs
+    API-->>-FE: Result
+    FE-->>Student: Show in OutputPanel
+
+    Student->>+FE: Click "Submit"
+    FE->>+API: POST /submissions
+    API->>+Sandbox: Run + compare expected
+    Sandbox-->>-API: Verdict
+    API->>+DB: Insert CodeSubmission
+    DB-->>-API: Saved
+    API-->>-FE: Verdict
+    FE-->>-Student: Update OutputPanel + dashboard
 ```
 
 ### 4.5. Ask the PDF assistant (RAG)
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as Frontend
-  participant API as Express API (pdfRoutes.js)
-  participant HF as HuggingFace (embeddings)
-  participant VS as Chroma DB
-  participant LLM as Groq llama-3.3-70b
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant HF as HuggingFace
+    participant VS as Chroma DB
+    participant LLM as Groq LLM
 
-  S->>FE: Upload PDF
-  FE->>API: POST /api/pdf/upload
-  API->>API: %PDF header check + pdf-parse
-  API->>API: chunkText(800-word chunks)
-  API->>HF: embed(chunks)
-  HF-->>API: vectors
-  API->>VS: addDocuments(collection="pdf_<id>")
-  API-->>FE: 200 { pdfId, totalPages, chunksCount }
+    Note over Student,VS: ref: Authenticate
 
-  S->>FE: Ask a question
-  FE->>API: POST /api/pdf/chat { pdfId, question }
-  alt vector store ready
-    API->>VS: similaritySearch(question, k=3)
-    VS-->>API: top-3 chunks
-  else Chroma down / timed out
-    API->>API: keyword-overlap fallback → top-3 chunks
-  end
-  API->>LLM: chat.completions(system + RAG prompt)
-  LLM-->>API: answer
-  API-->>FE: 200 { answer, sources }
-  FE->>S: render answer
+    Student->>+FE: Upload PDF
+    FE->>+API: POST /pdf/upload
+    API->>API: Check %PDF + parse + chunk(800)
+    API->>+HF: Embed chunks
+    HF-->>-API: Vectors
+    API->>+VS: addDocuments(pdf_<id>)
+    VS-->>-API: Indexed
+    API-->>-FE: { pdfId, pages, chunks }
+    FE-->>-Student: PDF ready
+
+    Student->>+FE: Ask a question
+    FE->>+API: POST /pdf/chat
+
+    alt Vector store ready
+        API->>+VS: similaritySearch(k=3)
+        VS-->>-API: Top-3 chunks
+    else Chroma down / timeout
+        API->>API: Keyword-overlap fallback
+    end
+
+    API->>+LLM: Chat (system + RAG prompt)
+    LLM-->>-API: Answer
+    API-->>-FE: { answer, sources }
+    FE-->>-Student: Render answer
 ```
 
 > Full deep-dive (C4 levels 1-4, numerical defaults, failure modes, and the
@@ -469,77 +497,112 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant S as Student
-  participant FE as Frontend
-  participant API as Express API
-  participant DB as PostgreSQL
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
 
-  S->>FE: open /join/:code
-  FE->>API: GET /api/classes/by-code/:code
-  API->>DB: SELECT class WHERE code=?
-  API-->>FE: class
-  S->>FE: click Join
-  FE->>API: POST /api/classes/join { code }
-  API->>API: ensure same institution
-  API->>DB: INSERT Enrollment
-  API-->>FE: 200
-  FE->>S: redirect to MyClassrooms
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Open /join/:code
+    FE->>+API: GET /classes/by-code/:code
+    API->>+DB: Find class by code
+    DB-->>-API: Class
+    API-->>-FE: Class info
+    FE-->>Student: Show class details
+
+    Student->>FE: Click "Join"
+    FE->>+API: POST /classes/join { code }
+    API->>API: Ensure same institution
+    API->>+DB: Insert Enrollment
+    DB-->>-API: Enrolled
+    API-->>-FE: 200 OK
+    FE-->>-Student: Redirect to MyClassrooms
 ```
 
 ### 4.7. Real-time messaging
 
 ```mermaid
 sequenceDiagram
-  participant A as User A
-  participant B as User B
-  participant FE_A as Frontend A
-  participant FE_B as Frontend B
-  participant API as Express API
-  participant DB as PostgreSQL
-  participant IO as Socket.IO Hub
+    actor UserA
+    actor UserB
+    participant FE_A as Frontend A
+    participant FE_B as Frontend B
+    participant API as Backend
+    participant Hub as Socket.IO
+    participant DB as Database
 
-  FE_A->>IO: socket.connect()
-  FE_B->>IO: socket.connect()
-  FE_A->>IO: join room conversationId
-  FE_B->>IO: join room conversationId
-  A->>FE_A: type message
-  FE_A->>API: POST /api/messages
-  API->>DB: INSERT Message
-  API->>IO: io.to(conversationId).emit("message:new", msg)
-  IO-->>FE_A: message:new
-  IO-->>FE_B: message:new
-  FE_B->>B: append message in thread
-  API->>DB: INSERT Notification for offline recipients
+    Note over UserA,DB: ref: Authenticate
+
+    FE_A->>Hub: socket.connect()
+    FE_B->>Hub: socket.connect()
+    FE_A->>Hub: Join conversation:id
+    FE_B->>Hub: Join conversation:id
+
+    UserA->>+FE_A: Type message
+    FE_A->>+API: POST /messages
+    API->>+DB: Insert Message
+    DB-->>-API: Saved
+    API->>Hub: Emit message:new (room conv:id)
+    Hub-->>FE_A: message:new
+    Hub-->>FE_B: message:new
+    FE_B-->>UserB: Append to thread
+
+    opt Recipient offline
+        API->>+DB: Insert Notification
+        DB-->>-API: Saved
+    end
+
+    API-->>-FE_A: 201 message
+    FE_A-->>-UserA: Sent
 ```
 
 ### 4.8. Onboard institution after Stripe checkout
 
 ```mermaid
 sequenceDiagram
-  participant U as User
-  participant FE as Frontend
-  participant API as Express API
-  participant Stripe
-  participant DB as PostgreSQL
+    actor User
+    participant FE as Frontend
+    participant API as Backend
+    participant Stripe as Stripe
+    participant DB as Database
 
-  U->>FE: click "Upgrade to Institution"
-  FE->>API: POST /api/stripe/checkout-institution
-  API->>Stripe: create Checkout Session
-  Stripe-->>FE: redirect URL
-  FE->>U: Stripe Checkout page
-  U->>Stripe: pay
-  Stripe-->>API: webhook checkout.session.completed
-  API->>DB: UPDATE users SET plan="institution"
-  FE->>API: GET /api/auth/me (next request)
-  API-->>FE: user has plan=institution, no institutionId
-  FE->>FE: Guard sees needsInstitutionOnboarding()
-  FE->>U: redirect to /onboarding/institution
-  U->>FE: submit institution form
-  FE->>API: POST /api/plan/institution { name, slug, logoUrl }
-  API->>DB: INSERT Institution
-  API->>DB: UPDATE users SET institutionId=?, role="institution_admin"
-  API-->>FE: 200
-  FE->>U: redirect to institution dashboard
+    Note over User,DB: ref: Authenticate
+
+    User->>+FE: Click "Upgrade to Institution"
+    FE->>+API: POST /stripe/checkout-institution
+    API->>+Stripe: Create Checkout Session
+    Stripe-->>-API: Session URL
+    API-->>-FE: Redirect URL
+    FE-->>User: Stripe Checkout page
+
+    User->>+Stripe: Pay
+    Stripe-->>API: Webhook checkout.session.completed
+    API->>+DB: Update users SET plan = "institution"
+    DB-->>-API: Updated
+    Stripe-->>-User: Receipt + redirect
+
+    FE->>+API: GET /auth/me
+    API->>+DB: Read user
+    DB-->>-API: plan = institution, no institutionId
+    API-->>-FE: user
+
+    Note over User,DB: ref: Guard detects needsInstitutionOnboarding
+
+    FE-->>User: Redirect to /onboarding/institution
+    User->>+FE: Submit institution form
+    FE->>+API: POST /plan/institution { name, slug, logoUrl }
+
+    opt Logo provided
+        API->>API: Upload logo to Cloudinary
+    end
+
+    API->>+DB: Insert Institution
+    DB-->>-API: Created
+    API->>+DB: Update user (institutionId, role = institution_admin)
+    DB-->>-API: Updated
+    API-->>-FE: 200 OK
+    FE-->>-User: Redirect to institution dashboard
 ```
 
 ---

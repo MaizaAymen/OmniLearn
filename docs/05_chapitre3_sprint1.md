@@ -146,24 +146,32 @@ A visitor opens the landing page, navigates to `/auth`, enters first name, last 
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor V as Visitor
-  participant FE as Auth.jsx
-  participant API as authRoutes.js
-  participant DB as PostgreSQL (User)
-  participant Mail as Nodemailer (SMTP)
+    actor Visitor
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
+    participant Mail as Mailer
 
-  V->>FE: Open /auth and fill the sign-up form
-  FE->>FE: Validate (email format, password strength)
-  FE->>API: POST /api/auth/register { firstname, lastname, email, password, plan }
-  API->>API: bcrypt.hash(password, BCRYPT_ROUNDS)
-  API->>API: generate emailVerificationToken (+ expiry)
-  API->>DB: INSERT INTO users (...)
-  DB-->>API: user row
-  API->>Mail: send verification email (link with token)
-  Mail-->>API: queued
-  API-->>FE: 201 { user, message: "Check your inbox" }
-  FE-->>V: Redirect to "Verify your email" screen
+    Visitor->>+FE: Fill sign-up form
+    FE->>FE: Validate inputs
+    FE->>+API: POST /auth/register
+
+    alt Email already used
+        API->>+DB: Find by email
+        DB-->>-API: Existing user
+        API-->>FE: 409 Conflict
+    else Email free
+        API->>API: bcrypt.hash + generate token
+        API->>+DB: Insert user
+        DB-->>-API: Created
+        opt Welcome email
+            API->>Mail: Send verification link
+        end
+        API-->>FE: 201 user
+    end
+
+    API-->>-FE: Response
+    FE-->>-Visitor: "Check your inbox"
 ```
 
 > *Figure 8 — Sequence diagram "Sign up".*
@@ -174,34 +182,36 @@ A student opens `/auth`, enters email and password. The frontend sends `POST /ap
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor S as Student
-  participant FE as Auth.jsx
-  participant API as authRoutes.js
-  participant DB as PostgreSQL (User)
-  participant TOTP as Speakeasy (TOTP)
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
+    participant TOTP as Speakeasy
 
-  S->>FE: Submit email + password
-  FE->>API: POST /api/auth/login { email, password }
-  API->>DB: SELECT user WHERE email = ?
-  DB-->>API: user (hash, is2FAEnabled, twoFactorSecret)
-  API->>API: bcrypt.compare(password, user.password)
-  alt invalid credentials
-    API-->>FE: 401 Unauthorized
-  else valid + 2FA disabled
-    API->>API: jwt.sign({ id, role, plan })
-    API-->>FE: 200 { token, user }
-  else valid + 2FA enabled
-    API-->>FE: 200 { require2FA: true }
-    S->>FE: Enter TOTP code
-    FE->>API: POST /api/auth/login/2fa { code }
-    API->>TOTP: verify(secret, code)
-    TOTP-->>API: ok
-    API->>API: jwt.sign({ id, role, plan })
-    API-->>FE: 200 { token, user }
-  end
-  FE->>FE: js-cookie.set("token", token) + set("user")
-  FE-->>S: Redirect to role-based dashboard
+    Student->>+FE: Submit credentials
+    FE->>+API: POST /auth/login
+    API->>+DB: Find user by email
+    DB-->>-API: User row
+    API->>API: bcrypt.compare
+
+    alt Invalid credentials
+        API-->>FE: 401 Unauthorized
+    else Valid + 2FA off
+        API->>API: jwt.sign
+        API-->>FE: 200 token + user
+    else Valid + 2FA on
+        API-->>FE: require2FA
+        Student->>FE: Enter TOTP code
+        FE->>API: POST /auth/login/2fa
+        API->>+TOTP: Verify(secret, code)
+        TOTP-->>-API: OK
+        API->>API: jwt.sign
+        API-->>FE: 200 token + user
+    end
+
+    API-->>-FE: Tokens issued
+    FE->>FE: Set cookies (token, user)
+    FE-->>-Student: Redirect to dashboard
 ```
 
 > *Figure 9 — Sequence diagram "Sign in".*
@@ -212,28 +222,30 @@ The student opens the profile page, clicks "Delete my account". A confirmation m
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor S as Student
-  participant FE as Profile.jsx
-  participant Auth as authenticate (JWT)
-  participant API as profileRoutes.js
-  participant DB as PostgreSQL (User)
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
 
-  S->>FE: Click "Delete my account"
-  FE->>S: Show confirmation modal
-  S->>FE: Confirm
-  FE->>Auth: DELETE /api/profile/:id  (Bearer JWT)
-  Auth->>Auth: verify(token)
-  alt token invalid or not owner / admin
-    Auth-->>FE: 401 / 403
-  else authorized
-    Auth->>API: forward
-    API->>DB: DELETE FROM users WHERE id = :id
-    DB-->>API: ok
-    API-->>FE: 204 No Content
-    FE->>FE: js-cookie.remove("token"); remove("user")
-    FE-->>S: Redirect to /auth
-  end
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Click "Delete my account"
+    FE-->>Student: Show confirmation
+    Student->>FE: Confirm
+    FE->>+API: DELETE /profile/:id (Bearer JWT)
+    API->>API: Verify JWT + check owner/admin
+
+    alt Not owner / not admin
+        API-->>FE: 401 / 403
+    else Authorized
+        API->>+DB: Delete user
+        DB-->>-API: Deleted
+        API-->>FE: 204 No Content
+    end
+
+    API-->>-FE: Response
+    FE->>FE: Clear cookies
+    FE-->>-Student: Redirect to /auth
 ```
 
 > *Figure 10 — Sequence diagram "Delete my account".*

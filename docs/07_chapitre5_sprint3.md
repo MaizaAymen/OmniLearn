@@ -151,30 +151,30 @@ A student receives an invite code, opens `/join/:code`. The frontend calls `POST
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor S as Student
-  participant FE as JoinClassroom.jsx
-  participant API as classRoutes.js
-  participant DB as PostgreSQL
+    actor Student
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
 
-  S->>FE: Open /join/:code
-  FE->>API: POST /api/classes/join { code }
-  API->>DB: SELECT class WHERE code = ?
-  alt class not found
-    DB-->>API: null
-    API-->>FE: 404 Not found
-  else found
-    DB-->>API: class
-    API->>API: check class.institutionId == student.institutionId
-    alt mismatch
-      API-->>FE: 403 Forbidden
-    else ok
-      API->>DB: INSERT INTO enrollments (classId, studentId)
-      DB-->>API: enrollment
-      API-->>FE: 201 { class }
-      FE-->>S: Redirect to /classrooms
+    Note over Student,DB: ref: Authenticate
+
+    Student->>+FE: Open /join/:code
+    FE->>+API: POST /classes/join { code }
+    API->>+DB: Find class by code
+    DB-->>-API: Class or null
+
+    alt Class not found
+        API-->>FE: 404 Not found
+    else Institution mismatch
+        API-->>FE: 403 Forbidden
+    else OK
+        API->>+DB: Insert Enrollment
+        DB-->>-API: Enrolled
+        API-->>FE: 201 class
     end
-  end
+
+    API-->>-FE: Response
+    FE-->>-Student: Redirect or show error
 ```
 
 > *Figure 40 — Sequence diagram "Join a classroom".*
@@ -185,32 +185,38 @@ A user opens `Messages.jsx`, picks a conversation and types a message. On submit
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor A as User A
-  participant FA as Messages.jsx (A)
-  participant API as messageRoutes.js
-  participant Hub as messageHub.js (Socket.IO)
-  participant DB  as PostgreSQL
-  participant FB  as Messages.jsx (B)
-  actor B as User B
+    actor UserA
+    actor UserB
+    participant FE_A as Frontend A
+    participant API as Backend
+    participant Hub as Socket.IO
+    participant DB as Database
+    participant FE_B as Frontend B
 
-  A->>FA: Type and send message
-  FA->>API: POST /api/messages { conversationId, body }
-  API->>DB: INSERT INTO messages
-  DB-->>API: message row
-  API->>Hub: emit("message:new", message) to room conv:<id>
-  par fan-out
-    Hub-->>FA: ack (self echo)
-    FA-->>A: append to thread
-  and
-    Hub-->>FB: message:new
-    FB-->>B: append to thread
-  end
-  alt recipient offline
-    API->>DB: INSERT INTO notifications (userId=B, type="message")
-    Hub->>Hub: emit("notification:new") if reconnected later
-  end
-  API-->>FA: 201 { message }
+    Note over UserA,DB: ref: Authenticate
+
+    UserA->>+FE_A: Type message
+    FE_A->>+API: POST /messages
+    API->>+DB: Insert Message
+    DB-->>-API: Saved
+    API->>+Hub: Emit message:new (room conv:id)
+
+    par Fan-out to room
+        Hub-->>FE_A: message:new (echo)
+        FE_A-->>UserA: Append to thread
+    and
+        Hub-->>FE_B: message:new
+        FE_B-->>UserB: Append to thread
+    end
+
+    opt Recipient offline
+        API->>+DB: Insert Notification
+        DB-->>-API: Saved
+    end
+
+    Hub-->>-API: Delivered
+    API-->>-FE_A: 201 message
+    FE_A-->>-UserA: Sent
 ```
 
 > *Figure 41 — Sequence diagram "Send a real-time message".*
