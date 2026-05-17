@@ -348,106 +348,116 @@ classDiagram
 
 > *Figure 44 — Class diagram of Sprint 3.*
 
-### 5. C4 architecture views
+### 5. C4 Component view
 
-Sprint 3 introduces the **collaboration plane** (classrooms, courses, assignments, announcements) and the **real-time plane** (`messageHub.js` Socket.IO server). The C4 model isolates both at three levels.
-
-#### 5.1. Level 1 — System Context
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart LR
-  Student((Student))
-  Teacher((Teacher))
-  Sys[["OmniLearn\n(Web application + Realtime hub)"]]
-  PG[(PostgreSQL)]
-  Cloud[(Cloudinary\nlesson PDFs)]
-
-  Student -- "join class, view content,\nsubmit assignments" --> Sys
-  Teacher -- "create class, courses,\nmodules, assignments,\npost announcements" --> Sys
-  Student <-. "real-time messages\n+ notifications (WS)" .-> Sys
-  Teacher <-. "real-time messages\n+ notifications (WS)" .-> Sys
-  Sys --> PG
-  Sys -- "upload lesson PDF" --> Cloud
-```
-
-> *Figure 44.1 — Sprint 3 — C4 Level 1 (System Context).*
-
-#### 5.2. Level 2 — Containers
+Sprint 3 adds the **collaboration plane** (classes, courses, modules, lessons, assignments, announcements, conversations, messages, notifications) and the **real-time plane** (`messageHub.js` Socket.IO server). The Component view shows every public endpoint and the internal building blocks of the hub (handshake, rooms, presence, broadcaster, fan-out, disconnect cleanup).
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart TB
-  subgraph Browser["Browser — React 19 SPA"]
-    Join["JoinClassroom.jsx"]
-    MyC["MyClassrooms.jsx"]
-    View["ClassroomView.jsx"]
-    AssUI["ClassAssignmentsPage.jsx"]
-    Msg["Messages.jsx"]
-    NotifUI["Notifications dropdown"]
-    SocketClient["socket.io-client"]
-  end
-
-  subgraph Server["Express API + Realtime"]
-    ClassR["classRoutes.js"]
-    CourseR["courseRoutes.js"]
-    ModR["moduleRoutes.js"]
-    LessonR["lessonRoutes.js"]
-    AssR["assignmentRoutes.js"]
-    AnnR["announcementRoutes.js"]
-    ConvR["conversationRoutes.js"]
-    MsgR["messageRoutes.js"]
-    NotifR["notificationRoutes.js"]
-    Hub["messageHub.js — Socket.IO server"]
-  end
-
-  subgraph Data["Data plane"]
-    PG[(PostgreSQL\nClass, Enrollment, Course,\nModule, Lesson, Assignment,\nAnnouncement, Conversation,\nMessage, Notification)]
-  end
-
-  Join --> ClassR --> PG
-  MyC --> ClassR
-  View --> CourseR --> PG
-  View --> ModR --> PG
-  View --> LessonR --> PG
-  View --> AnnR --> PG
-  AssUI --> AssR --> PG
-  Msg --> ConvR --> PG
-  Msg --> MsgR --> PG
-  MsgR --> Hub
-  Hub <-. "WS upgrade\n(JWT handshake)" .-> SocketClient
-  NotifUI --> NotifR --> PG
-  Hub -. "notification:new" .-> SocketClient
-```
-
-> *Figure 44.2 — Sprint 3 — C4 Level 2 (Containers).*
-
-#### 5.3. Level 3 — Components inside `messageHub.js`
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart TB
-  subgraph Hub["Component view — messageHub.js"]
+  subgraph WebAPI["Container — Web API + Realtime"]
     direction TB
-    Hand["Auth handshake\n(verify JWT cookie)"]
-    Rooms["Room manager\n(one room per conversationId)"]
-    Presence["Presence tracker\n(userId → socketId[])"]
-    Broadcast["Message broadcaster\nemit('message:new', msg)"]
-    Notify["Notification fan-out\n(offline → INSERT notifications)"]
-    DC["Disconnect handler\nroom + presence cleanup"]
+
+    subgraph ClassC["classRoutes.js"]
+      CCre["POST /classes"]
+      CList["GET  /classes/mine"]
+      CJoin["POST /classes/join"]
+      CMem["GET  /classes/:id/members"]
+    end
+
+    subgraph CurC["course / module / lesson routes"]
+      CrCRUD["CRUD /courses"]
+      MoCRUD["CRUD /modules"]
+      LeCRUD["CRUD /lessons"]
+    end
+
+    subgraph AssC["assignmentRoutes.js"]
+      ACre["POST /assignments"]
+      ASub["POST /assignments/:id/submissions"]
+      AGr["POST /grades"]
+    end
+
+    subgraph AnnC["announcementRoutes.js"]
+      AnCRUD["CRUD /announcements"]
+    end
+
+    subgraph ConvC["conversation + message routes"]
+      CvList["GET  /conversations"]
+      MsPost["POST /messages"]
+    end
+
+    subgraph NotC["notificationRoutes.js"]
+      NList["GET   /notifications"]
+      NRead["PATCH /notifications/:id/read"]
+    end
+
+    subgraph Hub["messageHub.js (Socket.IO)"]
+      Hand["JWT handshake"]
+      Rooms["Room manager — one room per conversation"]
+      Pres["Presence tracker (userId → sockets)"]
+      Bcast["Broadcaster — message:new"]
+      Fan["Notification fan-out (offline)"]
+      DC["Disconnect cleanup"]
+    end
+
+    MW["authenticate + role gate"]
+    CM["Class model"]
+    EM["Enrollment model"]
+    CrM["Course / Module / Lesson models"]
+    AM["ClassAssignment / Grade models"]
+    NM["Announcement model"]
+    CvM["Conversation / Message models"]
+    NotM["Notification model"]
   end
 
-  Conn[/"io.on('connection')"/] --> Hand --> Rooms
-  Hand --> Presence
-  Inbound[/"POST /api/messages\n→ hub.emit(...)"/] --> Broadcast
-  Broadcast --> Rooms
-  Broadcast --> Notify
-  Notify --> Presence
+  PG[(PostgreSQL)]
+  CloudExt[(Cloudinary — lesson PDFs)]
+  Client[/"socket.io-client (browser)"/]
+
+  CCre  --> MW --> CM
+  CList --> EM
+  CJoin --> EM
+  CMem  --> EM
+
+  CrCRUD --> MW --> CrM
+  MoCRUD --> MW --> CrM
+  LeCRUD --> MW --> CrM
+  LeCRUD --> CloudExt
+
+  ACre --> MW --> AM
+  ASub --> MW --> AM
+  AGr  --> MW --> AM
+
+  AnCRUD --> MW --> NM
+
+  CvList --> CvM
+  MsPost --> MW --> CvM
+  MsPost --> Bcast
+
+  Hand --> Rooms
+  Hand --> Pres
+  Bcast --> Rooms
+  Bcast --> Fan --> Pres
+  Fan --> NotM
   DC --> Rooms
-  DC --> Presence
+  DC --> Pres
+
+  Bcast -. "WS push" .-> Client
+  Fan   -. "notification:new" .-> Client
+
+  NList --> NotM
+  NRead --> NotM
+
+  CM   --> PG
+  EM   --> PG
+  CrM  --> PG
+  AM   --> PG
+  NM   --> PG
+  CvM  --> PG
+  NotM --> PG
 ```
 
-> *Figure 44.3 — Sprint 3 — C4 Level 3 (Realtime hub components).*
+> *Figure 44.1 — Sprint 3 — C4 Component view.*
 
 ## V. Implementation
 

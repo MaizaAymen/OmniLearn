@@ -59,7 +59,7 @@ The main objective of Sprint 1 is to deliver the building blocks that all later 
 
 ## IV. Design
 
-In this section we elaborate the use-case diagram, the sequence diagrams, the activity diagrams, the class diagram and the C4 architecture views (Context, Container, Component) for Sprint 1.
+In this section we elaborate the use-case diagram, the sequence diagrams, the activity diagrams, the class diagram and the C4 component view for Sprint 1.
 
 ### 1. Use-Case Diagram
 
@@ -337,101 +337,52 @@ classDiagram
 
 > *Figure 13 — Class diagram of Sprint 1.*
 
-### 5. C4 architecture views
+### 5. C4 Component view
 
-The C4 model (Context → Container → Component → Code) describes the Sprint 1 architecture at three levels of zoom. The Code level is already covered by the class diagram above.
-
-#### 5.1. Level 1 — System Context
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart LR
-  Visitor((Visitor))
-  Student((Student))
-  Sys[["OmniLearn\n(Web application)"]]
-  Stripe[(Stripe\nCheckout + webhook)]
-  SMTP[(SMTP provider\nNodemailer)]
-  Cloud[(Cloudinary\nAvatar uploads)]
-
-  Visitor -- "browses, signs up,\nchooses a plan" --> Sys
-  Student -- "signs in, manages profile,\nenables 2FA" --> Sys
-  Sys -- "checkout-pro session" --> Stripe
-  Sys -- "verification & reset emails" --> SMTP
-  Sys -- "PUT avatar" --> Cloud
-  Stripe -. "webhook" .-> Sys
-```
-
-> *Figure 13.1 — Sprint 1 — C4 Level 1 (System Context).*
-
-#### 5.2. Level 2 — Containers
+The Sprint 1 backend exposes three route modules (`authRoutes`, `profileRoutes`, `stripeRoutes`), one `authenticate` middleware, the `User` Sequelize model and a small set of supporting helpers (bcryptjs, jsonwebtoken, Speakeasy, qrcode, Nodemailer, Cloudinary, Stripe SDK). The Component view groups every public endpoint by module and shows which helpers and external systems each endpoint consumes.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart TB
-  subgraph Browser["Browser — React 19 SPA"]
-    Home["Home.jsx (landing)"]
-    Auth["Auth.jsx — sign-up / sign-in / 2FA prompt"]
-    Verify["VerifyEmail.jsx"]
-    Reset["Forgot- / Reset-password pages"]
-    Profile["Profile.jsx"]
-    Guard["Guard (App.jsx)"]
-  end
-
-  subgraph Server["Node.js / Express 5"]
-    AuthMW["Authmiddleware.js\nJWT + isActive check"]
-    AuthR["authRoutes.js"]
-    ProfileR["profileRoutes.js"]
-    StripeR["stripeRoutes.js (Pro checkout + webhook)"]
-  end
-
-  subgraph Data["Data plane"]
-    PG[(PostgreSQL — User table)]
-  end
-
-  subgraph Third["External services"]
-    Stripe[(Stripe)]
-    SMTP[(SMTP)]
-    Cloud[(Cloudinary)]
-  end
-
-  Browser -- "REST + JWT cookie" --> AuthMW
-  AuthMW --> AuthR
-  AuthMW --> ProfileR
-  Browser --> StripeR
-  AuthR  --> PG
-  ProfileR --> PG
-  StripeR --> PG
-  AuthR  --> SMTP
-  ProfileR --> Cloud
-  StripeR --> Stripe
-  Stripe -. "checkout.session.completed" .-> StripeR
-```
-
-> *Figure 13.2 — Sprint 1 — C4 Level 2 (Containers).*
-
-#### 5.3. Level 3 — Components inside the Auth module
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart TB
-  subgraph AuthMod["Component view — authRoutes.js + supporting helpers"]
+  subgraph WebAPI["Container — Web API (Express 5)"]
     direction TB
-    Reg["POST /register"]
-    Log["POST /login"]
-    Ver["GET  /verify-email"]
-    For["POST /forgot-password"]
-    Rst["POST /reset-password"]
-    Setup["POST /2fa/setup"]
-    Vfy2["POST /2fa/verify"]
 
-    Hash["bcryptjs (hash + compare)"]
-    JWT["jsonwebtoken (sign + verify)"]
-    TOTP["Speakeasy (secret + verify)"]
-    QR["qrcode (otpauth URL → QR)"]
-    Mailer["Nodemailer mailer"]
-    UserM["User (Sequelize model)"]
-    MW["authenticate middleware"]
+    subgraph AuthC["authRoutes.js"]
+      Reg["POST /register"]
+      Log["POST /login"]
+      Ver["GET  /verify-email"]
+      For["POST /forgot-password"]
+      Rst["POST /reset-password"]
+      Setup["POST /2fa/setup"]
+      Vfy2["POST /2fa/verify"]
+    end
+
+    subgraph ProfC["profileRoutes.js"]
+      Get["GET    /profile/:id"]
+      Patch["PATCH  /profile/:id"]
+      Del["DELETE /profile/:id"]
+    end
+
+    subgraph StrC["stripeRoutes.js"]
+      Co["POST /stripe/checkout-pro"]
+      Wh["POST /stripe/webhook"]
+    end
+
+    MW["authenticate (JWT + isActive)"]
+    UserM["User (Sequelize)"]
+    Hash["bcryptjs"]
+    JWT["jsonwebtoken"]
+    TOTP["Speakeasy"]
+    QR["qrcode"]
+    Mailer["Nodemailer"]
+    CloudUp["Cloudinary uploader"]
+    StripeC["stripe SDK"]
   end
+
+  PG[(PostgreSQL)]
+  SMTP[(SMTP)]
+  CloudExt[(Cloudinary)]
+  StripeExt[(Stripe)]
 
   Reg --> Hash --> UserM
   Reg --> Mailer
@@ -443,11 +394,24 @@ flowchart TB
   Rst --> Hash --> UserM
   Setup --> TOTP --> QR
   Vfy2 --> TOTP --> UserM
-  MW --> JWT
-  MW --> UserM
+
+  Get   --> MW --> UserM
+  Patch --> MW
+  Patch --> CloudUp
+  Del   --> MW --> UserM
+
+  Co --> MW
+  Co --> StripeC
+  Wh --> StripeC
+  Wh --> UserM
+
+  UserM --> PG
+  Mailer --> SMTP
+  CloudUp --> CloudExt
+  StripeC --> StripeExt
 ```
 
-> *Figure 13.3 — Sprint 1 — C4 Level 3 (Components inside Auth).*
+> *Figure 13.1 — Sprint 1 — C4 Component view.*
 
 ## V. Implementation
 

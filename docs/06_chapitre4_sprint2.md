@@ -330,121 +330,109 @@ classDiagram
 
 > *Figure 28 — Class diagram of Sprint 2.*
 
-### 5. C4 architecture views
+### 5. C4 Component view
 
-The Sprint 2 architecture is centered on two new sub-systems: the **AI roadmap generator** (`RoadmapService`) and the **code-execution pipeline** (run / submit). The C4 model exposes them at three levels of zoom.
-
-#### 5.1. Level 1 — System Context
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart LR
-  Student((Student))
-  Admin((Super Admin))
-  Sys[["OmniLearn\n(Web application)"]]
-  Groq[(Groq Cloud — LLM)]
-  SO[(Stack Exchange API)]
-  YT[(YouTube Data API v3)]
-  Sandbox[(Code sandbox runner)]
-
-  Student -- "onboarding, view roadmap,\nsolve / run / submit code" --> Sys
-  Admin -- "CRUD problems, import/export,\ntoggle Free/Pro tier" --> Sys
-  Sys -- "chat.completions" --> Groq
-  Sys -- "search/advanced (votes)" --> SO
-  Sys -- "search (viewCount)" --> YT
-  Sys -- "execute code\n(stdin → stdout)" --> Sandbox
-```
-
-> *Figure 28.1 — Sprint 2 — C4 Level 1 (System Context).*
-
-#### 5.2. Level 2 — Containers
+Sprint 2 adds five route modules (`roadmapRoutes`, `problemRoutes`, `submissionRoutes`, `runRoutes`, `admin/problemsRoutes`) and the `RoadmapService` AI orchestrator. The Component view groups every public endpoint and exposes the internal building blocks of `RoadmapService.js` (prompt → LLM → repair → normalize → enrichment batcher).
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart TB
-  subgraph Browser["Browser — React 19 SPA"]
-    Onb["OnboardingForm.jsx"]
-    RoadUI["RoadmapPage.jsx (@xyflow/react)"]
-    Probs["ProblemsPage.jsx"]
-    Prob["ProblemPage.jsx (CodeMirror 6)"]
-    Out["OutputPanel.jsx"]
-    Dash["CodingDashboard.jsx (recharts)"]
-    AdminUI["AdminDashboard.jsx\nFreeTierTab / ProTierTab"]
-  end
-
-  subgraph Server["Express API"]
-    RoadR["roadmapRoutes.js"]
-    Svc["RoadmapService.js — AI orchestrator"]
-    ProbR["problemRoutes.js"]
-    RunR["POST /api/code/run"]
-    SubR["submissionRoutes.js"]
-    AdminR["admin/problemsRoutes.js"]
-  end
-
-  subgraph Data["Data plane"]
-    PG[(PostgreSQL\nProblem, CodeSubmission,\nSavedRoadmap, StudentProblemSet)]
-  end
-
-  subgraph AI["AI plane"]
-    Groq[(Groq llama-3.3-70b)]
-  end
-
-  subgraph Ext["External enrichment"]
-    SO[(StackExchange)]
-    YT[(YouTube)]
-  end
-
-  subgraph Exec["Execution plane"]
-    Sandbox[(Sandbox runner)]
-  end
-
-  Onb --> RoadR --> Svc
-  RoadUI --> RoadR
-  Probs --> ProbR --> PG
-  Prob --> RunR --> Sandbox
-  Prob --> SubR --> Sandbox
-  SubR --> PG
-  Out -.-> RunR
-  Dash --> SubR
-  AdminUI --> AdminR --> PG
-
-  Svc --> Groq
-  Svc --> SO
-  Svc --> YT
-  Svc --> PG
-```
-
-> *Figure 28.2 — Sprint 2 — C4 Level 2 (Containers).*
-
-#### 5.3. Level 3 — Components inside `RoadmapService.js`
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart TB
-  subgraph Svc["Component view — RoadmapService.js"]
+  subgraph WebAPI["Container — Web API (Express 5)"]
     direction TB
-    Build["buildPrompt(profile)\n15-node / 5-level pyramid"]
-    LLM["groq.chat.completions.create"]
-    Parse["JSON parse\n+ repair pass (temperature 0.1)"]
-    Norm["normalizeRoadmap()\nshape validator"]
-    Backfill["generateProblemRoadmap()\nbackfill missing nodes"]
-    Batch["Enrichment batcher\n(batches of 5 nodes)"]
-    SO["fetchStackOverflow(query, 5)"]
-    YT["fetchYouTube(query, 3)"]
-    Docs["fetchDocs(title)\nLLM, real URLs only"]
-    Quiz["generateQuiz(title)\n5 MCQs, passingScore 80"]
-    Save["save SavedRoadmap (Sequelize)"]
+
+    subgraph RoadC["roadmapRoutes.js"]
+      Onb["POST /onboarding"]
+      GetR["GET  /roadmap"]
+      Prog["PATCH /progress"]
+    end
+
+    subgraph ProbC["problemRoutes.js"]
+      List["GET    /problems (plan + inst scope)"]
+      One["GET    /problems/:id"]
+      Cre["POST   /problems (admin)"]
+    end
+
+    subgraph SubC["submissionRoutes.js"]
+      Sub["POST /submissions"]
+      Mine["GET  /submissions/me"]
+    end
+
+    subgraph RunC["code execution"]
+      Run["POST /code/run"]
+      Cmp["expectedOutput comparator"]
+    end
+
+    subgraph AdmC["admin/problemsRoutes.js"]
+      Free["PATCH isFreeTier"]
+      Pro["PATCH isProTier"]
+      Imp["POST /import"]
+      Exp["GET  /export"]
+    end
+
+    subgraph Svc["RoadmapService.js — AI orchestrator"]
+      Build["buildPrompt(profile)\n15-node / 5-level pyramid"]
+      LLM["groq.chat.completions"]
+      Parse["JSON parse + repair (T=0.1)"]
+      Norm["normalizeRoadmap()"]
+      Bat["Enrichment batcher (5 / batch)"]
+      SOf["fetchStackOverflow(q, 5)"]
+      YTf["fetchYouTube(q, 3)"]
+      Docsf["fetchDocs (LLM, real URLs)"]
+      QuizG["generateQuiz (5 MCQs)"]
+    end
+
+    MW["authenticate + plan gate"]
+    PM["Problem model"]
+    CSM["CodeSubmission model"]
+    SRM["SavedRoadmap model"]
+    SPSM["StudentProblemSet model"]
+    Sand["Sandbox client"]
   end
 
-  Build --> LLM --> Parse --> Norm --> Backfill --> Batch
-  Batch --> SO
-  Batch --> YT
-  Batch --> Docs
-  Batch --> Quiz
-  Batch --> Save
+  PG[(PostgreSQL)]
+  Groq[(Groq)]
+  SO[(StackExchange)]
+  YT[(YouTube)]
+  Sandbox[(Sandbox runner)]
+
+  Onb  --> MW
+  Onb  --> Svc
+  GetR --> MW --> SRM
+  Prog --> MW --> SRM
+
+  List --> MW --> PM
+  One  --> PM
+  Cre  --> MW --> PM
+
+  Sub  --> MW
+  Sub  --> Sand
+  Sub  --> Cmp --> CSM
+  Mine --> CSM
+
+  Run  --> MW --> Sand
+  Sand --> Sandbox
+
+  Free --> MW --> PM
+  Pro  --> MW --> PM
+  Imp  --> MW --> PM
+  Exp  --> MW --> PM
+
+  Build --> LLM --> Parse --> Norm --> Bat
+  Bat --> SOf  --> SO
+  Bat --> YTf  --> YT
+  Bat --> Docsf --> Groq
+  Bat --> QuizG --> Groq
+  LLM --> Groq
+  Bat --> SRM
+  Svc --> SPSM
+
+  PM   --> PG
+  CSM  --> PG
+  SRM  --> PG
+  SPSM --> PG
 ```
 
-> *Figure 28.3 — Sprint 2 — C4 Level 3 (RoadmapService components).*
+> *Figure 28.1 — Sprint 2 — C4 Component view.*
 
 ## V. Implementation
 

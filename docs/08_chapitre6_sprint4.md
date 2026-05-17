@@ -443,171 +443,169 @@ classDiagram
 
 > *Figure 60 — Class diagram of Sprint 4.*
 
-### 5. C4 architecture views (sprint-level)
+### 5. C4 Component view
 
-Sprint 4 introduces both an **AI plane** (PDF assistant, AI Mentor, AI code correction, AI problem generation, workspace AI) and a **multi-tenant administration plane** (institutions, invite links, curriculum, super-admin console). The C4 views below describe the **whole sprint** at three levels; Section V.1 zooms further into the PDF assistant pipeline with its own C4 Levels 1–4.
-
-#### 5.1. Level 1 — System Context
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart LR
-  Stud((Student / Teacher))
-  IA((Institution Admin))
-  SA((Super Admin))
-  Sys[["OmniLearn\n(Web app + Realtime + AI plane)"]]
-
-  Stripe[(Stripe\nCheckout + webhook)]
-  Groq[(Groq — LLM\ncompletions + streaming)]
-  HF[(HuggingFace\nembeddings)]
-  Chroma[(Chroma DB\nvector store)]
-  SO[(StackExchange API)]
-  YT[(YouTube Data API)]
-  PG[(PostgreSQL)]
-  Cloud[(Cloudinary)]
-  SMTP[(SMTP)]
-
-  Stud -- "PDF chat, AI mentor,\nAI code correction,\nslash commands" --> Sys
-  IA -- "onboard, invite links,\ncurriculum, members" --> Sys
-  SA -- "manage institutions,\nban, stats, AI problem gen" --> Sys
-  Sys --> Groq
-  Sys --> HF
-  Sys --> Chroma
-  Sys --> SO
-  Sys --> YT
-  Sys --> Stripe
-  Sys --> PG
-  Sys --> Cloud
-  Sys --> SMTP
-  Stripe -. "checkout.session.completed" .-> Sys
-```
-
-> *Figure 60.1 — Sprint 4 — C4 Level 1 (System Context).*
-
-#### 5.2. Level 2 — Containers
+Sprint 4 adds both an **AI plane** (`pdfRoutes`, `aiRoutes`, `workspaceRoutes`) and a **multi-tenant administration plane** (`planRoutes`, `institutionCurriculumRoutes`, `adminRoutes`, `stripeRoutes`). The Component view groups every public endpoint by module, exposes the internal building blocks of the RAG pipeline and the AI orchestrators, and shows the shared cross-cutting helpers (plan gate, JSON-repair retry, time-boxed clients, caches). Section V.1 zooms further into the PDF assistant alone with its own C4 Levels 1–4.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart TB
-  subgraph Browser["Browser — React 19 SPA"]
-    PdfUI["PdfAssistant.jsx\nClassroomPdf.jsx"]
-    Mentor["AIMentor.jsx (SSE)"]
-    Prob["ProblemPage.jsx + AI correct diff"]
-    MsgSlash["Messages.jsx — slash commands"]
-    OnbInst["OnboardInstitution.jsx"]
-    InvUI["Invite-link forms\nJoinInstitution.jsx"]
-    InstTab["InstitutionTab.jsx"]
-    AdminUI["AdminDashboard.jsx\nFreeTier / ProTier / UsersByPlan"]
-    PlanUI["PlanSection.jsx"]
-  end
-
-  subgraph Server["Express API"]
-    PdfR["pdfRoutes.js (RAG)"]
-    AiR["aiRoutes.js\nmentor / correct-code /\nproblem generation"]
-    WsR["workspaceRoutes.js"]
-    PlanR["planRoutes.js\ninstitution + invite-links"]
-    CurR["institutionCurriculumRoutes.js"]
-    AdminR["adminRoutes.js"]
-    StripeR["stripeRoutes.js"]
-    NotifR["notificationRoutes.js"]
-    Hub["messageHub.js (Socket.IO)"]
-  end
-
-  subgraph Data["Data plane"]
-    PG[(PostgreSQL)]
-    Disk[("uploads/*.pdf + index.json")]
-    Chroma[(Chroma DB)]
-  end
-
-  subgraph AI["AI plane"]
-    HF[(HuggingFace)]
-    Groq[(Groq)]
-  end
-
-  subgraph Ext["External"]
-    Stripe[(Stripe)]
-    SO[(StackExchange)]
-    YT[(YouTube)]
-  end
-
-  PdfUI --> PdfR --> Disk
-  PdfR --> HF
-  PdfR --> Chroma
-  PdfR --> Groq
-  Mentor -. "SSE" .-> AiR --> Groq
-  Prob --> AiR
-  MsgSlash --> AiR
-  MsgSlash --> SO
-  MsgSlash --> YT
-  Prob --> WsR
-  OnbInst --> PlanR --> PG
-  InvUI --> PlanR
-  InstTab --> CurR --> PG
-  InstTab --> AdminR --> PG
-  AdminUI --> AdminR
-  PlanUI --> StripeR --> Stripe
-  Stripe -. "webhook" .-> StripeR --> PG
-  Hub --> NotifR --> PG
-```
-
-> *Figure 60.2 — Sprint 4 — C4 Level 2 (Containers).*
-
-#### 5.3. Level 3 — Components inside the AI plane
-
-```mermaid
-%%{init: {"theme":"neutral"} }%%
-flowchart TB
-  subgraph AI["Component view — Sprint 4 AI plane"]
+  subgraph WebAPI["Container — Web API (Sprint 4 additions)"]
     direction TB
 
-    subgraph PdfMod["pdfRoutes.js (RAG)"]
-      Up["upload (multer + %PDF + pdf-parse)"]
-      Chunk["chunkText(800)"]
-      Embed["HF embeddings\nall-MiniLM-L6-v2"]
-      VS["Chroma vector store\nsimilaritySearch(q, 3)"]
-      KW["keyword fallback"]
+    subgraph PdfC["pdfRoutes.js (RAG)"]
+      Upl["upload (multer + %PDF + pdf-parse)"]
+      Chk["chunkText(800)"]
+      Emb["HF embeddings (all-MiniLM-L6-v2)"]
+      Vec["Chroma vector store"]
+      Sim["similaritySearch(q, k=3)"]
+      KW["keyword fallback (top-3 overlap)"]
       RAG["RAG prompt builder"]
-    end
-
-    subgraph MentorMod["aiRoutes.js — AI Mentor"]
-      Sys2["Socratic system prompt (8 rules)"]
-      Stream["Groq stream → SSE\ndata: {text}"]
-    end
-
-    subgraph CorrectMod["aiRoutes.js — AI code correction"]
-      Gate["authenticate + requirePro"]
-      JsonF["response_format: json_object"]
-      Diff["{ correctedCode, changes[], summary }"]
-    end
-
-    subgraph GenMod["aiRoutes.js — Problem generation"]
-      Schema["Strict JSON schema\n(title, examples, hints, roadmap)"]
-      Repair["JSON-repair retry\n(temperature 0.1)"]
-      Norm["normalizeRoadmap()\nauto-backfill"]
-    end
-
-    subgraph Shared["Cross-cutting"]
-      Race["Promise.race(call, 8s/5s)"]
+      Chat["POST /chat"]
+      Exp["POST /explain"]
+      Sum["POST /summarize"]
+      Quiz["POST /quiz (10 / 20 MCQs)"]
+      Smart["POST /smart-search"]
+      Hi["POST /highlights, /bookmarks"]
       Cache["pdfCache (Map) + index.json"]
-      History["history.json (50 entries / user)"]
+      Loader["loadPdfData / loadPdfTextOnly"]
     end
 
-    Up --> Chunk --> Embed --> VS
-    VS -. "Chroma down" .-> KW
-    VS --> RAG
-    KW --> RAG
-    RAG --> Stream
-    Sys2 --> Stream
-    Gate --> JsonF --> Diff
-    Schema --> Repair --> Norm
-    Embed --> Race
-    VS --> Race
-    Up --> Cache
-    GenMod --> History
+    subgraph AiC["aiRoutes.js"]
+      Men["POST /mentor (SSE stream)"]
+      Cor["POST /correct-code (JSON diff)"]
+      Gen["POST /problems/generate-draft"]
+      SaveD["POST /problems/save-draft"]
+      RmGen["POST /generate/problem-roadmap"]
+      Fork["POST /problems/:id/fork"]
+      Repair["JSON-repair retry (T=0.1)"]
+      Norm["normalizeRoadmap()"]
+    end
+
+    subgraph WsC["workspaceRoutes.js"]
+      WsAn["POST /code/analyze"]
+      WsSm["POST /code/summarize"]
+      WsQz["POST /code/quiz"]
+      WsCR["CRUD pdfs / code files"]
+      WsLd["loadCodeForUser() (12k char cap)"]
+      Hist["history.json (50 / user)"]
+    end
+
+    subgraph PlanC["planRoutes.js"]
+      Inst["POST /plan/institution"]
+      InvCre["POST   /plan/invite-links"]
+      InvRev["DELETE /plan/invite-links/:id"]
+      InvGet["GET    /plan/invite-links/:token"]
+      InvJoin["POST   /plan/join-institution"]
+    end
+
+    subgraph CurC["institutionCurriculumRoutes.js"]
+      GrCRUD["CRUD Grade / Speciality / Level (institutionId scoped)"]
+    end
+
+    subgraph AdmC["adminRoutes.js"]
+      InstList["GET  /admin/institutions"]
+      InstSusp["DELETE / suspend institution"]
+      Members["GET  /admin/institution/members"]
+      Ban["PATCH /admin/users/:id (isActive)"]
+      Stats["GET  /admin/stats"]
+    end
+
+    subgraph StripeC["stripeRoutes.js"]
+      ChPro["POST /checkout-pro"]
+      ChIns["POST /checkout-institution"]
+      WhS["POST /webhook"]
+    end
+
+    Gate["authenticate + requirePro + role gate"]
+    GroqC["groq SDK (chat.completions, stream)"]
+    HFC["@huggingface/inference"]
+    ChrC["@langchain/community Chroma client"]
+    StripeS["stripe SDK"]
+    Race["Promise.race(call, 8s / 5s)"]
+
+    PdfM["PdfDocument + vector collection"]
+    InstM["Institution / InviteLink models"]
+    UserM["User model"]
+    NotM["Notification model"]
   end
+
+  Groq[(Groq)]
+  HF[(HuggingFace)]
+  Chroma[(Chroma DB)]
+  Disk[("uploads/*.pdf")]
+  Stripe[(Stripe)]
+  SO[(StackExchange)]
+  YT[(YouTube)]
+  PG[(PostgreSQL)]
+
+  Upl --> Chk --> Emb --> Vec
+  Emb --> HFC --> HF
+  Vec --> ChrC --> Chroma
+  Upl --> Disk
+  Upl --> Cache
+  Cache --> Loader
+  Loader --> Vec
+  Chat --> Loader --> Sim --> RAG
+  Sim -. "Chroma down" .-> KW --> RAG
+  RAG --> GroqC --> Groq
+  Exp --> RAG
+  Sum --> Loader
+  Sum --> GroqC
+  Quiz --> Loader --> GroqC
+  Smart --> Sim
+  Hi --> PdfM
+  Vec --> Race
+  Sim --> Race
+
+  Men --> Gate
+  Men --> GroqC
+  Cor --> Gate
+  Cor --> GroqC
+  Gen --> GroqC
+  Gen --> Repair --> Norm
+  SaveD --> PG
+  RmGen --> GroqC
+  Fork --> PG
+
+  WsAn --> WsLd --> GroqC
+  WsSm --> WsLd --> GroqC
+  WsQz --> WsLd --> GroqC
+  WsCR --> Disk
+  WsQz --> Hist
+  Exp --> Hist
+
+  Inst --> InstM
+  InvCre --> InstM
+  InvRev --> InstM
+  InvGet --> InstM
+  InvJoin --> InstM
+  InvJoin --> UserM
+
+  GrCRUD --> InstM
+  InstList --> InstM
+  InstSusp --> InstM
+  Members --> UserM
+  Ban --> UserM
+  Stats --> UserM
+  Stats --> InstM
+
+  ChPro --> StripeS --> Stripe
+  ChIns --> StripeS
+  Stripe -. "webhook" .-> WhS
+  WhS --> UserM
+  WhS --> NotM
+
+  SO -. "used by /stackoverflow slash" .-> AiC
+  YT -. "used by /video slash" .-> AiC
+
+  PdfM --> PG
+  InstM --> PG
+  UserM --> PG
+  NotM --> PG
 ```
 
-> *Figure 60.3 — Sprint 4 — C4 Level 3 (AI plane components). For a deeper zoom on the PDF assistant pipeline alone, see Section V.1 (C4 Levels 1–4).*
+> *Figure 60.1 — Sprint 4 — C4 Component view.*
 
 ## V. Implementation
 
