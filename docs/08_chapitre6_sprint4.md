@@ -74,13 +74,88 @@ Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant ad
 
 #### Super Admin side
 
+```mermaid
+flowchart LR
+  Admin((Super Admin))
+  Inst(["Manage institutions"])
+  SuspI(["Suspend / delete institution"])
+  Ban(["Ban / unban users"])
+  Stats(["View global statistics"])
+  Free(["Toggle Free-tier flags"])
+  Pro(["Toggle Pro-tier flags"])
+  Curr(["Manage global curriculum templates"])
+  Probs(["Manage problem catalogue"])
+  Imp(["Import / export problems"])
+  GenAI(["Generate problems via AI"])
+
+  Admin --- Inst
+  Admin --- Ban
+  Admin --- Stats
+  Admin --- Free
+  Admin --- Pro
+  Admin --- Curr
+  Admin --- Probs
+  Admin --- GenAI
+  Inst -. "&laquo;extend&raquo;" .-> SuspI
+  Probs -. "&laquo;extend&raquo;" .-> Imp
+```
+
 > *Figure 53 — Use-case diagram of Sprint 4 — Super Admin side.*
 
 #### Institution Admin side
 
+```mermaid
+flowchart LR
+  IA((Institution Admin))
+  Onb(["Onboard institution"])
+  Inv(["Generate invite links"])
+  Rev(["Revoke invite link"])
+  Dir(["Browse member directory"])
+  Role(["Change member role"])
+  Cur(["Manage Grades / Specialities / Levels"])
+  Pay(["Pay Institution plan (Stripe)"])
+
+  IA --- Onb
+  IA --- Inv
+  IA --- Dir
+  IA --- Cur
+  IA --- Pay
+  Inv -. "&laquo;extend&raquo;" .-> Rev
+  Dir -. "&laquo;extend&raquo;" .-> Role
+  Onb -. "&laquo;include&raquo;" .-> Pay
+```
+
 > *Figure 54 — Use-case diagram of Sprint 4 — Institution Admin side.*
 
 #### Student side — AI features
+
+```mermaid
+flowchart LR
+  S((Student / Teacher))
+  Up(["Upload PDF"])
+  Ask(["Chat with PDF (RAG)"])
+  Exp(["Explain a passage"])
+  Sum(["Summarize PDF"])
+  Quiz(["Generate quiz"])
+  Search(["Smart-search highlights"])
+  Mentor(["Ask AI Mentor (SSE stream)"])
+  Correct(["AI-correct my code"])
+  Slash(["Use messenger slash command (/ai /stackoverflow /video)"])
+  WS(["Workspace: analyze / summarize / quiz code"])
+
+  S --- Up
+  S --- Ask
+  S --- Exp
+  S --- Sum
+  S --- Quiz
+  S --- Search
+  S --- Mentor
+  S --- Correct
+  S --- Slash
+  S --- WS
+  Up -. "&laquo;include&raquo;" .-> Ask
+  Correct -. "Pro / Institution only" .- S
+```
 
 > *Figure 55 — Use-case diagram of Sprint 4 — Student (AI features).*
 
@@ -177,6 +252,36 @@ sequenceDiagram
 
 A visitor opens the invite URL `/join-institution/:token`. `JoinInstitution.jsx` calls `GET /api/plan/invite-links/:token` to display the institution and the assigned role. After signup or login, the user calls `POST /api/plan/join-institution`. The backend validates the token, checks `expiresAt` and `maxUses`, and updates the user with `institutionId` + the role from the token (`teacher` or `student`). The frontend redirects to the dashboard.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor V as Visitor
+  participant FE as JoinInstitution.jsx
+  participant API as planRoutes.js
+  participant DB  as PostgreSQL
+
+  V->>FE: Open /join-institution/:token
+  FE->>API: GET /api/plan/invite-links/:token
+  API->>DB: SELECT inviteLink WHERE token = ?
+  alt token unknown / expired / maxUses reached
+    DB-->>API: invalid
+    API-->>FE: 404 / 410
+    FE-->>V: Show "Invite link no longer valid"
+  else valid
+    DB-->>API: { institution, role, expiresAt, usedCount }
+    API-->>FE: { institutionName, role }
+    FE-->>V: Show institution + role, prompt sign-up / login
+    V->>FE: Authenticate
+    FE->>API: POST /api/plan/join-institution { token }
+    API->>DB: BEGIN TX
+    API->>DB: UPDATE users SET institutionId, role
+    API->>DB: UPDATE invite_links SET usedCount = usedCount + 1
+    API->>DB: COMMIT
+    API-->>FE: 200 { user }
+    FE-->>V: Redirect to role-based dashboard
+  end
+```
+
 > *Figure 57 — Sequence diagram "Join an institution via invite link".*
 
 ### 3. Activity Diagrams
@@ -185,11 +290,43 @@ A visitor opens the invite URL `/join-institution/:token`. `JoinInstitution.jsx`
 
 The super admin opens the users-by-plan tab, picks a user and clicks "Ban". A confirmation modal appears. On confirm, the frontend sends `PATCH /api/admin/users/:id { isActive: false }`. All active sessions for that user are revoked at the next request via middleware.
 
+```mermaid
+flowchart TD
+  A([Start]) --> B[Admin opens UsersByPlanTab]
+  B --> C[Pick a user]
+  C --> D[Click "Ban"]
+  D --> E[Confirmation modal]
+  E --> F{Confirm?}
+  F -- No --> Z([End])
+  F -- Yes --> G[PATCH /api/admin/users/:id isActive=false]
+  G --> H{Caller role == "admin"?}
+  H -- No --> I[403 Forbidden] --> Z
+  H -- Yes --> J[UPDATE users SET isActive = false]
+  J --> K[Next request: authenticate middleware rejects token]
+  K --> L[Banned user gets 401 + signed out]
+  L --> Z
+```
+
 > *Figure 58 — Activity diagram "Ban a user".*
 
 #### 3.2. Activity diagram — "Onboard a new institution"
 
 When the Stripe webhook detects a successful Institution checkout, it flips the user's `plan` to `institution`. The next time the user reaches a guarded route, `Guard` detects `plan === "institution" && !institutionId` and redirects to `/onboarding/institution`. The user fills the form, the backend creates the `Institution` and sets the user's `institutionId` and `role = institution_admin`.
+
+```mermaid
+flowchart TD
+  A([Start]) --> B[User completes Stripe Checkout (Institution)]
+  B --> C[Stripe webhook: POST /api/stripe/webhook]
+  C --> D[UPDATE users SET plan = 'institution']
+  D --> E[User navigates to a guarded route]
+  E --> F{Guard: plan == 'institution' AND institutionId == null?}
+  F -- No --> M[Continue to requested route] --> Z([End])
+  F -- Yes --> G[Redirect to /onboarding/institution]
+  G --> H[Fill name, slug, logo]
+  H --> I[POST /api/plan/institution]
+  I --> J[INSERT Institution] --> K[UPDATE users SET institutionId, role = 'institution_admin']
+  K --> L[Redirect to Institution Admin dashboard] --> Z
+```
 
 > *Figure 59 — Activity diagram "Onboard a new institution".*
 
@@ -201,6 +338,75 @@ Sprint 4 adds:
 - `InviteLink` — `id`, `institutionId`, `token`, `role`, `expiresAt`, `maxUses`, `usedCount`.
 - Per-institution `Grade` / `Speciality` / `Level` — same schema as Sprint 3, but with `institutionId` nullable (null = global template owned by the super admin).
 - `Notification` (already defined) used across PDF assistant, classrooms and messaging.
+
+```mermaid
+classDiagram
+  class Institution {
+    +UUID id
+    +string name
+    +string slug
+    +string logoUrl
+    +enum plan
+    +Date createdAt
+  }
+  class InviteLink {
+    +UUID id
+    +UUID institutionId
+    +string token
+    +enum role  (teacher|student|institution_admin)
+    +Date expiresAt
+    +int  maxUses
+    +int  usedCount
+  }
+  class Grade {
+    +UUID id
+    +string name
+    +UUID institutionId
+  }
+  class Speciality {
+    +UUID id
+    +string name
+    +UUID institutionId
+  }
+  class Level {
+    +UUID id
+    +string name
+    +UUID institutionId
+  }
+  class User {
+    +UUID id
+    +enum role
+    +enum plan
+    +UUID institutionId
+  }
+  class StripeCheckout {
+    +string sessionId
+    +enum  product (pro|institution)
+    +enum  status
+  }
+  class PdfDocument {
+    +UUID id
+    +UUID ownerId
+    +string fileUrl
+    +string vectorCollectionName
+    +int  chunksCount
+  }
+  class Notification {
+    +UUID id
+    +UUID userId
+    +string type
+    +JSON payload
+  }
+
+  Institution "1" --> "*" InviteLink : issues
+  Institution "1" --> "*" Grade
+  Institution "1" --> "*" Speciality
+  Institution "1" --> "*" Level
+  Institution "1" --> "*" User       : members
+  User        "1" --> "*" PdfDocument : owns
+  User        "1" --> "*" Notification : receives
+  User        "1" --> "*" StripeCheckout : initiates
+```
 
 > *Figure 60 — Class diagram of Sprint 4.*
 

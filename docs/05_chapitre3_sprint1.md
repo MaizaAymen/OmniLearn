@@ -67,11 +67,54 @@ In this section we elaborate the use-case diagram, the sequence diagrams, the ac
 
 The visitor can: browse the landing page, sign up, verify the email, choose a plan and sign in.
 
+```mermaid
+flowchart LR
+  Visitor((Visitor))
+  UC1(["Browse landing page"])
+  UC2(["Sign up"])
+  UC3(["Verify email"])
+  UC4(["Choose a plan"])
+  UC5(["Sign in"])
+  UC6(["Pay via Stripe"])
+
+  Visitor --- UC1
+  Visitor --- UC2
+  Visitor --- UC3
+  Visitor --- UC4
+  Visitor --- UC5
+  UC2 -. "&laquo;include&raquo;" .-> UC4
+  UC2 -. "&laquo;include&raquo;" .-> UC3
+  UC4 -. "&laquo;extend&raquo;" .-> UC6
+```
+
 > *Figure 6 — Use-case diagram of Sprint 1 — Visitor side.*
 
 #### Student / authenticated user side
 
 The student can: sign in, manage profile (view / update / delete), reset password and enable 2FA.
+
+```mermaid
+flowchart LR
+  Student((Student))
+  L(["Sign in"])
+  VP(["View profile"])
+  UP(["Update profile"])
+  DP(["Delete account"])
+  R(["Reset password"])
+  T(["Enable 2FA (TOTP)"])
+  U(["Upload avatar (Cloudinary)"])
+  CT(["Confirm TOTP code"])
+
+  Student --- L
+  Student --- VP
+  Student --- UP
+  Student --- DP
+  Student --- R
+  Student --- T
+  UP -. "&laquo;include&raquo;" .-> U
+  L  -. "&laquo;extend&raquo;" .-> CT
+  T  -. "&laquo;include&raquo;" .-> CT
+```
 
 > *Figure 7 — Use-case diagram of Sprint 1 — Student side.*
 
@@ -81,11 +124,65 @@ The student can: sign in, manage profile (view / update / delete), reset passwor
 
 A visitor opens the landing page, navigates to `/auth`, enters first name, last name, email, password and chosen plan. The frontend validates the inputs, then sends `POST /api/auth/register`. The backend validates the payload, hashes the password (bcryptjs), creates the `User` row, generates an `emailVerificationToken` and triggers a Nodemailer email. The user is redirected to a "check your inbox" screen.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor V as Visitor
+  participant FE as Auth.jsx
+  participant API as authRoutes.js
+  participant DB as PostgreSQL (User)
+  participant Mail as Nodemailer (SMTP)
+
+  V->>FE: Open /auth and fill the sign-up form
+  FE->>FE: Validate (email format, password strength)
+  FE->>API: POST /api/auth/register { firstname, lastname, email, password, plan }
+  API->>API: bcrypt.hash(password, BCRYPT_ROUNDS)
+  API->>API: generate emailVerificationToken (+ expiry)
+  API->>DB: INSERT INTO users (...)
+  DB-->>API: user row
+  API->>Mail: send verification email (link with token)
+  Mail-->>API: queued
+  API-->>FE: 201 { user, message: "Check your inbox" }
+  FE-->>V: Redirect to "Verify your email" screen
+```
+
 > *Figure 8 — Sequence diagram "Sign up".*
 
 #### 2.2. Sequence diagram — "Sign in"
 
 A student opens `/auth`, enters email and password. The frontend sends `POST /api/auth/login`. The backend looks up the user, compares the password with bcryptjs, optionally challenges for a TOTP code (if `is2FAEnabled`), signs a JWT and returns it. The frontend stores the token and the user in cookies, then redirects to the role-appropriate dashboard.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor S as Student
+  participant FE as Auth.jsx
+  participant API as authRoutes.js
+  participant DB as PostgreSQL (User)
+  participant TOTP as Speakeasy (TOTP)
+
+  S->>FE: Submit email + password
+  FE->>API: POST /api/auth/login { email, password }
+  API->>DB: SELECT user WHERE email = ?
+  DB-->>API: user (hash, is2FAEnabled, twoFactorSecret)
+  API->>API: bcrypt.compare(password, user.password)
+  alt invalid credentials
+    API-->>FE: 401 Unauthorized
+  else valid + 2FA disabled
+    API->>API: jwt.sign({ id, role, plan })
+    API-->>FE: 200 { token, user }
+  else valid + 2FA enabled
+    API-->>FE: 200 { require2FA: true }
+    S->>FE: Enter TOTP code
+    FE->>API: POST /api/auth/login/2fa { code }
+    API->>TOTP: verify(secret, code)
+    TOTP-->>API: ok
+    API->>API: jwt.sign({ id, role, plan })
+    API-->>FE: 200 { token, user }
+  end
+  FE->>FE: js-cookie.set("token", token) + set("user")
+  FE-->>S: Redirect to role-based dashboard
+```
 
 > *Figure 9 — Sequence diagram "Sign in".*
 
@@ -93,21 +190,130 @@ A student opens `/auth`, enters email and password. The frontend sends `POST /ap
 
 The student opens the profile page, clicks "Delete my account". A confirmation modal is shown. On confirmation, the frontend sends `DELETE /api/profile/:id` with the JWT. The backend authorizes (own account or admin), removes the user and returns 204. The frontend clears the cookies and redirects to `/auth`.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor S as Student
+  participant FE as Profile.jsx
+  participant Auth as authenticate (JWT)
+  participant API as profileRoutes.js
+  participant DB as PostgreSQL (User)
+
+  S->>FE: Click "Delete my account"
+  FE->>S: Show confirmation modal
+  S->>FE: Confirm
+  FE->>Auth: DELETE /api/profile/:id  (Bearer JWT)
+  Auth->>Auth: verify(token)
+  alt token invalid or not owner / admin
+    Auth-->>FE: 401 / 403
+  else authorized
+    Auth->>API: forward
+    API->>DB: DELETE FROM users WHERE id = :id
+    DB-->>API: ok
+    API-->>FE: 204 No Content
+    FE->>FE: js-cookie.remove("token"); remove("user")
+    FE-->>S: Redirect to /auth
+  end
+```
+
 > *Figure 10 — Sequence diagram "Delete my account".*
 
 ### 3. Activity Diagrams
 
 #### 3.1. Activity diagram — "Update profile"
 
+```mermaid
+flowchart TD
+  A([Start]) --> B[Open Profile page]
+  B --> C{Pick an avatar?}
+  C -- Yes --> D[Upload to Cloudinary] --> E[Receive avatar URL]
+  C -- No --> E
+  E --> F[Edit bio / GitHub / LinkedIn]
+  F --> G[Submit PATCH /api/profile/:id]
+  G --> H{Server validates payload}
+  H -- Invalid --> I[Show field errors] --> F
+  H -- Valid --> J[UPDATE users SET ...] --> K[Emit 'profile-updated' event]
+  K --> L[Guard re-checks profile completeness]
+  L --> M([End])
+```
+
 > *Figure 11 — Activity diagram "Update profile".*
 
 #### 3.2. Activity diagram — "Reset password"
+
+```mermaid
+flowchart TD
+  A([Start]) --> B[Click "Forgot password?"]
+  B --> C[Enter email]
+  C --> D[POST /api/auth/forgot-password]
+  D --> E{User exists?}
+  E -- No --> F[Generic success message] --> Z([End])
+  E -- Yes --> G[Generate passwordResetToken + expiry]
+  G --> H[Send email via Nodemailer]
+  H --> I[User clicks email link]
+  I --> J[Open /reset-password?token=...]
+  J --> K[Enter new password]
+  K --> L[POST /api/auth/reset-password]
+  L --> M{Token valid & not expired?}
+  M -- No --> N[Show "Link expired"] --> Z
+  M -- Yes --> O[bcrypt.hash + UPDATE users] --> P[Clear reset token] --> Q[Redirect to /auth] --> Z
+```
 
 > *Figure 12 — Activity diagram "Reset password".*
 
 ### 4. Class Diagram
 
 The Sprint-1 class diagram introduces the `User` aggregate with its authentication, profile and plan fields — `id`, `firstname`, `lastname`, `email`, `password`, `role`, `plan`, `planJoinedAt`, `institutionId`, `isActive`, `isEmailVerified`, `emailVerificationToken`, `passwordResetToken`, `twoFactorSecret`, `is2FAEnabled`, `bio`, `githubUrl`, `linkedinUrl`, `avatar`, plus the roadmap-related fields used by later sprints.
+
+```mermaid
+classDiagram
+  class User {
+    +UUID id
+    +string firstname
+    +string lastname
+    +string email
+    -string password
+    +enum role  (student|teacher|admin|institution_admin)
+    +enum plan  (free|pro|institution)
+    +Date planJoinedAt
+    +UUID institutionId
+    +bool isActive
+    +bool isEmailVerified
+    +string emailVerificationToken
+    +Date  emailVerificationExpires
+    +string passwordResetToken
+    +Date  passwordResetExpires
+    +string twoFactorSecret
+    +bool  is2FAEnabled
+    +string bio
+    +string githubUrl
+    +string linkedinUrl
+    +string avatar
+    +register()
+    +login()
+    +verifyEmail(token)
+    +resetPassword(token, newPwd)
+    +enable2FA()
+    +updateProfile()
+    +delete()
+  }
+
+  class AuthToken {
+    <<value object>>
+    +string jwt
+    +Date issuedAt
+    +Date expiresAt
+  }
+
+  class StripeCustomer {
+    +string customerId
+    +string subscriptionId
+    +enum  status
+  }
+
+  User "1" --> "*" AuthToken : issues
+  User "1" --> "0..1" StripeCustomer : links
+```
 
 > *Figure 13 — Class diagram of Sprint 1.*
 

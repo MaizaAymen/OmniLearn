@@ -58,11 +58,68 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 
 The student can: join a classroom via code, view classrooms, see announcements, submit assignments, send messages and receive notifications.
 
+```mermaid
+flowchart LR
+  Student((Student))
+  Join(["Join classroom (with code)"])
+  ListMine(["View my classrooms"])
+  ViewClass(["Open classroom view"])
+  ReadAnn(["Read announcements"])
+  ViewLesson(["View modules / lessons"])
+  ViewAss(["View assignments"])
+  Submit(["Submit assignment"])
+  Conv(["Open conversations"])
+  Send(["Send message"])
+  Recv(["Receive real-time message"])
+  Notif(["See notifications"])
+
+  Student --- Join
+  Student --- ListMine
+  Student --- ViewClass
+  Student --- Conv
+  Student --- Notif
+  ViewClass -. "&laquo;include&raquo;" .-> ReadAnn
+  ViewClass -. "&laquo;include&raquo;" .-> ViewLesson
+  ViewClass -. "&laquo;include&raquo;" .-> ViewAss
+  ViewAss   -. "&laquo;extend&raquo;"  .-> Submit
+  Conv      -. "&laquo;include&raquo;" .-> Send
+  Conv      -. "&laquo;include&raquo;" .-> Recv
+  Send      -. "&laquo;extend&raquo;"  .-> Notif
+```
+
 > *Figure 38 — Use-case diagram of Sprint 3 — Student side.*
 
 #### Teacher side
 
 The teacher can: create a class, generate a class code, list enrolled students, create courses / modules / lessons, create assignments, attach problems to an assignment, post announcements and respond to messages.
+
+```mermaid
+flowchart LR
+  Teacher((Teacher))
+  CreateClass(["Create class"])
+  Code(["Generate class code"])
+  Members(["List enrolled students"])
+  CRUDCourse(["Manage courses"])
+  CRUDModule(["Manage modules"])
+  CRUDLesson(["Manage lessons"])
+  CreateAss(["Create assignment"])
+  AttachP(["Attach problems to assignment"])
+  Grade(["Grade submissions"])
+  PostAnn(["Post announcement"])
+  Reply(["Reply in conversations"])
+
+  Teacher --- CreateClass
+  Teacher --- Members
+  Teacher --- CRUDCourse
+  Teacher --- CreateAss
+  Teacher --- Grade
+  Teacher --- PostAnn
+  Teacher --- Reply
+  CreateClass -. "&laquo;include&raquo;" .-> Code
+  CRUDCourse  -. "&laquo;include&raquo;" .-> CRUDModule
+  CRUDModule  -. "&laquo;include&raquo;" .-> CRUDLesson
+  CreateAss   -. "&laquo;include&raquo;" .-> AttachP
+```
 
 > *Figure 39 — Use-case diagram of Sprint 3 — Teacher side.*
 
@@ -72,17 +129,92 @@ The teacher can: create a class, generate a class code, list enrolled students, 
 
 A student receives an invite code, opens `/join/:code`. The frontend calls `POST /api/classes/join`. The backend looks up the class by code, ensures the student belongs to the same institution, creates an `Enrollment`, and returns the class. The student is redirected to `MyClassrooms`.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor S as Student
+  participant FE as JoinClassroom.jsx
+  participant API as classRoutes.js
+  participant DB as PostgreSQL
+
+  S->>FE: Open /join/:code
+  FE->>API: POST /api/classes/join { code }
+  API->>DB: SELECT class WHERE code = ?
+  alt class not found
+    DB-->>API: null
+    API-->>FE: 404 Not found
+  else found
+    DB-->>API: class
+    API->>API: check class.institutionId == student.institutionId
+    alt mismatch
+      API-->>FE: 403 Forbidden
+    else ok
+      API->>DB: INSERT INTO enrollments (classId, studentId)
+      DB-->>API: enrollment
+      API-->>FE: 201 { class }
+      FE-->>S: Redirect to /classrooms
+    end
+  end
+```
+
 > *Figure 40 — Sequence diagram "Join a classroom".*
 
 #### 2.2. Sequence diagram — "Send a real-time message"
 
 A user opens `Messages.jsx`, picks a conversation and types a message. On submit, the frontend calls `POST /api/messages`. The backend persists the `Message`, then emits a `message:new` event on the conversation's Socket.IO room. All connected clients in the room receive the message and append it to the thread; a `Notification` is created for offline recipients.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor A as User A
+  participant FA as Messages.jsx (A)
+  participant API as messageRoutes.js
+  participant Hub as messageHub.js (Socket.IO)
+  participant DB  as PostgreSQL
+  participant FB  as Messages.jsx (B)
+  actor B as User B
+
+  A->>FA: Type and send message
+  FA->>API: POST /api/messages { conversationId, body }
+  API->>DB: INSERT INTO messages
+  DB-->>API: message row
+  API->>Hub: emit("message:new", message) to room conv:<id>
+  par fan-out
+    Hub-->>FA: ack (self echo)
+    FA-->>A: append to thread
+  and
+    Hub-->>FB: message:new
+    FB-->>B: append to thread
+  end
+  alt recipient offline
+    API->>DB: INSERT INTO notifications (userId=B, type="message")
+    Hub->>Hub: emit("notification:new") if reconnected later
+  end
+  API-->>FA: 201 { message }
+```
+
 > *Figure 41 — Sequence diagram "Send a real-time message".*
 
 ### 3. Activity Diagrams
 
 #### 3.1. Activity diagram — "Create an assignment"
+
+```mermaid
+flowchart TD
+  A([Start]) --> B[Teacher opens ModuleAssignmentsTab]
+  B --> C[Fill name, due date, description]
+  C --> D[Select a module / class]
+  D --> E{Attach problems?}
+  E -- Yes --> F[Pick problems from catalogue]
+  E -- No --> G
+  F --> G[POST /api/assignments]
+  G --> H{Authorized as teacher of the class?}
+  H -- No --> I[403 Forbidden] --> Z([End])
+  H -- Yes --> J[INSERT ClassAssignment]
+  J --> K[Notify enrolled students (Notification + Socket.IO)]
+  K --> L[Assignment appears in ClassAssignmentsPage]
+  L --> Z
+```
 
 > *Figure 43 — Activity diagram "Create an assignment".*
 
@@ -100,6 +232,99 @@ The Sprint-3 class diagram introduces the collaboration entities:
 - `Conversation` — `id`, `name?`, `participantIds[]`, `createdAt`.
 - `Message` — `id`, `conversationId`, `senderId`, `body`, `createdAt`.
 - `Notification` — `id`, `userId`, `type`, `payload`, `readAt?`.
+
+```mermaid
+classDiagram
+  class User {
+    +UUID id
+    +enum role
+    +UUID institutionId
+  }
+  class Class {
+    +UUID id
+    +string name
+    +string code
+    +UUID gradeId
+    +UUID specialityId
+    +UUID levelId
+    +UUID teacherId
+    +UUID institutionId
+  }
+  class Enrollment {
+    +UUID id
+    +UUID classId
+    +UUID studentId
+    +Date enrolledAt
+  }
+  class Course {
+    +UUID id
+    +string name
+    +UUID teacherId
+    +UUID classId
+    +UUID levelId
+  }
+  class Module {
+    +UUID id
+    +string name
+    +UUID courseId
+  }
+  class Lesson {
+    +UUID id
+    +string title
+    +text content
+    +string pdfUrl
+    +UUID moduleId
+    +UUID courseId
+  }
+  class ClassAssignment {
+    +UUID id
+    +string name
+    +UUID moduleId
+    +UUID classId
+    +Date dueAt
+    +UUID[] problemIds
+  }
+  class Announcement {
+    +UUID id
+    +string title
+    +text body
+    +UUID classId
+    +UUID authorId
+    +Date createdAt
+  }
+  class Conversation {
+    +UUID id
+    +string name
+    +UUID[] participantIds
+    +Date createdAt
+  }
+  class Message {
+    +UUID id
+    +UUID conversationId
+    +UUID senderId
+    +text body
+    +Date createdAt
+  }
+  class Notification {
+    +UUID id
+    +UUID userId
+    +string type
+    +JSON payload
+    +Date readAt
+  }
+
+  User "1"  --> "*" Class       : teaches
+  User "1"  --> "*" Enrollment  : enrolls
+  Class "1" --> "*" Enrollment  : has
+  Class "1" --> "*" Course      : contains
+  Course "1" --> "*" Module     : contains
+  Module "1" --> "*" Lesson     : contains
+  Module "1" --> "*" ClassAssignment : produces
+  Class "1" --> "*" Announcement     : has
+  User  "1" --> "*" Conversation     : participates
+  Conversation "1" --> "*" Message   : holds
+  User  "1" --> "*" Notification     : receives
+```
 
 > *Figure 44 — Class diagram of Sprint 3.*
 

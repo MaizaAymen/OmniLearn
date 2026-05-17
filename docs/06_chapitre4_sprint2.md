@@ -63,11 +63,68 @@ This second sprint focuses on the **core learning loop**: roadmaps, problems and
 
 The student can: complete the roadmap onboarding, view the roadmap, click a node, track progress, download a certificate, browse problems, open a problem, run code, submit code and see the coding dashboard.
 
+```mermaid
+flowchart LR
+  Student((Student))
+  Onb(["Fill onboarding (goal, interests, languages)"])
+  Gen(["Generate personalized roadmap"])
+  View(["View roadmap graph"])
+  Node(["Open node detail"])
+  Prog(["Track progress"])
+  Cert(["Download certificate (PDF)"])
+  Browse(["Browse problem catalogue"])
+  Filter(["Filter / search problems"])
+  Open(["Open a problem"])
+  Run(["Run code"])
+  Submit(["Submit code"])
+  Dash(["View coding dashboard"])
+  LLM(["Call LLM (Groq)"])
+
+  Student --- Onb
+  Student --- View
+  Student --- Node
+  Student --- Prog
+  Student --- Cert
+  Student --- Browse
+  Student --- Open
+  Student --- Run
+  Student --- Submit
+  Student --- Dash
+  Onb -. "&laquo;include&raquo;" .-> Gen
+  Gen -. "&laquo;include&raquo;" .-> LLM
+  Browse -. "&laquo;extend&raquo;" .-> Filter
+  Open -. "&laquo;include&raquo;" .-> Run
+  Open -. "&laquo;include&raquo;" .-> Submit
+  Prog -. "&laquo;extend&raquo;" .-> Cert
+```
+
 > *Figure 22 — Use-case diagram of Sprint 2 — Student side.*
 
 #### Super admin side
 
 The super admin can: CRUD problems, toggle Free-tier, toggle Pro-tier, and import / export the problem dataset.
+
+```mermaid
+flowchart LR
+  Admin((Super Admin))
+  Create(["Create problem"])
+  Read(["List / read problems"])
+  Update(["Update problem"])
+  Delete(["Delete problem"])
+  Free(["Toggle isFreeTier"])
+  Pro(["Toggle isProTier"])
+  Imp(["Import problems (JSON)"])
+  Exp(["Export problems (JSON)"])
+
+  Admin --- Create
+  Admin --- Read
+  Admin --- Update
+  Admin --- Delete
+  Admin --- Free
+  Admin --- Pro
+  Admin --- Imp
+  Admin --- Exp
+```
 
 > *Figure 23 — Use-case diagram of Sprint 2 — Super Admin side.*
 
@@ -77,11 +134,69 @@ The super admin can: CRUD problems, toggle Free-tier, toggle Pro-tier, and impor
 
 The student opens the `OnboardingForm`, fills in career goal / interests / languages, and submits. The frontend calls `POST /api/roadmap/onboarding`. The backend persists the inputs on the `User` row, then invokes `RoadmapService.js` which calls the LLM (Groq / OpenAI), parses the JSON answer, validates it, and creates a `SavedRoadmap` linked to the user. The page navigates to `/roadmap` and renders the graph.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor S as Student
+  participant FE as OnboardingForm.jsx
+  participant API as roadmapRoutes.js
+  participant Svc as RoadmapService
+  participant LLM as Groq llama-3.3-70b
+  participant SO as StackExchange
+  participant YT as YouTube Data API
+  participant DB as PostgreSQL
+
+  S->>FE: Fill goal, interests, languages
+  FE->>API: POST /api/roadmap/onboarding
+  API->>DB: UPDATE users SET careerGoal, interests, languages
+  API->>Svc: generateRoadmap(profile)
+  Svc->>LLM: chat.completions (15 nodes / 5 levels)
+  LLM-->>Svc: roadmap JSON
+  Svc->>Svc: normalizeRoadmap + validate
+  loop batches of 5 nodes
+    Svc->>SO: search/advanced (top 5 by votes)
+    Svc->>YT: search (top 3 by viewCount)
+    Svc->>LLM: official-docs URLs + 5 MCQs
+  end
+  Svc->>DB: INSERT INTO saved_roadmaps (graphJson, userId)
+  DB-->>Svc: roadmap row
+  Svc-->>API: roadmap
+  API-->>FE: 201 { roadmap }
+  FE-->>S: Navigate to /roadmap (React Flow render)
+```
+
 > *Figure 24 — Sequence diagram "Generate personalized roadmap".*
 
 #### 2.2. Sequence diagram — "Submit a code solution"
 
 The student writes code in the CodeMirror editor and clicks "Submit". The frontend calls `POST /api/submissions` with the problem id, the source code and the language. The backend creates a pending `CodeSubmission`, runs the code in a sandbox, compares the output to the expected one, updates the submission with the verdict and returns it. The frontend updates the `OutputPanel` and the `CodingDashboard`.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor S as Student
+  participant FE as ProblemPage.jsx (CodeMirror)
+  participant API as submissionRoutes.js
+  participant Sandbox as Code runner (sandbox)
+  participant DB as PostgreSQL
+
+  S->>FE: Write code, click "Submit"
+  FE->>API: POST /api/submissions { problemId, sourceCode, language }
+  API->>DB: INSERT CodeSubmission (verdict = "pending")
+  API->>Sandbox: run(sourceCode, language, stdin)
+  Sandbox-->>API: { stdout, stderr, runtimeMs }
+  API->>API: compare(stdout, problem.expectedOutput)
+  alt match
+    API->>DB: UPDATE submission SET verdict = "accepted"
+  else mismatch
+    API->>DB: UPDATE submission SET verdict = "wrong_answer"
+  else error
+    API->>DB: UPDATE submission SET verdict = "runtime_error"
+  end
+  DB-->>API: submission row
+  API-->>FE: 201 { verdict, stdout, stderr, runtimeMs }
+  FE-->>S: Update OutputPanel + refresh CodingDashboard
+```
 
 > *Figure 25 — Sequence diagram "Submit code".*
 
@@ -91,11 +206,41 @@ The student writes code in the CodeMirror editor and clicks "Submit". The fronte
 
 The super admin opens the `FreeTierTab`, selects a problem and toggles the switch. The frontend calls `PATCH /api/admin/problems/:id { isFreeTier: true|false }`. The backend updates the row. Free users immediately see / hide that problem in their catalogue.
 
+```mermaid
+flowchart TD
+  A([Start]) --> B[Super admin opens FreeTierTab]
+  B --> C[Pick a problem]
+  C --> D{Toggle switch}
+  D -->|ON| E[PATCH /api/admin/problems/:id isFreeTier=true]
+  D -->|OFF| F[PATCH /api/admin/problems/:id isFreeTier=false]
+  E --> G[UPDATE problems SET isFreeTier]
+  F --> G
+  G --> H{Authorized as admin?}
+  H -- No --> I[403 Forbidden] --> Z([End])
+  H -- Yes --> J[Return updated row]
+  J --> K[Free users' catalogue re-queries] --> L[Problem appears or disappears] --> Z
+```
+
 > *Figure 26 — Activity diagram "Toggle problem as Free-tier".*
 
 #### 3.2. Activity diagram — "Generate certificate"
 
 When the student reaches 100% roadmap progress, the `CertificateButton` becomes active. The user clicks it, the `Certificate` component renders the certificate HTML, `html2canvas` snapshots it, and `jspdf` exports it as a PDF download.
+
+```mermaid
+flowchart TD
+  A([Start]) --> B[Student marks last node as done]
+  B --> C[PATCH /api/roadmap/progress]
+  C --> D{progress == 100%?}
+  D -- No --> E[Save progress] --> Z([End])
+  D -- Yes --> F[Save progress, unlock certificate]
+  F --> G[CertificateButton becomes active]
+  G --> H[Click button]
+  H --> I[Certificate.jsx renders HTML template (name, roadmap title, date)]
+  I --> J[html2canvas snapshots the node]
+  J --> K[jsPDF builds the PDF from the canvas]
+  K --> L[Trigger browser download] --> Z
+```
 
 > *Figure 27 — Activity diagram "Generate certificate".*
 
@@ -108,6 +253,63 @@ The Sprint-2 class diagram adds:
 - `StudentProblemSet` — `id`, `studentId`, `problemIds[]`, `generatedFromGoal`, etc.
 - `SavedRoadmap` — `id`, `userId`, `graphJson` (nodes / edges), `progress`.
 - Relations: `User 1 — N Problem` (creator), `User 1 — N CodeSubmission`, `Problem 1 — N CodeSubmission`, `User 1 — 1 SavedRoadmap`, `User 1 — N StudentProblemSet`.
+
+```mermaid
+classDiagram
+  class User {
+    +UUID id
+    +string careerGoal
+    +string[] interests
+    +string[] languages
+    +int roadmapProgress
+  }
+
+  class Problem {
+    +UUID id
+    +string title
+    +text statement
+    +enum difficulty (easy|medium|hard)
+    +string[] tags
+    +string language
+    +text expectedOutput
+    +bool isFreeTier
+    +bool isProTier
+    +UUID institutionId
+    +UUID createdBy
+  }
+
+  class CodeSubmission {
+    +UUID id
+    +UUID userId
+    +UUID problemId
+    +text sourceCode
+    +string language
+    +enum verdict (pending|accepted|wrong_answer|runtime_error)
+    +int runtimeMs
+    +Date createdAt
+  }
+
+  class SavedRoadmap {
+    +UUID id
+    +UUID userId
+    +JSON graphJson
+    +int  progress
+    +bool isActive
+  }
+
+  class StudentProblemSet {
+    +UUID id
+    +UUID studentId
+    +UUID[] problemIds
+    +string generatedFromGoal
+  }
+
+  User "1" --> "*" Problem : createdBy
+  User "1" --> "*" CodeSubmission : submits
+  Problem "1" --> "*" CodeSubmission : receives
+  User "1" --> "*" SavedRoadmap : owns
+  User "1" --> "*" StudentProblemSet : owns
+```
 
 > *Figure 28 — Class diagram of Sprint 2.*
 
