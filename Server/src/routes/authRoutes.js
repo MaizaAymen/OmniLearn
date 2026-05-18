@@ -419,6 +419,71 @@ router.post("/2fa/disable", authenticate, async (req, res) => {
   }
 });
 
+// ─── Google account linking (for users already logged in) ─────────────────────
+
+router.post("/google/link", authenticate, async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ error: "Missing Google credential" });
+    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: "Google login not configured" });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email: googleEmail, picture } = payload;
+
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.googleId) {
+      return res.status(400).json({ error: "Your account is already linked to Google" });
+    }
+
+    if (googleEmail.toLowerCase() !== user.email.toLowerCase()) {
+      return res.status(400).json({
+        error: "The Google account email does not match your OmniLearn email",
+      });
+    }
+
+    const existing = await User.findOne({ where: { googleId } });
+    if (existing && existing.id !== user.id) {
+      return res.status(409).json({ error: "This Google account is already linked to another user" });
+    }
+
+    user.googleId = googleId;
+    if (!user.avatar && picture) user.avatar = picture;
+    await user.save();
+
+    res.json({ message: "Google account linked successfully", googleId: user.googleId });
+  } catch (err) {
+    console.error("Google link error:", err);
+    res.status(401).json({ error: "Failed to link Google account" });
+  }
+});
+
+router.post("/google/unlink", authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.googleId) return res.status(400).json({ error: "No Google account is linked" });
+    if (!user.password) {
+      return res.status(400).json({
+        error: "Set a password before unlinking Google — otherwise you won't be able to log in.",
+      });
+    }
+
+    user.googleId = null;
+    await user.save();
+
+    res.json({ message: "Google account unlinked successfully" });
+  } catch (err) {
+    console.error("Google unlink error:", err);
+    res.status(500).json({ error: "Failed to unlink Google account" });
+  }
+});
+
 // ─── Email Verification Routes ────────────────────────────────────────────────
 
 // Send a verification email to the logged-in user

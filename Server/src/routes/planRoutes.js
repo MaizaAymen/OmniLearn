@@ -997,7 +997,7 @@ router.get("/super-admin/users-overview", requireSuperAdmin, async (req, res) =>
       attributes: [
         "id", "firstname", "lastname", "email", "role", "plan",
         "institutionId", "createdAt", "planJoinedAt", "isActive",
-        "isEmailVerified",
+        "isEmailVerified", "avatar",
       ],
       include: [
         { model: Institution, as: "institution", attributes: ["id", "name"], required: false },

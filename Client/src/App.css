@@ -14,10 +14,7 @@ body {
   overflow-x: hidden;
 }
 
-img, svg, video, canvas {
-  max-width: 100%;
-  height: auto;
-}
+
 
 /* Anything that overflows on a phone gets a horizontal scroll
    instead of breaking the layout. */

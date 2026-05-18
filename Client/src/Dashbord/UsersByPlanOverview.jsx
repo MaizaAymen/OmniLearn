@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button, Card, Col, Descriptions, Form, Input, Modal, Row, Segmented,
+  Avatar, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Segmented,
   Select, Space, Statistic, Table, Tag, Typography, message,
 } from "antd";
-import { EditOutlined } from "@ant-design/icons";
+import { EditOutlined, UserOutlined } from "@ant-design/icons";
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -126,6 +126,14 @@ const UsersByPlanOverview = () => {
 
   // ÉTAPE 4 : colonnes du tableau (vue résumée).
   const columns = [
+    {
+      title: "",
+      key: "avatar",
+      width: 56,
+      render: (_, u) => (
+        <Avatar src={u.avatar || undefined} icon={<UserOutlined />} />
+      ),
+    },
     {
       title: "Name",
       key: "name",

@@ -332,34 +332,26 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-1 class diagram introduces the `User` aggregate with its authentication, profile and plan fields — `id`, `firstname`, `lastname`, `email`, `password`, `role`, `plan`, `planJoinedAt`, `institutionId`, `isActive`, `isEmailVerified`, `emailVerificationToken`, `passwordResetToken`, `twoFactorSecret`, `is2FAEnabled`, `bio`, `githubUrl`, `linkedinUrl`, `avatar`, plus the roadmap-related fields used by later sprints.
+The Sprint-1 class diagram is organised around an **abstract `User`** that holds the authentication core (identity, password, plan, activation flags) and four **role subclasses** — `Student`, `Teacher`, `Admin`, `InstitutionAdmin` — which the role-based sidebar branches on. The profile fields (`bio`, `githubUrl`, `linkedinUrl`, `avatar`) are extracted into a `Profile` value object composed by `User`, and the security-sensitive fields (`emailVerificationToken`, `passwordResetToken`, `twoFactorSecret`, `is2FAEnabled`) are grouped into a `SecurityCredentials` value object. `AuthToken` is the JWT returned by `login()` — it is **transient** (stateless JWT, never persisted). `StripeCustomer` links a `User` to its Stripe-side subscription when a Free user upgrades to Pro. Persistence uses single-table inheritance with a `role` discriminator column on the `users` table.
 
 ```mermaid
 classDiagram
+  direction TB
+
   class User {
+    <<abstract>>
     +UUID id
     +string firstname
     +string lastname
     +string email
     -string password
-    +enum role  (student|teacher|admin|institution_admin)
     +enum plan  (free|pro|institution)
     +Date planJoinedAt
     +UUID institutionId
     +bool isActive
     +bool isEmailVerified
-    +string emailVerificationToken
-    +Date  emailVerificationExpires
-    +string passwordResetToken
-    +Date  passwordResetExpires
-    +string twoFactorSecret
-    +bool  is2FAEnabled
-    +string bio
-    +string githubUrl
-    +string linkedinUrl
-    +string avatar
     +register()
-    +login()
+    +login() AuthToken
     +verifyEmail(token)
     +resetPassword(token, newPwd)
     +enable2FA()
@@ -367,8 +359,35 @@ classDiagram
     +delete()
   }
 
-  class AuthToken {
+  class Student {
+  }
+  class Teacher {
+  }
+  class Admin {
+  }
+  class InstitutionAdmin {
+  }
+
+  class Profile {
     <<value object>>
+    +string bio
+    +string githubUrl
+    +string linkedinUrl
+    +string avatar
+  }
+
+  class SecurityCredentials {
+    <<value object>>
+    +string emailVerificationToken
+    +Date   emailVerificationExpires
+    +string passwordResetToken
+    +Date   passwordResetExpires
+    +string twoFactorSecret
+    +bool   is2FAEnabled
+  }
+
+  class AuthToken {
+    <<transient>>
     +string jwt
     +Date issuedAt
     +Date expiresAt
@@ -380,8 +399,18 @@ classDiagram
     +enum  status
   }
 
-  User "1" --> "*" AuthToken : issues
-  User "1" --> "0..1" StripeCustomer : links
+  Student          --|> User
+  Teacher          --|> User
+  Admin            --|> User
+  InstitutionAdmin --|> User
+
+  User "1" *-- "1"    Profile             : has
+  User "1" *-- "1"    SecurityCredentials : has
+  User "1" --  "0..1" StripeCustomer      : links
+  User ..> AuthToken : «returns»
+
+  note for User "Single-table inheritance:\nrole discriminator on `users` table"
+  note for Student "Role-specific methods\narrive in Sprint 2+"
 ```
 
 > *Figure 13 — Class diagram of Sprint 1.*

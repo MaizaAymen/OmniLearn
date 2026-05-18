@@ -45,6 +45,7 @@ import {
 import ImgCrop from "antd-img-crop";
 import Cookies from "js-cookie";
 import dayjs from "dayjs";
+import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
 import { BellOutlined, TeamOutlined, CheckOutlined } from "@ant-design/icons";
 import { Badge } from "antd";
@@ -214,6 +215,9 @@ export default function Profile() {
   const [twoFAOtp, setTwoFAOtp] = useState("");
   // Generic loading flag used while any 2FA API call is in-flight
   const [twoFALoading, setTwoFALoading] = useState(false);
+  // ── Google linking state ──────────────────────────────────────────────────
+  const [googleLinkModal, setGoogleLinkModal] = useState(false);
+  const [googleActionLoading, setGoogleActionLoading] = useState(false);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const navigate = useNavigate();
@@ -751,6 +755,59 @@ export default function Profile() {
     } finally {
       setTwoFALoading(false);
     }
+  };
+
+  const handleGoogleLink = async (credentialResponse) => {
+    const credential = credentialResponse?.credential;
+    if (!credential) {
+      message.error("Google sign-in returned no credential");
+      return;
+    }
+    setGoogleActionLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/google/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to link Google account");
+      setUser((prev) => ({ ...prev, googleId: data.googleId }));
+      setGoogleLinkModal(false);
+      message.success("Google account linked");
+    } catch (err) {
+      message.error(err.message || "Failed to link Google account");
+    } finally {
+      setGoogleActionLoading(false);
+    }
+  };
+
+  const handleGoogleUnlink = () => {
+    Modal.confirm({
+      title: "Unlink Google account?",
+      icon: <ExclamationCircleOutlined />,
+      content:
+        "You'll need to use your email and password to sign in afterwards. Make sure you have one set.",
+      okText: "Unlink",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setGoogleActionLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/auth/google/unlink`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to unlink");
+          setUser((prev) => ({ ...prev, googleId: null }));
+          message.success("Google account unlinked");
+        } catch (err) {
+          message.error(err.message || "Failed to unlink Google account");
+        } finally {
+          setGoogleActionLoading(false);
+        }
+      },
+    });
   };
 
   const initials = user
@@ -1785,6 +1842,32 @@ export default function Profile() {
                       )}
                     </Space>
                   </Descriptions.Item>
+                  <Descriptions.Item label="Google Account">
+                    <Space wrap>
+                      <Tag color={user.googleId ? "success" : "default"}>
+                        {user.googleId ? "Linked" : "Not linked"}
+                      </Tag>
+                      {user.googleId ? (
+                        <Button
+                          size="small"
+                          danger
+                          loading={googleActionLoading}
+                          onClick={handleGoogleUnlink}
+                        >
+                          Unlink
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="primary"
+                          loading={googleActionLoading}
+                          onClick={() => setGoogleLinkModal(true)}
+                        >
+                          Link Google
+                        </Button>
+                      )}
+                    </Space>
+                  </Descriptions.Item>
                   <Descriptions.Item label="Last Login">
                     {user.lastLoginAt
                       ? dayjs(user.lastLoginAt).format("MMM D, YYYY HH:mm")
@@ -1809,6 +1892,37 @@ export default function Profile() {
         </Content>
       </Layout>
 
+      <Modal
+        title="Link your Google account"
+        open={googleLinkModal}
+        onCancel={() => setGoogleLinkModal(false)}
+        footer={null}
+        width={420}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Text>
+            Sign in with the Google account that uses <Text strong>{user.email}</Text>. The email must
+            match your OmniLearn email.
+          </Text>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <GoogleLogin
+              onSuccess={handleGoogleLink}
+              onError={() => message.error("Google sign-in failed")}
+              width="320"
+              shape="rectangular"
+              size="large"
+              text="continue_with"
+              theme="outline"
+            />
+          </div>
+          {googleActionLoading && (
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <Spin />
+            </div>
+          )}
+        </Space>
+      </Modal>
     </div>
   );
 }
