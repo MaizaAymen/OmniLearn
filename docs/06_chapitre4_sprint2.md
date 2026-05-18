@@ -343,7 +343,32 @@ classDiagram
 
 > *Figure 28 — Class diagram of Sprint 2.*
 
-### 5. C4 Component view
+### 5. C4 Container view
+
+Sprint 2 keeps the same two-tier shape but the API gains a synchronous AI orchestrator (`RoadmapService`) that talks to Groq, StackExchange and YouTube, and a sidecar **code-sandbox runner** that executes user submissions in isolation. PostgreSQL now stores roadmaps, problems and submissions on top of the Sprint 1 schema.
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  SPA["React SPA<br/>(graph + Monaco editor)"]
+  API["Web API · Express 5<br/>+ RoadmapService"]
+  Sand["Code sandbox<br/>runner"]
+  DB[("PostgreSQL")]
+  Groq[(Groq · LLM)]
+  SO[(StackExchange)]
+  YT[(YouTube)]
+
+  SPA -- "HTTPS / JSON · JWT" --> API
+  API -- "Sequelize"          --> DB
+  API -- "execute / verdict"  --> Sand
+  API -- "completions"        --> Groq
+  API -- "enrichment"         --> SO
+  API -- "enrichment"         --> YT
+```
+
+> *Figure 28.1 — Sprint 2 — C4 Container view.*
+
+### 6. C4 Component view
 
 Sprint 2 adds five route modules (`roadmapRoutes`, `problemRoutes`, `submissionRoutes`, `runRoutes`, `admin/problemsRoutes`) and the `RoadmapService` AI orchestrator. The Component view groups every public endpoint and exposes the internal building blocks of `RoadmapService.js` (prompt → LLM → repair → normalize → enrichment batcher).
 
@@ -445,7 +470,7 @@ flowchart TB
   SPSM --> PG
 ```
 
-> *Figure 28.1 — Sprint 2 — C4 Component view.*
+> *Figure 28.2 — Sprint 2 — C4 Component view.*
 
 ## V. Implementation
 

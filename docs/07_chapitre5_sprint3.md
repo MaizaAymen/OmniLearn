@@ -354,7 +354,30 @@ classDiagram
 
 > *Figure 44 — Class diagram of Sprint 3.*
 
-### 5. C4 Component view
+### 5. C4 Container view
+
+Sprint 3 introduces a second long-lived process — the **Socket.IO message hub** (`messageHub.js`) — that shares the same JWT and the same PostgreSQL database as the HTTP API. The SPA opens a WebSocket alongside its REST calls; the API emits message/notification events into the hub, which routes them by conversation room. Lesson PDFs go through Cloudinary.
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  SPA["React SPA<br/>+ socket.io-client"]
+  API["Web API<br/>Express 5"]
+  Hub["Socket.IO Hub<br/>(messageHub.js)"]
+  DB[("PostgreSQL")]
+  Cloud[(Cloudinary)]
+
+  SPA  -- "HTTPS / JSON · JWT"                   --> API
+  SPA  <-- "WebSocket · JWT handshake"           --> Hub
+  API  -- "Sequelize"                            --> DB
+  API  -- "lesson PDFs"                          --> Cloud
+  API  -. "message:new · notification:new"       .-> Hub
+  Hub  -- "Sequelize"                            --> DB
+```
+
+> *Figure 44.1 — Sprint 3 — C4 Container view.*
+
+### 6. C4 Component view
 
 Sprint 3 adds the **collaboration plane** (classes, courses, modules, lessons, assignments, announcements, conversations, messages, notifications) and the **real-time plane** (`messageHub.js` Socket.IO server). The Component view shows every public endpoint and the internal building blocks of the hub (handshake, rooms, presence, broadcaster, fan-out, disconnect cleanup).
 
@@ -463,7 +486,7 @@ flowchart TB
   NotM --> PG
 ```
 
-> *Figure 44.1 — Sprint 3 — C4 Component view.*
+> *Figure 44.2 — Sprint 3 — C4 Component view.*
 
 ## V. Implementation
 

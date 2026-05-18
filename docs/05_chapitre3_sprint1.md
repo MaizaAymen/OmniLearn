@@ -386,7 +386,31 @@ classDiagram
 
 > *Figure 13 — Class diagram of Sprint 1.*
 
-### 5. C4 Component view
+### 5. C4 Container view
+
+The Sprint 1 deployment is a thin three-tier stack: a React 19 SPA (Vite) talks to a single Express 5 API, which fans out to PostgreSQL and three managed services (SMTP for verification mails, Cloudinary for avatars, Stripe for paid plans). The JWT travels from the SPA in the `Authorization` header; the only inbound webhook is Stripe → API.
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  SPA["React 19 SPA<br/>(Vite)"]
+  API["Web API<br/>Express 5"]
+  DB[("PostgreSQL")]
+  SMTP[(SMTP)]
+  Cloud[(Cloudinary)]
+  Stripe[(Stripe)]
+
+  SPA  -- "HTTPS / JSON · JWT"     --> API
+  API  -- "Sequelize"              --> DB
+  API  -- "verification mails"     --> SMTP
+  API  -- "avatar upload"          --> Cloud
+  API  -- "checkout"               --> Stripe
+  Stripe -. "webhook"              .-> API
+```
+
+> *Figure 13.1 — Sprint 1 — C4 Container view.*
+
+### 6. C4 Component view
 
 The Sprint 1 backend exposes three route modules (`authRoutes`, `profileRoutes`, `stripeRoutes`), one `authenticate` middleware, the `User` Sequelize model and a small set of supporting helpers (bcryptjs, jsonwebtoken, Speakeasy, qrcode, Nodemailer, Cloudinary, Stripe SDK). The Component view groups every public endpoint by module and shows which helpers and external systems each endpoint consumes.
 
@@ -460,7 +484,7 @@ flowchart TB
   StripeC --> StripeExt
 ```
 
-> *Figure 13.1 — Sprint 1 — C4 Component view.*
+> *Figure 13.2 — Sprint 1 — C4 Component view.*
 
 ## V. Implementation
 
