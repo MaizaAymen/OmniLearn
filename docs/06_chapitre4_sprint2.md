@@ -282,24 +282,17 @@ The Sprint-2 class diagram adds:
 - `CodeSubmission` — `id`, `userId`, `problemId`, `sourceCode`, `language`, `verdict`, `runtimeMs`, `createdAt`.
 - `StudentProblemSet` — `id`, `studentId`, `problemIds[]`, `generatedFromGoal`, etc.
 - `SavedRoadmap` — `id`, `userId`, `graphJson` (nodes / edges), `progress`.
-
-Relations are attached to the `User` subclasses introduced in Sprint 1 so the role-specific intent is explicit: `Teacher` authors `Problem`s, `Student` produces `CodeSubmission`s, owns a `SavedRoadmap` and a `StudentProblemSet`.
+- Relations: `User 1 — N Problem` (creator), `User 1 — N CodeSubmission`, `Problem 1 — N CodeSubmission`, `User 1 — 1 SavedRoadmap`, `User 1 — N StudentProblemSet`.
 
 ```mermaid
 classDiagram
   class User {
-    <<abstract>>
     +UUID id
-  }
-  class Teacher
-  class Student {
     +string careerGoal
     +string[] interests
     +string[] languages
     +int roadmapProgress
   }
-  User <|-- Teacher
-  User <|-- Student
 
   class Problem {
     +UUID id
@@ -341,16 +334,14 @@ classDiagram
     +string generatedFromGoal
   }
 
-  Teacher  "1" --> "*" Problem           : authors
-  Student  "1" --> "*" CodeSubmission    : submits
-  Problem  "1" --> "*" CodeSubmission    : receives
-  Student  "1" --> "1" SavedRoadmap      : owns
-  Student  "1" --> "*" StudentProblemSet : owns
+  User "1" --> "*" Problem : createdBy
+  User "1" --> "*" CodeSubmission : submits
+  Problem "1" --> "*" CodeSubmission : receives
+  User "1" --> "*" SavedRoadmap : owns
+  User "1" --> "*" StudentProblemSet : owns
 ```
 
 > *Figure 28 — Class diagram of Sprint 2.*
-
-> **Modeling note.** The relationships are attached to `Teacher` and `Student` rather than to the abstract `User` — only teachers may author a `Problem`, and a `SavedRoadmap` only makes sense for a student. At the database level both endpoints still resolve to a row in the single `users` collection, but the conceptual model now enforces *who* can do *what*.
 
 ### 5. C4 Container view
 

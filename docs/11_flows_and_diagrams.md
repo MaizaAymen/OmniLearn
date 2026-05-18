@@ -131,12 +131,12 @@ flowchart LR
 ```mermaid
 classDiagram
   class User {
-    <<abstract>>
     +UUID id
     +string firstname
     +string lastname
     +string email
     +string password
+    +enum role  // admin | institution_admin | teacher | student
     +enum plan  // free | pro | institution
     +Date planJoinedAt
     +UUID institutionId
@@ -150,35 +150,12 @@ classDiagram
     +string githubUrl
     +string linkedinUrl
     +string avatar
-  }
-
-  class Admin {
-    +manageInstitutions()
-    +impersonate(userId)
-  }
-  class InstitutionAdmin {
-    +inviteMember(role)
-    +manageGradesLevels()
-  }
-  class Teacher {
-    +createClass()
-    +createCourse()
-    +publishAnnouncement()
-    +authorProblem()
-  }
-  class Student {
     +string careerGoal
     +json interests
     +json programmingLanguages
     +json roadmap
-    +int  roadmapProgress
-    +enroll(classCode)
-    +submitCode(problemId)
+    +int roadmapProgress
   }
-  User <|-- Admin
-  User <|-- InstitutionAdmin
-  User <|-- Teacher
-  User <|-- Student
 
   class Institution {
     +UUID id
@@ -316,45 +293,37 @@ classDiagram
     +int progress
   }
 
-  Admin            "1" --> "*" Institution    : oversees
-  InstitutionAdmin "1" --> "*" InviteLink     : issues
-  Institution      "1" --> "*" InviteLink     : inviteLinks
-  Institution      "1" --> "*" Grade          : grades
-  Institution      "1" --> "*" Speciality     : specialities
-  Institution      "1" --> "*" Level          : levels
-  Institution      "1" --> "*" User           : members
+  Institution "1" --> "*" User : members
+  Institution "1" --> "*" InviteLink : inviteLinks
+  Institution "1" --> "*" Grade : grades
+  Institution "1" --> "*" Speciality : specialities
+  Institution "1" --> "*" Level : levels
 
-  Grade      "1" --> "*" Speciality
+  Grade "1" --> "*" Speciality
   Speciality "1" --> "*" Level
-  Level      "1" --> "*" Course
+  Level "1" --> "*" Course
 
-  Teacher "1" --> "*" Class       : teaches
-  Teacher "1" --> "*" Course      : authors
-  Teacher "1" --> "*" Announcement : posts
-  Teacher "1" --> "*" Problem     : authors
-  Student "1" --> "*" Enrollment  : enrollments
-  Class   "1" --> "*" Enrollment
-  Class   "1" --> "*" Course
-  Course  "1" --> "*" Module
-  Module  "1" --> "*" Lesson
-  Course  "1" --> "*" Lesson      : directLessons
-  Module  "1" --> "*" ClassAssignment
-  Class   "1" --> "*" ClassAssignment
-  Class   "1" --> "*" Announcement
-
-  Student "1" --> "*" CodeSubmission     : submits
+  User "1" --> "*" Class : taughtClasses
+  Class "1" --> "*" Enrollment
+  User "1" --> "*" Enrollment : enrollments
+  Class "1" --> "*" Course
+  Course "1" --> "*" Module
+  Module "1" --> "*" Lesson
+  Course "1" --> "*" Lesson : directLessons
+  Module "1" --> "*" ClassAssignment
+  Class "1" --> "*" ClassAssignment
+  Class "1" --> "*" Announcement
+  User "1" --> "*" Announcement : authoredAnnouncements
+  User "1" --> "*" CodeSubmission
   Problem "1" --> "*" CodeSubmission
-  Course  "1" --> "*" CodeSubmission
-  Module  "1" --> "*" CodeSubmission
-  Student "1" --> "*" StudentProblemSet  : owns
-  Student "1" --> "1" SavedRoadmap       : owns
-
+  Course "1" --> "*" CodeSubmission
+  Module "1" --> "*" CodeSubmission
+  User "1" --> "*" StudentProblemSet
   Conversation "1" --> "*" Message
-  User "1" --> "*" Message       : sentMessages
-  User "1" --> "*" Notification  : receives
+  User "1" --> "*" Message : sentMessages
+  User "1" --> "*" Notification
+  User "1" --> "1" SavedRoadmap
 ```
-
-> **Modeling note — `User` specialization and single-table persistence.** Across all sprints, `User` is conceptually an **abstract class** specialized into four concrete subclasses: `Admin`, `InstitutionAdmin`, `Teacher`, `Student`. Each subclass owns the relations that are exclusive to its role — only a `Teacher` can teach a `Class` or author a `Problem`, only a `Student` produces a `CodeSubmission` or owns a `SavedRoadmap`, only an `InstitutionAdmin` issues an `InviteLink`, and only an `Admin` oversees an `Institution`. Cross-role relations (`Conversation`, `Message`, `Notification`, `StripeCheckout`) stay on the abstract `User` because every role participates in them. At the persistence layer this generalization is realized as **single-table inheritance**: a single `users` collection with a `role` discriminator (`admin | institution_admin | teacher | student`). This keeps authentication, profile, plan and 2FA logic uniform while role-specific behavior is enforced by authorization middleware on the API side.
 
 ---
 

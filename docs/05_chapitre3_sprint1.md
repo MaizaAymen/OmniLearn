@@ -332,17 +332,17 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-1 class diagram introduces the `User` aggregate as an **abstract entity** specialized into four concrete roles — `Admin`, `InstitutionAdmin`, `Teacher`, `Student`. The abstract class carries everything that is common to every member of the platform (identity, authentication, two-factor, profile, plan, audit fields), while each subclass holds the attributes and operations that are specific to its role.
+The Sprint-1 class diagram introduces the `User` aggregate with its authentication, profile and plan fields — `id`, `firstname`, `lastname`, `email`, `password`, `role`, `plan`, `planJoinedAt`, `institutionId`, `isActive`, `isEmailVerified`, `emailVerificationToken`, `passwordResetToken`, `twoFactorSecret`, `is2FAEnabled`, `bio`, `githubUrl`, `linkedinUrl`, `avatar`, plus the roadmap-related fields used by later sprints.
 
 ```mermaid
 classDiagram
   class User {
-    <<abstract>>
     +UUID id
     +string firstname
     +string lastname
     +string email
     -string password
+    +enum role  (student|teacher|admin|institution_admin)
     +enum plan  (free|pro|institution)
     +Date planJoinedAt
     +UUID institutionId
@@ -367,36 +367,6 @@ classDiagram
     +delete()
   }
 
-  class Admin {
-    +manageInstitutions()
-    +impersonate(userId)
-    +moderateContent()
-  }
-
-  class InstitutionAdmin {
-    +inviteMember(role)
-    +manageGradesLevels()
-    +viewInstitutionAnalytics()
-  }
-
-  class Teacher {
-    +createClass()
-    +createCourse()
-    +publishAnnouncement()
-    +authorProblem()
-  }
-
-  class Student {
-    +string careerGoal
-    +json   interests
-    +json   programmingLanguages
-    +json   roadmap
-    +int    roadmapProgress
-    +enroll(classCode)
-    +submitCode(problemId)
-    +generateRoadmap()
-  }
-
   class AuthToken {
     <<value object>>
     +string jwt
@@ -410,18 +380,11 @@ classDiagram
     +enum  status
   }
 
-  User <|-- Admin
-  User <|-- InstitutionAdmin
-  User <|-- Teacher
-  User <|-- Student
-
   User "1" --> "*" AuthToken : issues
   User "1" --> "0..1" StripeCustomer : links
 ```
 
 > *Figure 13 — Class diagram of Sprint 1.*
-
-> **Modeling note — single-table inheritance.** Conceptually, `User` is abstract and the four roles are real subclasses. At the persistence layer this generalization is implemented as **single-table inheritance**: every member is stored in the same `users` collection and disambiguated by a `role` discriminator (`admin | institution_admin | teacher | student`). This keeps authentication, 2FA and profile logic uniform across roles, while role-specific behavior is enforced by authorization middleware on the API side.
 
 ### 5. C4 Container view
 
