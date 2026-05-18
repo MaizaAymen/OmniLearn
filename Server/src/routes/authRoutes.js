@@ -4,6 +4,7 @@ const { Op } = require("sequelize");
 const sequelize = require("../config/database");
 const { User } = require("../models");
 const sendEmail = require("../config/mail");
+const { buildEmailTemplate, clientUrl } = require("../config/mail");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
@@ -107,30 +108,38 @@ if (!password) {
     firstname, lastname, email, password, role
   });
   sendEmail({
-   to: email,
-subject: "Bienvenue sur OmniLearn !",
-text: `Bonjour ${firstname},
+    to: email,
+    subject: "Welcome to OmniLearn!",
+    text: `Hi ${firstname},
 
-      Bienvenue sur OmniLearn !
+Welcome to OmniLearn!
 
-Nous vous remercions chaleureusement pour votre inscription. 
-Nous sommes ravis de vous compter parmi notre communauté d'apprentissage.
+Thank you for joining us. We're thrilled to have you in our learning community and can't wait to see what you'll build, learn, and share.
 
-À très bientôt sur OmniLearn !
+Here's how to get started:
+  - Complete your profile so others can connect with you
+  - Explore classrooms and join the ones that match your goals
+  - Track your progress from your dashboard
 
-Cordialement,
+If you have any questions, just reply to this email — we read every message.
+
+Welcome aboard,
 Aymen Maiza
-Fondateur de OmniLearn`,
-html: `
-  <p>Bonjour ${firstname},</p>
-  <p>Bienvenue sur <strong>OmniLearn</strong> !</p>
-  <p>Nous vous remercions chaleureusement pour votre inscription. 
-  Nous sommes ravis de vous compter parmi notre communauté d'apprentissage.</p>
-  <p>À très bientôt sur OmniLearn !</p>
-  <p>Cordialement,<br><strong>Aymen Maiza</strong><br>Fondateur de OmniLearn</p>
-`,
-
-  }).catch((err) => console.error("Erreur lors de l'envoi de l'email:", err));
+Founder, OmniLearn`,
+    html: buildEmailTemplate({
+      preheader: "Welcome to OmniLearn — start building your learning contribution graph.",
+      title: "Welcome to OmniLearn",
+      intro: `Hi ${firstname},`,
+      gridMode: "active",
+      gridCaption: "This is what an active learner's contribution graph looks like — yours starts today.",
+      body: `
+        <p style="margin:0 0 16px 0;">Thank you for joining <strong>OmniLearn</strong>. Every lesson you complete, classroom you join, and assignment you submit will light up another square on your learning graph. The more you learn, the greener it gets.</p>
+        <p style="margin:0;">Ready to fill in your first square? Jump in below — and if you ever have a question, just reply to this email.</p>
+      `,
+      cta: { label: "Start learning", url: clientUrl() },
+      footerNote: "Sent by Aymen Maiza, Founder of OmniLearn.",
+    }),
+  }).catch((err) => console.error("Error sending welcome email:", err));
   res.status(201).json(newUser);
   
 }
@@ -222,20 +231,28 @@ router.post("/forgot-password", async (req, res) => {
         await sendEmail({
             to: email,
             subject: "Reset your OmniLearn password",
-            text: `Hello ${user.firstname},\n\nClick the link below to reset your password:\n${resetLink}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.\n\nOmniLearn Team`,
-            html: `
-                <p>Hello <strong>${user.firstname}</strong>,</p>
-                <p>We received a request to reset your password. Click the button below to create a new one:</p>
-                <p>
-                  <a href="${resetLink}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">
-                    Reset Password
-                  </a>
-                </p>
-                <p style="color:#888;font-size:13px;">Or copy this link: ${resetLink}</p>
-                <p style="color:#888;font-size:13px;">This link expires in 1 hour.</p>
-                <p style="color:#888;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
-                <p>— <strong>OmniLearn Team</strong></p>
-            `,
+            text: `Hello ${user.firstname},
+
+We received a request to reset your OmniLearn password. Click the link below to create a new one:
+
+${resetLink}
+
+This link will expire in 1 hour.
+
+If you didn't request a password reset, you can safely ignore this email — your password won't change.
+
+— The OmniLearn Team`,
+            html: buildEmailTemplate({
+                preheader: "Reset your OmniLearn password — link expires in 1 hour.",
+                title: "Reset your password",
+                intro: `Hello ${user.firstname},`,
+                body: `
+                    <p style="margin:0 0 12px 0;">We received a request to reset the password for your OmniLearn account.</p>
+                    <p style="margin:0;">Click the button below to choose a new password. The link is valid for <strong>1 hour</strong>.</p>
+                `,
+                cta: { label: "Reset my password", url: resetLink },
+                footerNote: "Didn't request this? You can safely ignore this email — your password won't change.",
+            }),
         });
 
         res.json({ message: "If the email exists, a reset link has been sent" });
@@ -274,14 +291,31 @@ router.post("/reset-password", async (req, res) => {
         // Send confirmation email
         await sendEmail({
             to: user.email,
-            subject: "Your password has been reset",
-            text: `Hello ${user.firstname},\n\nYour password has been successfully reset.\n\nIf you didn't request this, please contact support immediately.\n\nOmniLearn Team`,
-            html: `
-                <p>Hello <strong>${user.firstname}</strong>,</p>
-                <p>Your password has been successfully reset.</p>
-                <p style="color:#888;font-size:13px;">If you didn't request this, please contact support immediately.</p>
-                <p>— <strong>OmniLearn Team</strong></p>
-            `,
+            subject: "Your OmniLearn password has been reset",
+            text: `Hello ${user.firstname},
+
+Your OmniLearn password has just been updated successfully. You can now sign in with your new password.
+
+If this wasn't you, please contact our support team immediately so we can secure your account.
+
+— The OmniLearn Team`,
+            html: buildEmailTemplate({
+                preheader: "Your OmniLearn password was changed.",
+                title: "Password updated ✓",
+                intro: `Hello ${user.firstname},`,
+                body: `
+                    <p style="margin:0 0 12px 0;">Your OmniLearn password has just been updated successfully. You can now sign in with your new password.</p>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:14px 16px;background:#ecfdf5;border-left:3px solid #10b981;border-radius:6px;color:#065f46;font-size:14px;">
+                          <strong>Security tip:</strong> Use a unique password you don't reuse anywhere else, and consider enabling two-factor authentication.
+                        </td>
+                      </tr>
+                    </table>
+                `,
+                cta: { label: "Sign in to OmniLearn", url: `${clientUrl()}/login` },
+                footerNote: "Didn't change your password? Contact our support team immediately to secure your account.",
+            }),
         }).catch(() => {});
 
         res.json({ message: "Password reset successfully. You can now log in." });
@@ -502,20 +536,29 @@ router.post("/send-verification-email", authenticate, async (req, res) => {
 
     await sendEmail({
       to: user.email,
-      subject: "Verify your OmniLearn email",
-      text: `Hello ${user.firstname},\n\nPlease verify your email by visiting:\n${verifyLink}\n\nThis link expires in 24 hours.\n\nOmniLearn Team`,
-      html: `
-        <p>Hello <strong>${user.firstname}</strong>,</p>
-        <p>Click the button below to verify your email address:</p>
-        <p>
-          <a href="${verifyLink}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">
-            Verify Email
-          </a>
-        </p>
-        <p style="color:#888;font-size:13px;">Or copy this link: ${verifyLink}</p>
-        <p style="color:#888;font-size:13px;">This link expires in 24 hours.</p>
-        <p>— <strong>OmniLearn Team</strong></p>
-      `,
+      subject: "Confirm your OmniLearn email address",
+      text: `Hello ${user.firstname},
+
+Please confirm your email address to finish setting up your OmniLearn account:
+
+${verifyLink}
+
+This link will expire in 24 hours.
+
+If you didn't create an OmniLearn account, you can safely ignore this email.
+
+— The OmniLearn Team`,
+      html: buildEmailTemplate({
+        preheader: "Confirm your email to activate your OmniLearn account.",
+        title: "Confirm your email address",
+        intro: `Hello ${user.firstname},`,
+        body: `
+          <p style="margin:0 0 12px 0;">Thanks for signing up! Please confirm your email address to activate your OmniLearn account and unlock all features.</p>
+          <p style="margin:0;">This confirmation link is valid for <strong>24 hours</strong>.</p>
+        `,
+        cta: { label: "Verify my email", url: verifyLink },
+        footerNote: "Didn't create an OmniLearn account? You can safely ignore this email.",
+      }),
     });
 
     res.json({ message: "Verification email sent" });
