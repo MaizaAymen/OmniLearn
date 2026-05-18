@@ -262,10 +262,15 @@ The Sprint-3 class diagram introduces the collaboration entities:
 ```mermaid
 classDiagram
   class User {
+    <<abstract>>
     +UUID id
-    +enum role
     +UUID institutionId
   }
+  class Teacher
+  class Student
+  User <|-- Teacher
+  User <|-- Student
+
   class Class {
     +UUID id
     +string name
@@ -339,20 +344,25 @@ classDiagram
     +Date readAt
   }
 
-  User "1"  --> "*" Class       : teaches
-  User "1"  --> "*" Enrollment  : enrolls
-  Class "1" --> "*" Enrollment  : has
-  Class "1" --> "*" Course      : contains
-  Course "1" --> "*" Module     : contains
-  Module "1" --> "*" Lesson     : contains
-  Module "1" --> "*" ClassAssignment : produces
-  Class "1" --> "*" Announcement     : has
-  User  "1" --> "*" Conversation     : participates
-  Conversation "1" --> "*" Message   : holds
-  User  "1" --> "*" Notification     : receives
+  Teacher "1" --> "*" Class            : teaches
+  Teacher "1" --> "*" Course           : authors
+  Teacher "1" --> "*" Announcement     : posts
+  Student "1" --> "*" Enrollment       : holds
+  Class   "1" --> "*" Enrollment       : has
+  Class   "1" --> "*" Course           : contains
+  Course  "1" --> "*" Module           : contains
+  Module  "1" --> "*" Lesson           : contains
+  Module  "1" --> "*" ClassAssignment  : produces
+  Class   "1" --> "*" Announcement     : has
+  User    "1" --> "*" Conversation     : participates
+  Conversation "1" --> "*" Message     : holds
+  User    "1" --> "*" Message          : sends
+  User    "1" --> "*" Notification     : receives
 ```
 
 > *Figure 44 — Class diagram of Sprint 3.*
+
+> **Modeling note.** Collaboration relations are split between `Teacher` (authoring `Class`, `Course`, `Announcement`) and `Student` (holding `Enrollment`), while messaging and notifications remain on the abstract `User` because every role can chat and receive notifications. The discriminator-based persistence chosen in Sprint 1 makes this clean: cross-role features (`Conversation`, `Message`, `Notification`) stay polymorphic, role-restricted features become typed at the conceptual layer and enforced by middleware.
 
 ### 5. C4 Container view
 

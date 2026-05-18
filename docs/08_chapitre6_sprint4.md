@@ -396,6 +396,21 @@ Sprint 4 adds:
 
 ```mermaid
 classDiagram
+  class User {
+    <<abstract>>
+    +UUID id
+    +enum plan
+    +UUID institutionId
+  }
+  class Admin
+  class InstitutionAdmin
+  class Teacher
+  class Student
+  User <|-- Admin
+  User <|-- InstitutionAdmin
+  User <|-- Teacher
+  User <|-- Student
+
   class Institution {
     +UUID id
     +string name
@@ -428,12 +443,6 @@ classDiagram
     +string name
     +UUID institutionId
   }
-  class User {
-    +UUID id
-    +enum role
-    +enum plan
-    +UUID institutionId
-  }
   class StripeCheckout {
     +string sessionId
     +enum  product (pro|institution)
@@ -453,17 +462,20 @@ classDiagram
     +JSON payload
   }
 
-  Institution "1" --> "*" InviteLink : issues
-  Institution "1" --> "*" Grade
-  Institution "1" --> "*" Speciality
-  Institution "1" --> "*" Level
-  Institution "1" --> "*" User       : members
-  User        "1" --> "*" PdfDocument : owns
-  User        "1" --> "*" Notification : receives
-  User        "1" --> "*" StripeCheckout : initiates
+  Admin            "1" --> "*" Institution    : oversees
+  InstitutionAdmin "1" --> "*" InviteLink     : issues
+  InstitutionAdmin "1" --> "*" Grade          : defines
+  InstitutionAdmin "1" --> "*" Speciality     : defines
+  InstitutionAdmin "1" --> "*" Level          : defines
+  Institution      "1" --> "*" User           : members
+  Student          "1" --> "*" PdfDocument    : owns
+  User             "1" --> "*" Notification   : receives
+  User             "1" --> "*" StripeCheckout : initiates
 ```
 
 > *Figure 60 — Class diagram of Sprint 4.*
+
+> **Modeling note.** Sprint 4 makes the role specialization pay off: `Admin` is the only role that creates and oversees `Institution` entities, and `InstitutionAdmin` is the only role that issues `InviteLink`s and defines per-institution `Grade` / `Speciality` / `Level` taxonomies. The `Student` subclass owns `PdfDocument`s (the PDF assistant is a student feature), while `Notification` and `StripeCheckout` remain on the abstract `User` because every role can be notified and any user (or admin acting on behalf of an institution) can initiate a checkout. Persistence stays single-table — the `role` discriminator is what authorization middleware checks to enforce these conceptual rules.
 
 ### 5. C4 Component view
 
