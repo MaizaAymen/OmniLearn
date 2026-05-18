@@ -349,12 +349,12 @@ The super admin opens the users-by-plan tab, picks a user and clicks "Ban". A co
 flowchart TD
   A([Start]) --> B[Admin opens UsersByPlanTab]
   B --> C[Pick a user]
-  C --> D[Click "Ban"]
+  C --> D[Click &quot;Ban&quot;]
   D --> E[Confirmation modal]
   E --> F{Confirm?}
   F -- No --> Z([End])
   F -- Yes --> G[PATCH /api/admin/users/:id isActive=false]
-  G --> H{Caller role == "admin"?}
+  G --> H{Caller role == &quot;admin&quot;?}
   H -- No --> I[403 Forbidden] --> Z
   H -- Yes --> J[UPDATE users SET isActive = false]
   J --> K[Next request: authenticate middleware rejects token]

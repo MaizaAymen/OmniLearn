@@ -333,7 +333,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A([Start]) --> B[Click "Forgot password?"]
+  A([Start]) --> B[Click &quot;Forgot password?&quot;]
   B --> C[Enter email]
   C --> D[POST /api/auth/forgot-password]
   D --> E{User exists?}
@@ -345,7 +345,7 @@ flowchart TD
   J --> K[Enter new password]
   K --> L[POST /api/auth/reset-password]
   L --> M{Token valid & not expired?}
-  M -- No --> N[Show "Link expired"] --> Z
+  M -- No --> N[Show &quot;Link expired&quot;] --> Z
   M -- Yes --> O[bcrypt.hash + UPDATE users] --> P[Clear reset token] --> Q[Redirect to /auth] --> Z
 ```
 
