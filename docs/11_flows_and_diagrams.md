@@ -605,6 +605,60 @@ sequenceDiagram
     FE-->>-User: Redirect to institution dashboard
 ```
 
+### 4.9. Reset password (forgot + set new)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
+    participant Mail as Mailer
+
+    Note over User,DB: Step 1 — Request reset
+
+    User->>+FE: Click "Forgot password"
+    FE->>+API: POST /auth/forgot-password { email }
+    API->>+DB: Find user by email
+    DB-->>-API: User or null
+
+    alt Email not registered
+        API-->>FE: 200 generic message
+    else Email exists
+        API->>API: Generate resetToken + expiry (1h)
+        API->>+DB: Save passwordResetToken + expires
+        DB-->>-API: Updated
+        API->>Mail: Send reset link
+        API-->>FE: 200 generic message
+    end
+
+    API-->>-FE: Done
+    FE-->>-User: "If email exists, check inbox"
+
+    Note over User,DB: Step 2 — Reset password
+
+    User->>+FE: Open link, enter new password
+    FE->>+API: POST /auth/reset-password { token, newPassword }
+    API->>+DB: Find user by token (not expired)
+    DB-->>-API: User or null
+
+    alt Token invalid / expired
+        API-->>FE: 400 Invalid or expired
+        FE-->>User: Show error
+    else Valid
+        API->>+DB: Update password (bcrypt) + clear token
+        DB-->>-API: Updated
+        opt Confirmation email
+            API->>Mail: Send confirmation
+        end
+        API-->>FE: 200 success
+        FE-->>User: "Login with new password"
+    end
+
+    API-->>-FE: Response
+    FE-->>-User: Done
+```
+
 ---
 
 ## 5. Activity diagrams

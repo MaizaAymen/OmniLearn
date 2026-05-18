@@ -11,6 +11,7 @@
 | 7  | Use-case diagram of Sprint 1 — Student side | Ch. 3 — Sprint 1 |
 | 8  | Sequence diagram "Sign up" | Ch. 3 — Sprint 1 |
 | 9  | Sequence diagram "Sign in" | Ch. 3 — Sprint 1 |
+| 9.1 | Sequence diagram "Reset password" | Ch. 3 — Sprint 1 |
 | 10 | Sequence diagram "Delete my account" | Ch. 3 — Sprint 1 |
 | 11 | Activity diagram "Update profile" | Ch. 3 — Sprint 1 |
 | 12 | Activity diagram "Reset password" | Ch. 3 — Sprint 1 |
