@@ -237,18 +237,13 @@ sequenceDiagram
 The super admin opens the `FreeTierTab`, selects a problem and toggles the switch. The frontend calls `PATCH /api/admin/problems/:id { isFreeTier: true|false }`. The backend updates the row. Free users immediately see / hide that problem in their catalogue.
 
 ```mermaid
-flowchart TD
-  A([Start]) --> B[Super admin opens FreeTierTab]
-  B --> C[Pick a problem]
-  C --> D{Toggle switch}
-  D -->|ON| E[PATCH /api/admin/problems/:id isFreeTier=true]
-  D -->|OFF| F[PATCH /api/admin/problems/:id isFreeTier=false]
-  E --> G[UPDATE problems SET isFreeTier]
-  F --> G
-  G --> H{Authorized as admin?}
-  H -- No --> I[403 Forbidden] --> Z([End])
-  H -- Yes --> J[Return updated row]
-  J --> K[Free users' catalogue re-queries] --> L[Problem appears or disappears] --> Z
+flowchart LR
+  A([Start]) --> B[Open FreeTierTab,<br/>pick problem, toggle]
+  B --> C[PATCH /api/admin/problems/:id<br/>isFreeTier=true/false]
+  C --> D{Admin?}
+  D -- No --> E[403 Forbidden] --> Z([End])
+  D -- Yes --> F[UPDATE problems<br/>SET isFreeTier]
+  F --> G[Free users' catalogue<br/>shows/hides the problem] --> Z
 ```
 
 > *Figure 26 — Activity diagram "Toggle problem as Free-tier".*
