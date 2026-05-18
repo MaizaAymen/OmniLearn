@@ -332,7 +332,7 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-1 class diagram is organised around an **abstract `User`** that holds the authentication core (identity, password, plan, activation flags) and four **role subclasses** — `Student`, `Teacher`, `Admin`, `InstitutionAdmin` — which the role-based sidebar branches on. The profile fields (`bio`, `githubUrl`, `linkedinUrl`, `avatar`) are extracted into a `Profile` value object composed by `User`, and the security-sensitive fields (`emailVerificationToken`, `passwordResetToken`, `twoFactorSecret`, `is2FAEnabled`) are grouped into a `SecurityCredentials` value object. `AuthToken` is the JWT returned by `login()` — it is **transient** (stateless JWT, never persisted). `StripeCustomer` links a `User` to its Stripe-side subscription when a Free user upgrades to Pro. Persistence uses single-table inheritance with a `role` discriminator column on the `users` table.
+The Sprint-1 class diagram is organised around an **abstract `User`** that holds the authentication, profile and plan fields, specialised by four **role subclasses** — `Student`, `Teacher`, `Admin`, `InstitutionAdmin` — which the role-based sidebar branches on. `AuthToken` is the JWT returned by `login()` and is **transient** (stateless JWT, never persisted). Persistence uses single-table inheritance with a `role` discriminator column on the `users` table.
 
 ```mermaid
 classDiagram
@@ -350,6 +350,16 @@ classDiagram
     +UUID institutionId
     +bool isActive
     +bool isEmailVerified
+    +string emailVerificationToken
+    +Date   emailVerificationExpires
+    +string passwordResetToken
+    +Date   passwordResetExpires
+    +string twoFactorSecret
+    +bool   is2FAEnabled
+    +string bio
+    +string githubUrl
+    +string linkedinUrl
+    +string avatar
     +register()
     +login() AuthToken
     +verifyEmail(token)
@@ -368,24 +378,6 @@ classDiagram
   class InstitutionAdmin {
   }
 
-  class Profile {
-    <<value object>>
-    +string bio
-    +string githubUrl
-    +string linkedinUrl
-    +string avatar
-  }
-
-  class SecurityCredentials {
-    <<value object>>
-    +string emailVerificationToken
-    +Date   emailVerificationExpires
-    +string passwordResetToken
-    +Date   passwordResetExpires
-    +string twoFactorSecret
-    +bool   is2FAEnabled
-  }
-
   class AuthToken {
     <<transient>>
     +string jwt
@@ -393,20 +385,11 @@ classDiagram
     +Date expiresAt
   }
 
-  class StripeCustomer {
-    +string customerId
-    +string subscriptionId
-    +enum  status
-  }
-
   Student          --|> User
   Teacher          --|> User
   Admin            --|> User
   InstitutionAdmin --|> User
 
-  User "1" *-- "1"    Profile             : has
-  User "1" *-- "1"    SecurityCredentials : has
-  User "1" --  "0..1" StripeCustomer      : links
   User ..> AuthToken : «returns»
 
   note for User "Single-table inheritance:\nrole discriminator on `users` table"
