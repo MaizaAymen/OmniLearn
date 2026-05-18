@@ -237,7 +237,7 @@ sequenceDiagram
 The super admin opens the `FreeTierTab`, selects a problem and toggles the switch. The frontend calls `PATCH /api/admin/problems/:id { isFreeTier: true|false }`. The backend updates the row. Free users immediately see / hide that problem in their catalogue.
 
 ```mermaid
-flowchart LR
+flowchart TD
   A([Start]) --> B[Open FreeTierTab,<br/>pick problem, toggle]
   B --> C[PATCH /api/admin/problems/:id<br/>isFreeTier=true/false]
   C --> D{Admin?}
