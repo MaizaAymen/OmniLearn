@@ -271,13 +271,7 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-2 class diagram adds:
-
-- `Problem` — `id`, `title`, `statement`, `difficulty`, `tags`, `language`, `expectedOutput`, `isFreeTier`, `isProTier`, `institutionId?`.
-- `CodeSubmission` — `id`, `userId`, `problemId`, `sourceCode`, `language`, `verdict`, `runtimeMs`, `createdAt`.
-- `StudentProblemSet` — `id`, `studentId`, `problemIds[]`, `generatedFromGoal`, etc.
-- `SavedRoadmap` — `id`, `userId`, `graphJson` (nodes / edges), `progress`.
-- Relations: `User 1 — N Problem` (creator), `User 1 — N CodeSubmission`, `Problem 1 — N CodeSubmission`, `User 1 — 1 SavedRoadmap`, `User 1 — N StudentProblemSet`.
+The Sprint-2 class diagram extends the Sprint-1 model with the entities required by the coding and roadmap features. A `Problem` entity carries the statement, difficulty, tags, target language, expected output and tier flags (`isFreeTier`, `isProTier`), and may optionally belong to an institution. Each attempt is persisted as a `CodeSubmission`, which links a user to a problem and stores the submitted source code, language, verdict and runtime. To group exercises generated for a learner, a `StudentProblemSet` holds the list of problem identifiers together with the goal that produced them, while `SavedRoadmap` stores the personalised learning graph as JSON nodes and edges along with the user's progress. On the relational side, a user can author many problems and submit many solutions (`User 1 — N Problem`, `User 1 — N CodeSubmission`), a problem aggregates all its attempts (`Problem 1 — N CodeSubmission`), and each user owns a single active roadmap (`User 1 — 1 SavedRoadmap`) and several generated problem sets (`User 1 — N StudentProblemSet`).
 
 ```mermaid
 classDiagram
