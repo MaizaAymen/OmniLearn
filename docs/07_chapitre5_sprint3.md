@@ -514,11 +514,23 @@ The `/join/:code` route opens `JoinClassroom.jsx`, which automatically resolves 
 
 > *Figure 51 — Class assignments page.*
 
-### 5. Real-time messaging (`Messages.jsx`)
+### 5. Classroom problem bank (teacher)
+
+`ClassroomProblemsTab.jsx`, embedded inside the teacher's classroom view, is the **per-class problem bank** that feeds the assignment editor. Problems the teacher creates here stay scoped to the current classroom — invisible to other classes and to the global catalogue — and forks from the public `/problems` bank also land here automatically. Two entry points sit at the top of the tab: a *Create manually* button that opens `ProblemCreatePage.jsx` with the `classId` already pre-bound in the URL, and an *AI generate* button that switches the same page to its AI authoring tab so the teacher can produce a problem from a natural-language prompt. The list below shows each problem with its title, difficulty (Easy / Medium / Hard), category and publication status, alongside a delete action. This bank is the catalogue the assignment modal in the next section draws from.
+
+> *Figure 51.1 — Classroom problem bank used by the teacher.*
+
+### 6. Creating an assignment (teacher)
+
+`ModuleAssignmentsTab.jsx`, opened from a module on the teacher's classroom dashboard, is where coding practice sets are assembled and pushed to enrolled students. Clicking *New Assignment* opens a modal with three groups of inputs: assignment metadata (title, due date, optional maximum number of attempts), a **difficulty quick-filter** that auto-selects every problem of the chosen level from the class bank, and the **explicit problem checklist** populated from `GET /api/ai/ai/getallproblems`. On submit the frontend posts `{ moduleId, title, problemIds, dueDate, maxAttempts }` to `POST /api/assignments`, which materialises a `ClassAssignment` row — and from that moment the same entry becomes visible to every enrolled student in `ClassAssignmentsPage.jsx` (subsection 4 above). Each card in the resulting list exposes a *Stats* button that calls `GET /api/assignments/:id/stats` and renders per-problem completion progress, so the teacher can monitor the assignment without leaving the module view.
+
+> *Figure 51.2 — Teacher's assignment editor with the problem picker driven by the class bank.*
+
+### 7. Real-time messaging (`Messages.jsx`)
 
 `Messages.jsx` ships a modern two-pane interface inspired by mainstream messaging apps. The left pane lists conversations (teachers, classmates, group chats) with a preview of the latest message and an unread-count badge. The right pane displays the full history of the active thread, with instant delivery over Socket.IO, typing indicators and read receipts — enabling fluid communication across the entire educational community.
 
-> *Figure 52 — Real-time messaging page.*
+> *Figure 53 — Real-time messaging page.*
 
 ## VI. Conclusion
 

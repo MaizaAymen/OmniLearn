@@ -829,6 +829,37 @@ router.post("/classrooms/:classId/announcements", async (req, res) => {
   }
 });
 
+// Update an announcement (author or admin)
+router.put("/announcements/:id", async (req, res) => {
+  try {
+    const announcement = await Announcement.findByPk(req.params.id);
+    if (!announcement) return res.status(404).json({ error: "Announcement not found" });
+    if (!isAdmin(req) && announcement.authorId !== req.user.id) {
+      return res.status(403).json({ error: "You can only edit your own announcements." });
+    }
+
+    const { title, content } = req.body;
+    if (content !== undefined && (!content || !String(content).trim())) {
+      return res.status(400).json({ error: "Content cannot be empty" });
+    }
+
+    await announcement.update({
+      title: title !== undefined ? (title?.trim() || null) : announcement.title,
+      content: content !== undefined ? String(content).trim() : announcement.content,
+    });
+
+    const full = await Announcement.findByPk(announcement.id, {
+      include: [
+        { model: User, as: "author", attributes: ["id", "firstname", "lastname", "email", "role"] },
+      ],
+    });
+    res.json(full);
+  } catch (error) {
+    console.error("Error updating announcement:", error);
+    res.status(500).json({ error: "Failed to update announcement" });
+  }
+});
+
 // Delete an announcement (author or admin)
 router.delete("/announcements/:id", async (req, res) => {
   try {

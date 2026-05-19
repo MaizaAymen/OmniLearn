@@ -59,6 +59,9 @@ import {
   createLesson,
   deleteLesson,
   uploadLessonFile,
+  updateCourse,
+  updateModule,
+  updateLesson,
 } from "../Admin/api";
 import ClassroomProblemsTab from "./ClassroomProblemsTab";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
@@ -121,6 +124,10 @@ export default function ClassroomView() {
   const [announcementDraft, setAnnouncementDraft] = useState("");
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
   const [announcementsLoaded, setAnnouncementsLoaded] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
+  const [editingAnnouncementDraft, setEditingAnnouncementDraft] = useState("");
+  const [editingClassroomName, setEditingClassroomName] = useState(null);
+  const [renaming, setRenaming] = useState(null); // { kind, id, value }
   const [instProblems, setInstProblems] = useState([]);
   // ── Teacher assignment management ────────────────────────────────────────
   const [createFor, setCreateFor] = useState(null);
@@ -270,6 +277,93 @@ export default function ClassroomView() {
       message.error("Failed to post announcement");
     } finally {
       setPostingAnnouncement(false);
+    }
+  };
+
+  const saveAnnouncementEdit = async () => {
+    const content = editingAnnouncementDraft.trim();
+    if (!content) return message.warning("Content cannot be empty");
+    try {
+      const res = await fetch(`${ADMIN}/announcements/${editingAnnouncementId}`, {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setAnnouncements((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setEditingAnnouncementId(null);
+      message.success("Updated");
+    } catch {
+      message.error("Failed to update");
+    }
+  };
+
+  const saveClassroomName = async () => {
+    const name = (editingClassroomName || "").trim();
+    if (!name) return message.warning("Name is required");
+    try {
+      const res = await fetch(`${ADMIN}/classrooms/${classId}`, {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setClassroom((prev) => (prev ? { ...prev, name: updated.name } : prev));
+      setEditingClassroomName(null);
+      message.success("Updated");
+    } catch {
+      message.error("Failed to update");
+    }
+  };
+
+  // Rename a course / module / lesson. Called when user finishes editing.
+  const saveRename = async () => {
+    if (!renaming) return;
+    const title = renaming.value.trim();
+    if (!title) {
+      setRenaming(null);
+      return;
+    }
+
+    try {
+      if (renaming.kind === "course") {
+        await updateCourse(renaming.id, { title });
+      }
+      if (renaming.kind === "module") {
+        await updateModule(renaming.id, { title });
+      }
+      if (renaming.kind === "lesson") {
+        await updateLesson(renaming.id, { title });
+      }
+
+      // Refresh the title in our local lists.
+      if (renaming.kind === "course") {
+        setCourses(courses.map((c) => c.id === renaming.id ? { ...c, title } : c));
+      }
+      if (renaming.kind === "module") {
+        const next = {};
+        for (const cid in modulesByCourse) {
+          next[cid] = modulesByCourse[cid].map((m) => m.id === renaming.id ? { ...m, title } : m);
+        }
+        setModulesByCourse(next);
+      }
+      if (renaming.kind === "lesson") {
+        const next = {};
+        for (const mid in lessonsByModule) {
+          next[mid] = lessonsByModule[mid].map((l) => l.id === renaming.id ? { ...l, title } : l);
+        }
+        setLessonsByModule(next);
+        if (selectedLesson && selectedLesson.id === renaming.id) {
+          setSelectedLesson({ ...selectedLesson, title });
+        }
+      }
+
+      setRenaming(null);
+      message.success("Renamed");
+    } catch {
+      message.error("Rename failed");
     }
   };
 
@@ -735,9 +829,30 @@ export default function ClassroomView() {
                         <RightOutlined style={{ fontSize: 10, color: "#9ca3af" }} />
                       )}
                       <BookOutlined style={{ color: "#6b7280", fontSize: 13 }} />
-                      <Text strong style={{ fontSize: 13, flex: 1 }}>
-                        {course.title || course.name}
-                      </Text>
+                      {canManage && renaming?.kind === "course" && renaming.id === course.id ? (
+                        <Input
+                          autoFocus
+                          size="small"
+                          style={{ flex: 1 }}
+                          value={renaming.value}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                          onPressEnter={saveRename}
+                          onBlur={saveRename}
+                        />
+                      ) : (
+                        <Text
+                          strong
+                          style={{ fontSize: 13, flex: 1 }}
+                          onDoubleClick={(e) => {
+                            if (!canManage) return;
+                            e.stopPropagation();
+                            setRenaming({ kind: "course", id: course.id, value: course.title || course.name || "" });
+                          }}
+                        >
+                          {course.title || course.name}
+                        </Text>
+                      )}
                       {canManage && (
                         <Space size={2} onClick={(e) => e.stopPropagation()}>
                           <Tooltip title="Add module">
@@ -795,9 +910,29 @@ export default function ClassroomView() {
                                   ) : (
                                     <RightOutlined style={{ fontSize: 9, color: "#9ca3af" }} />
                                   )}
-                                  <Text style={{ fontSize: 12.5, flex: 1, color: "#374151" }}>
-                                    {m.title}
-                                  </Text>
+                                  {canManage && renaming?.kind === "module" && renaming.id === m.id ? (
+                                    <Input
+                                      autoFocus
+                                      size="small"
+                                      style={{ flex: 1 }}
+                                      value={renaming.value}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                                      onPressEnter={saveRename}
+                                      onBlur={saveRename}
+                                    />
+                                  ) : (
+                                    <Text
+                                      style={{ fontSize: 12.5, flex: 1, color: "#374151" }}
+                                      onDoubleClick={(e) => {
+                                        if (!canManage) return;
+                                        e.stopPropagation();
+                                        setRenaming({ kind: "module", id: m.id, value: m.title || "" });
+                                      }}
+                                    >
+                                      {m.title}
+                                    </Text>
+                                  )}
                                   {canManage && (
                                     <Space size={2} onClick={(e) => e.stopPropagation()}>
                                       <Tooltip title="Add lesson">
@@ -869,17 +1004,35 @@ export default function ClassroomView() {
                                             ) : (
                                               <FileTextOutlined style={{ fontSize: 12 }} />
                                             )}
-                                            <span
-                                              style={{
-                                                fontSize: 12.5,
-                                                whiteSpace: "nowrap",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                flex: 1,
-                                              }}
-                                            >
-                                              {l.title}
-                                            </span>
+                                            {canManage && renaming?.kind === "lesson" && renaming.id === l.id ? (
+                                              <Input
+                                                autoFocus
+                                                size="small"
+                                                style={{ flex: 1 }}
+                                                value={renaming.value}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                                                onPressEnter={saveRename}
+                                                onBlur={saveRename}
+                                              />
+                                            ) : (
+                                              <span
+                                                style={{
+                                                  fontSize: 12.5,
+                                                  whiteSpace: "nowrap",
+                                                  overflow: "hidden",
+                                                  textOverflow: "ellipsis",
+                                                  flex: 1,
+                                                }}
+                                                onDoubleClick={(e) => {
+                                                  if (!canManage) return;
+                                                  e.stopPropagation();
+                                                  setRenaming({ kind: "lesson", id: l.id, value: l.title || "" });
+                                                }}
+                                              >
+                                                {l.title}
+                                              </span>
+                                            )}
                                             {canManage && (
                                               <Popconfirm
                                                 title="Delete this lesson?"
@@ -1301,8 +1454,10 @@ export default function ClassroomView() {
           </Card>
         ) : (
           announcements.map((a) => {
-            const canDelete =
-              user.role === "admin" || (a.author && a.author.id === user.id);
+            const isOwner = a.author && a.author.id === user.id;
+            const canEdit = isOwner;
+            const canDelete = user.role === "admin" || isOwner;
+            const isEditing = editingAnnouncementId === a.id;
             return (
               <Card
                 key={a.id}
@@ -1329,28 +1484,61 @@ export default function ClassroomView() {
                           {new Date(a.createdAt).toLocaleString()}
                         </Text>
                       </Space>
-                      {canDelete && (
-                        <Button
-                          type="text"
-                          size="small"
-                          danger
-                          onClick={() => deleteAnnouncement(a.id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                      <Space size={4}>
+                        {canEdit && !isEditing && (
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => {
+                              setEditingAnnouncementId(a.id);
+                              setEditingAnnouncementDraft(a.content || "");
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                        {canDelete && !isEditing && (
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            onClick={() => deleteAnnouncement(a.id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </Space>
                     </Space>
-                    <div
-                      style={{
-                        marginTop: 6,
-                        whiteSpace: "pre-wrap",
-                        color: "#1f2937",
-                        fontSize: 13.5,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {a.content}
-                    </div>
+                    {isEditing ? (
+                      <div style={{ marginTop: 6 }}>
+                        <Input.TextArea
+                          value={editingAnnouncementDraft}
+                          onChange={(e) => setEditingAnnouncementDraft(e.target.value)}
+                          autoSize={{ minRows: 2, maxRows: 8 }}
+                        />
+                        <Space style={{ marginTop: 8 }}>
+                          <Button type="primary" size="small" onClick={saveAnnouncementEdit}>
+                            Save
+                          </Button>
+                          <Button size="small" onClick={() => setEditingAnnouncementId(null)}>
+                            Cancel
+                          </Button>
+                        </Space>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          whiteSpace: "pre-wrap",
+                          color: "#1f2937",
+                          fontSize: 13.5,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {a.content}
+                      </div>
+                    )}
                   </div>
                 </Space>
               </Card>
@@ -1461,12 +1649,37 @@ export default function ClassroomView() {
                   <ReadOutlined style={{ fontSize: 22 }} />
                 </div>
                 <div>
-                  <Title
-                    level={4}
-                    style={{ margin: 0, fontWeight: 700, letterSpacing: -0.3, color: "#111827" }}
-                  >
-                    {classroom.name}
-                  </Title>
+                  {editingClassroomName !== null ? (
+                    <Space.Compact style={{ width: 360 }}>
+                      <Input
+                        autoFocus
+                        value={editingClassroomName}
+                        onChange={(e) => setEditingClassroomName(e.target.value)}
+                        onPressEnter={saveClassroomName}
+                      />
+                      <Button type="primary" onClick={saveClassroomName}>Save</Button>
+                      <Button onClick={() => setEditingClassroomName(null)}>Cancel</Button>
+                    </Space.Compact>
+                  ) : (
+                    <Space align="center" size={6}>
+                      <Title
+                        level={4}
+                        style={{ margin: 0, fontWeight: 700, letterSpacing: -0.3, color: "#111827" }}
+                      >
+                        {classroom.name}
+                      </Title>
+                      {canManage && (
+                        <Tooltip title="Edit classroom name">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => setEditingClassroomName(classroom.name || "")}
+                          />
+                        </Tooltip>
+                      )}
+                    </Space>
+                  )}
                   <Space size={14} wrap style={{ marginTop: 4 }}>
                     <Space size={6}>
                       <Avatar
