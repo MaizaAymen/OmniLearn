@@ -492,29 +492,31 @@ flowchart TB
 
 ### 1. My classrooms (student)
 
+`MyClassrooms.jsx` is the student's entry point into the classroom system. It displays every class the student is enrolled in as a grid of cards, each showing the class name, the teacher, the linked subject, and the number of members, alongside a quick-access button to open the classroom. From this dashboard, the student can also join a new class by entering an invitation code, which routes them to the join confirmation page.
+
 > *Figure 48 — `MyClassrooms` listing of the student's enrolled classes.*
 
 ### 2. Classroom view
 
-`ClassroomView.jsx` shows modules, lessons, announcements and assignments for a class.
+`ClassroomView.jsx` centralizes every resource attached to a class inside a single interface. The content is organised into tabs — Modules, Lessons, Announcements and Assignments — so the student navigates seamlessly between course materials, teacher messages and the tasks to complete. A sidebar surfaces the enrolled members and the teacher's profile, keeping the social context one click away.
 
 > *Figure 49 — Classroom view (modules, lessons, announcements).*
 
 ### 3. Join a classroom
 
-The `/join/:code` route opens `JoinClassroom.jsx` and asks the student to confirm the join.
+The `/join/:code` route opens `JoinClassroom.jsx`, which automatically resolves the class information from the invitation code embedded in the URL. The student is shown a summary of the class (name, teacher, subject) and confirms the enrolment with a single click. On success, the class is appended to their personal list and they are redirected to the classroom view to start exploring its content.
 
 > *Figure 50 — Join a classroom page.*
 
 ### 4. Assignments page
 
-The `ClassAssignmentsPage` shows the assignments of a class with their due dates, attached problems and submission status.
+`ClassAssignmentsPage.jsx` lists every assignment published by the teacher for a given class. Each entry exposes the title, description, due date, attached problems and current submission status (not started, in progress, submitted, graded). The student can open an assignment to access the linked exercises and submit their work directly from the platform, with all state updates reflected back in the listing.
 
 > *Figure 51 — Class assignments page.*
 
 ### 5. Real-time messaging (`Messages.jsx`)
 
-A two-pane layout: conversations on the left, the active thread on the right. Messages stream in live through Socket.IO.
+`Messages.jsx` ships a modern two-pane interface inspired by mainstream messaging apps. The left pane lists conversations (teachers, classmates, group chats) with a preview of the latest message and an unread-count badge. The right pane displays the full history of the active thread, with instant delivery over Socket.IO, typing indicators and read receipts — enabling fluid communication across the entire educational community.
 
 > *Figure 52 — Real-time messaging page.*
 
