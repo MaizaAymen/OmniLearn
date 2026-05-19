@@ -477,6 +477,8 @@ The `RoadmapPage` renders the roadmap as a React Flow graph with custom node typ
 
 ### 3. Roadmap node detail panel
 
+Clicking a node on the roadmap graph opens a side panel that displays the topic title, a short description and its list of prerequisites. The panel also exposes the curated learning resources (articles, videos, official docs) attached to the node by the AI generator. A "mark as done" button lets the student validate the node and propagate progress to the dependent edges.
+
 > *Figure 31 — Roadmap node detail panel.*
 
 ### 4. Certificate
@@ -487,7 +489,7 @@ After 100% completion, the student can download a personalized certificate as a 
 
 ### 5. Problems page
 
-The `ProblemsPage` lists problems with filters by difficulty and tag. The catalogue is automatically scoped to the user's plan and institution.
+The `ProblemsPage` lists problems with filters by difficulty and tag. The catalogue is automatically scoped to the user's plan and institution. Each row shows the problem title, difficulty badge, associated tags and the student's solved/attempted status to make navigation easier. A search bar at the top allows quick lookup by keyword, while pagination keeps the list performant even with hundreds of statements.
 
 > *Figure 33 — Problems catalogue page.*
 
@@ -499,11 +501,13 @@ The `ProblemPage` combines the statement (left) with the CodeMirror code editor 
 
 ### 7. Coding dashboard
 
-The `CodingDashboard` aggregates the student's submissions and visualizes them as charts (success rate, problems-by-difficulty, recent submissions).
+The `CodingDashboard` aggregates the student's submissions and visualizes them as charts (success rate, problems-by-difficulty, recent submissions). KPI cards on top summarize the total number of attempts, accepted solutions and the current solve streak. A recent-activity feed lists the latest verdicts with a direct link back to the corresponding problem page.
 
 > *Figure 35 — Coding dashboard.*
 
 ### 8. Super-admin problems tabs (Free-tier / Pro-tier)
+
+In the super-admin console, two dedicated tabs let the platform owner curate which problems belong to the Free plan and which are reserved for the Pro plan. Each tab displays the global catalogue with a toggle that flips the `isPro` flag on the corresponding problem document. Changes take effect immediately and are reflected in the catalogue scoping used by the student-facing `ProblemsPage`.
 
 > *Figure 36 — `FreeTierTab` — toggle problems as free-tier.*
 > *Figure 37 — `ProTierTab` — toggle problems as pro-tier.*
