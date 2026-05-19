@@ -333,6 +333,228 @@
     ]
   },
   {
+    "id": "hist_1779212915698_355967",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "quiz",
+    "documentName": "PDF",
+    "date": "2026-05-19T17:48:35.698Z",
+    "score": 8,
+    "total": 10,
+    "questions": [
+      {
+        "question": "What is the name of the student who realized the school management system project?",
+        "options": [
+          "Youcef DEGACHI",
+          "Haifa DEGACHI",
+          "Mohamed FOURATI",
+          "Wissem Elayari"
+        ],
+        "answer": "Youcef DEGACHI"
+      },
+      {
+        "question": "What is the name of the host organization where the student did his internship?",
+        "options": [
+          "CodeCooperation GmbH",
+          "Higher Institute of Technological Studies of Tozeur",
+          "ISETT",
+          "GMBH"
+        ],
+        "answer": "CodeCooperation GmbH"
+      },
+      {
+        "question": "Who is the academic supervisor of the student?",
+        "options": [
+          "Mrs Haifa DEGACHI",
+          "Mr Mohamed FOURATI",
+          "Mr Wissem Elayari",
+          "Mr Taieb Ben Dai"
+        ],
+        "answer": "Mrs Haifa DEGACHI"
+      },
+      {
+        "question": "What is the duration of the internship period?",
+        "options": [
+          "From January 1, 2025 to March 31, 2025",
+          "From February 3, 2025 to May 30, 2025",
+          "From June 1, 2025 to August 31, 2025",
+          "From September 1, 2025 to November 30, 2025"
+        ],
+        "answer": "From February 3, 2025 to May 30, 2025"
+      },
+      {
+        "question": "What is the name of the department where the student is studying?",
+        "options": [
+          "Department of Computer Technology",
+          "Department of Information Systems",
+          "Department of Software Engineering",
+          "Department of Data Science"
+        ],
+        "answer": "Department of Computer Technology"
+      },
+      {
+        "question": "What is the name of the institute where the student is studying?",
+        "options": [
+          "Higher Institute of Technological Studies of Tozeur",
+          "Institute of Technology",
+          "Tozeur University",
+          "CodeCooperation Institute"
+        ],
+        "answer": "Higher Institute of Technological Studies of Tozeur"
+      },
+      {
+        "question": "What is the specialty of the student's Bachelor's Degree?",
+        "options": [
+          "Information Systems Development",
+          "Computer Science",
+          "Software Engineering",
+          "Data Science"
+        ],
+        "answer": "Information Systems Development"
+      },
+      {
+        "question": "Who is the professional supervisor of the student?",
+        "options": [
+          "Mr Mohamed FOURATI",
+          "Mrs Haifa DEGACHI",
+          "Mr Wissem Elayari",
+          "Mr Taieb Ben Dai"
+        ],
+        "answer": "Mr Mohamed FOURATI"
+      },
+      {
+        "question": "What is the code of the project?",
+        "options": [
+          "PFE/DSI 1/2025/01",
+          "PFE/DSI 2/2025/02",
+          "PFE/DSI 3/2025/03",
+          "PFE/DSI 4/2025/04"
+        ],
+        "answer": "PFE/DSI 3/2025/03"
+      },
+      {
+        "question": "What is the title of the project?",
+        "options": [
+          "School Management System",
+          "University Management System",
+          "College Management System",
+          "Institute Management System"
+        ],
+        "answer": "School Management System"
+      }
+    ]
+  },
+  {
+    "id": "hist_1779212906569_956167",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "quiz",
+    "documentName": "PDF",
+    "date": "2026-05-19T17:48:26.569Z",
+    "score": 8,
+    "total": 10,
+    "questions": [
+      {
+        "question": "What is the name of the student who realized the school management system project?",
+        "options": [
+          "Youcef DEGACHI",
+          "Haifa DEGACHI",
+          "Mohamed FOURATI",
+          "Wissem Elayari"
+        ],
+        "answer": "Youcef DEGACHI"
+      },
+      {
+        "question": "What is the name of the host organization where the student did his internship?",
+        "options": [
+          "CodeCooperation GmbH",
+          "Higher Institute of Technological Studies of Tozeur",
+          "ISETT",
+          "GMBH"
+        ],
+        "answer": "CodeCooperation GmbH"
+      },
+      {
+        "question": "Who is the academic supervisor of the student?",
+        "options": [
+          "Mrs Haifa DEGACHI",
+          "Mr Mohamed FOURATI",
+          "Mr Wissem Elayari",
+          "Mr Taieb Ben Dai"
+        ],
+        "answer": "Mrs Haifa DEGACHI"
+      },
+      {
+        "question": "What is the duration of the internship period?",
+        "options": [
+          "From January 1, 2025 to March 31, 2025",
+          "From February 3, 2025 to May 30, 2025",
+          "From June 1, 2025 to August 31, 2025",
+          "From September 1, 2025 to November 30, 2025"
+        ],
+        "answer": "From February 3, 2025 to May 30, 2025"
+      },
+      {
+        "question": "What is the name of the department where the student is studying?",
+        "options": [
+          "Department of Computer Technology",
+          "Department of Information Systems",
+          "Department of Software Engineering",
+          "Department of Data Science"
+        ],
+        "answer": "Department of Computer Technology"
+      },
+      {
+        "question": "What is the name of the institute where the student is studying?",
+        "options": [
+          "Higher Institute of Technological Studies of Tozeur",
+          "Institute of Technology",
+          "Tozeur University",
+          "CodeCooperation Institute"
+        ],
+        "answer": "Higher Institute of Technological Studies of Tozeur"
+      },
+      {
+        "question": "What is the specialty of the student's Bachelor's Degree?",
+        "options": [
+          "Information Systems Development",
+          "Computer Science",
+          "Software Engineering",
+          "Data Science"
+        ],
+        "answer": "Information Systems Development"
+      },
+      {
+        "question": "Who is the professional supervisor of the student?",
+        "options": [
+          "Mr Mohamed FOURATI",
+          "Mrs Haifa DEGACHI",
+          "Mr Wissem Elayari",
+          "Mr Taieb Ben Dai"
+        ],
+        "answer": "Mr Mohamed FOURATI"
+      },
+      {
+        "question": "What is the code of the project?",
+        "options": [
+          "PFE/DSI 1/2025/01",
+          "PFE/DSI 2/2025/02",
+          "PFE/DSI 3/2025/03",
+          "PFE/DSI 4/2025/04"
+        ],
+        "answer": "PFE/DSI 3/2025/03"
+      },
+      {
+        "question": "What is the title of the project?",
+        "options": [
+          "School Management System",
+          "University Management System",
+          "College Management System",
+          "Institute Management System"
+        ],
+        "answer": "School Management System"
+      }
+    ]
+  },
+  {
     "id": "hist_1778878015691_473158",
     "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
     "type": "quiz",
