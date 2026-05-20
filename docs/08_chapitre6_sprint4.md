@@ -351,19 +351,13 @@ The user is marked inactive and signed out automatically on their next request.
 
 ```mermaid
 flowchart TD
-  A([Start]) --> B[Admin opens UsersByPlanTab]
-  B --> C[Pick a user]
-  C --> D[Click &quot;Ban&quot;]
-  D --> E[Confirmation modal]
-  E --> F{Confirm?}
-  F -- No --> Z([End])
-  F -- Yes --> G[PATCH /api/admin/users/:id isActive=false]
-  G --> H{Caller role == &quot;admin&quot;?}
-  H -- No --> I[403 Forbidden] --> Z
-  H -- Yes --> J[UPDATE users SET isActive = false]
-  J --> K[Next request: authenticate middleware rejects token]
-  K --> L[Banned user gets 401 + signed out]
-  L --> Z
+  A([Start]) --> B[Admin picks a user]
+  B --> C[Click &quot;Ban&quot;]
+  C --> D{Confirm?}
+  D -- No --> Z([End])
+  D -- Yes --> E[Mark user as inactive]
+  E --> F[User is signed out on next action]
+  F --> Z
 ```
 
 > *Figure 58 — Activity diagram "Ban a user".*
