@@ -182,34 +182,16 @@ export default function PdfAssistant() {
   }, [messages, loading]);
 
   // Load CODE from navigation state (My Workspace → AI Assistant on a code file).
-  // We bypass the whole PDF upload flow and kick off an overview ask.
+  // The user runs Summarize/Chat manually — no auto-analyze on load.
   useEffect(() => {
     const state = location.state;
     if (!state?.codeContent) return;
 
-    const id = state.codeId || null;
     setCodeMode(true);
     setCodeContent(state.codeContent);
     setCodeName(state.codeName || "snippet");
-    setCodeId(id);
+    setCodeId(state.codeId || null);
     setMessages([{ role: "system", content: `Code loaded: ${state.codeName || "snippet"}` }]);
-
-
-    // Kick off an initial overview through the workspace endpoint.
-    setLoading(true);
-    api.post(`${WORKSPACE_API}/code/analyze`, {
-      itemId: state.codeId,
-      content: state.codeContent,
-      name: state.codeName,
-    })
-      .then((res) => {
-        setMessages((prev) => [...prev, { role: "assistant", content: res.data.answer || "" }]);
-      })
-      .catch((e) => {
-        const detail = e?.response?.data?.error || e?.message || "Failed to analyze";
-        message.error(`AI error: ${detail}`);
-      })
-      .finally(() => setLoading(false));
   }, [location.state]);
 
   // Load PDF from navigation state (e.g., Classroom PDFs)

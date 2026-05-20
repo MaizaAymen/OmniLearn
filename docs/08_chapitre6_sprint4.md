@@ -841,18 +841,13 @@ Every student in the class sees the same lesson PDF and can ask questions about 
 
 ### 3. AI Mentor — Socratic streaming tutor
 
-`AIMentor.jsx` is a sidebar inside `ProblemPage.jsx`. It calls `POST /api/ai/ai/mentor` and streams the answer back over **Server-Sent Events** (`text/event-stream`, `data: { text }` frames, terminated by `data: [DONE]`).
-
-The endpoint accepts `{ code, language, question, problemTitle, history }`, injects the current code (truncated to 2 000 chars) as a fenced block, replays the last 10 turns of `history`, and calls Groq with `stream: true`. The system prompt is the design — it pins eight rules, the first three of which are non-negotiable:
+`AIMentor.jsx` is a sidebar inside `ProblemPage.jsx` that streams a Socratic tutor over Server-Sent Events.
+It knows the student's current code, language, problem title, and the last 10 turns of conversation.
+Its system prompt pins three non-negotiable rules that shape every reply:
 
 > 1. NEVER give a complete solution or write the full corrected code.
 > 2. Always teach the WHY behind concepts and bugs.
 > 3. Ask a guiding reflective question at the end of each response.
-
-The frontend renders tokens with a pulsing cursor glyph until it sees `[DONE]`. The UI also exposes five **quick actions** ("Explain this", "Why wrong?", "Give a hint", "Improve it", "What concept?") that simply prefill the prompt — the server still sees them as normal user questions.
-
-The screenshot below shows the AI Mentor panel next to the code editor.
-The student chats with the mentor while solving a problem and gets hints without full answers.
 
 > *Figure 64 — AI Mentor side panel.*
 

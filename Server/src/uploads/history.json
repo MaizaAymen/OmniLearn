@@ -333,6 +333,33 @@
     ]
   },
   {
+    "id": "hist_1779310793626_850170",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "explanation",
+    "documentName": "ssss",
+    "date": "2026-05-20T20:59:53.626Z",
+    "selectedText": "Code — ssss\nimport axios from \"axios\";\nimport Cookies from \"js-cookie\";\n\nconst BASE = \"http://localhost:5000/api/roadmap",
+    "explanation": "### Overview\nThis code defines an API client for interacting with a roadmap service. It uses the `axios` library to make HTTP requests and the `js-cookie` library to handle authentication tokens.\n\n### Key Components\n\n* `BASE`: The base URL for the roadmap API (`http://localhost:5000/api/roadmap`).\n* `auth`: A function that returns an object with an `Authorization` header containing a Bearer token retrieved from cookies.\n* `roadmapApi`: An object that exports various API endpoints for interacting with the roadmap service.\n\n### API Endpoints\nThe `roadmapApi` object contains the following endpoints:\n\n* `me`: Retrieves the current user's data.\n* `list`: Retrieves a list of roadmaps.\n* `saveProfile`: Updates the user's profile.\n* `generate`: Generates a new roadmap.\n* `switchTo`: Switches to a different roadmap.\n* `deleteRoadmap`: Deletes a roadmap.\n* `rename`: Renames a roadmap.\n* `setStatus`: Updates the status of a node.\n* `quizSubmit`: Submits a quiz score.\n* `issueCertificate`: Issues a certificate.\n* `resources`: Retrieves resources for a node.\n\n### Example Usage\nTo use this API client, you would import the `roadmapApi` object and call the desired endpoint. For example:\n```javascript\nimport { roadmapApi } from './roadmapApi';\n\n// Retrieve the current user's data\nroadmapApi.me().then((data) => console.log(data));\n\n// Update the user's profile\nconst payload = { name: 'John Doe' };\nroadmapApi.saveProfile(payload).then((data) => console.log(data));\n```"
+  },
+  {
+    "id": "hist_1779310779109_738786",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "explanation",
+    "documentName": "ssss",
+    "date": "2026-05-20T20:59:39.109Z",
+    "selectedText": "const auth = () => ({\n  headers: { Authorization: `Bearer ${Cookies.get(\"token\")}` },",
+    "explanation": "### Authentication Function\n\nThis snippet defines a function `auth` that returns an object with a specific header for authentication.\n\n* It uses the `Cookies.get(\"token\")` function to retrieve a token from the browser's cookies.\n* The token is then included in the `Authorization` header, prefixed with `Bearer`.\n* This header is used to authenticate requests to the API.\n\nIn simple terms, this function helps verify the user's identity when making requests to the API by including a token in the request headers.\n\n### Example\n```javascript\nconst token = Cookies.get(\"token\");\nconst authHeader = {\n  headers: { Authorization: `Bearer ${token}` },\n};\n```\nThis is equivalent to what the `auth` function returns."
+  },
+  {
+    "id": "hist_1779310778986_723801",
+    "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
+    "type": "explanation",
+    "documentName": "ssss",
+    "date": "2026-05-20T20:59:38.986Z",
+    "selectedText": "const auth = () => ({\n  headers: { Authorization: `Bearer ${Cookies.get(\"token\")}` },",
+    "explanation": "### Authentication Function\n\nThis snippet defines a function called `auth` that returns an object with a specific header for authentication.\n\nHere's what it does:\n\n* It checks for a cookie named \"token\" using `Cookies.get(\"token\")`.\n* It constructs an `Authorization` header with the value `Bearer <token_value>`, where `<token_value>` is the value of the \"token\" cookie.\n* The resulting object is:\n```javascript\n{\n  headers: {\n    Authorization: 'Bearer <token_value>'\n  }\n}\n```\nThis object is used to authenticate API requests by including the token in the `Authorization` header."
+  },
+  {
     "id": "hist_1779212915698_355967",
     "userId": "6e2c761b-1c8e-4111-8c83-1129e081848a",
     "type": "quiz",
