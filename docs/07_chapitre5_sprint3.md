@@ -229,6 +229,9 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Create an assignment"
 
+This diagram shows the steps the teacher follows to create an assignment.
+The teacher fills the form, picks problems, the server checks the rights, saves the assignment, and notifies the students.
+
 ```mermaid
 flowchart TD
   A([Start]) --> B[Teacher opens ModuleAssignmentsTab]
@@ -237,11 +240,11 @@ flowchart TD
   D --> E{Attach problems?}
   E -- Yes --> F[Pick problems from catalogue]
   E -- No --> G
-  F --> G[POST /api/assignments]
+  F --> G["POST /api/assignments"]
   G --> H{Authorized as teacher of the class?}
   H -- No --> I[403 Forbidden] --> Z([End])
   H -- Yes --> J[INSERT ClassAssignment]
-  J --> K[Notify enrolled students (Notification + Socket.IO)]
+  J --> K["Notify enrolled students (Notification + Socket.IO)"]
   K --> L[Assignment appears in ClassAssignmentsPage]
   L --> Z
 ```
