@@ -196,6 +196,8 @@ sequenceDiagram
     participant Hub as Socket.IO
     participant DB as DB
 
+    Note over A,DB: ref: Authenticate
+
     A->>FE: Type message
     FE->>API: POST /messages
     API->>DB: Insert Message
