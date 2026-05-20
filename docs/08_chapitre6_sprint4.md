@@ -196,7 +196,8 @@ flowchart LR
 
 #### 2.1. Sequence diagram — "Ask a question to the PDF assistant"
 
-The student opens `PdfAssistant.jsx`, uploads a PDF and types a question. The frontend calls `POST /api/pdf/chat`. The backend retrieves the top-3 relevant chunks from Chroma DB through `vectorStore.similaritySearch(question, 3)` (vector store created at upload time and rebuilt on cache miss by `loadPdfData()`), builds a RAG prompt with those chunks as context, and calls Groq (`llama-3.3-70b-versatile`). If Chroma is unreachable the route silently falls back to a keyword-overlap top-3. The answer is returned as a single JSON `{ answer, sources }` response.
+The student uploads a PDF and asks a question.
+The system finds the most relevant parts of the PDF and uses the AI model to answer based on them.
 
 ```mermaid
 sequenceDiagram
@@ -299,7 +300,8 @@ sequenceDiagram
 
 #### 2.2. Sequence diagram — "Join an institution via invite link"
 
-A visitor opens the invite URL `/join-institution/:token`. `JoinInstitution.jsx` calls `GET /api/plan/invite-links/:token` to display the institution and the assigned role. After signup or login, the user calls `POST /api/plan/join-institution`. The backend validates the token, checks `expiresAt` and `maxUses`, and updates the user with `institutionId` + the role from the token (`teacher` or `student`). The frontend redirects to the dashboard.
+A visitor opens the invite link and sees the institution and assigned role.
+After signing in, the backend links the user to the institution and sends them to the dashboard.
 
 ```mermaid
 sequenceDiagram
@@ -343,7 +345,8 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Ban a user"
 
-The super admin opens the users-by-plan tab, picks a user and clicks "Ban". A confirmation modal appears. On confirm, the frontend sends `PATCH /api/admin/users/:id { isActive: false }`. All active sessions for that user are revoked at the next request via middleware.
+The super admin picks a user and clicks Ban, then confirms in a modal.
+The user is marked inactive and signed out automatically on their next request.
 
 ```mermaid
 flowchart TD
@@ -366,7 +369,8 @@ flowchart TD
 
 #### 3.2. Activity diagram — "Onboard a new institution"
 
-When the Stripe webhook detects a successful Institution checkout, it flips the user's `plan` to `institution`. The next time the user reaches a guarded route, `Guard` detects `plan === "institution" && !institutionId` and redirects to `/onboarding/institution`. The user fills the form, the backend creates the `Institution` and sets the user's `institutionId` and `role = institution_admin`.
+After paying for the Institution plan, the user is redirected to the onboarding form.
+They fill it in, and the backend creates the institution and makes them its admin.
 
 ```mermaid
 flowchart TD
@@ -467,7 +471,8 @@ classDiagram
 
 ### 5. C4 Component view
 
-Sprint 4 adds both an **AI plane** (`pdfRoutes`, `aiRoutes`, `workspaceRoutes`) and a **multi-tenant administration plane** (`planRoutes`, `institutionCurriculumRoutes`, `adminRoutes`, `stripeRoutes`). The Component view groups every public endpoint by module, exposes the internal building blocks of the RAG pipeline and the AI orchestrators, and shows the shared cross-cutting helpers (plan gate, JSON-repair retry, time-boxed clients, caches). Section V.1 zooms further into the PDF assistant alone with its own C4 Levels 1–4.
+Sprint 4 adds an AI plane (PDF, mentor, workspace) and an admin plane (plans, institutions, super admin).
+The diagram groups every endpoint by module and shows shared helpers like the plan gate and timeouts.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -653,7 +658,8 @@ flowchart LR
   OmniLearn -- "user / plan / classroom data" --> PG
 ```
 
-The student talks only to OmniLearn. Two managed providers (Groq, HuggingFace) and one self-hosted store (Chroma) are the only external dependencies.
+The student only talks to OmniLearn.
+OmniLearn then calls Groq, HuggingFace, and Chroma in the background.
 
 #### 1.2. C4 Level 2 — Containers
 
@@ -685,7 +691,8 @@ flowchart TB
   PdfRouter -- "chat.completions" --> Groq
 ```
 
-The PDF router owns three outbound clients (HF, Chroma, Groq) and persists PDFs to disk plus a small `index.json` so the in-memory cache can be rebuilt after a restart (`loadPdfData()`).
+The PDF router talks to HuggingFace, Chroma, and Groq, and saves the PDFs on disk.
+A small index file lets it rebuild the cache after a server restart.
 
 #### 1.3. C4 Level 3 — Components inside `pdfRoutes.js`
 
@@ -787,7 +794,8 @@ groq.chat.completions({
 
 ### 2. Classroom PDF
 
-`ClassroomPdf.jsx` is a variant of the PDF assistant scoped to a classroom's lesson PDF, so all students of the same class share a common knowledge base. Same router, same RAG pipeline.
+This is the PDF assistant tied to a classroom lesson, so every student in the class shares the same PDF.
+It uses the same routes and AI pipeline as the personal PDF assistant.
 
 > *Figure 63 — Classroom PDF assistant.*
 
@@ -896,27 +904,31 @@ The Groq and HuggingFace fallback keys committed in the source are **placeholder
 
 ### 11. Institution onboarding
 
-After upgrading to the Institution plan, the user is redirected to `/onboarding/institution` to register the institution.
+After paying for the Institution plan, the user is sent to the onboarding page.
+They fill in the institution name, slug, and logo to register it.
 
 > *Figure 66 — Institution onboarding form.*
 
 ### 12. Invite links
 
-The institution admin generates invite links scoped to a target role (teacher or student), with an expiration date and a maximum number of uses.
+The institution admin creates invite links for either teachers or students.
+Each link has an expiration date and a maximum number of uses.
 
 > *Figure 67 — Invite-link generation form.*
 > *Figure 68 — Public "Join institution" page (`JoinInstitution.jsx`).*
 
 ### 13. Institution Admin console
 
-The institution-admin tabs show the member directory, the per-institution curriculum (Grades / Specialities / Levels), the institution's classes, and basic statistics.
+The institution admin sees the list of members and the curriculum of their institution.
+They can also view the institution's classes and basic statistics.
 
 > *Figure 69 — Institution member directory (`InstitutionTab.jsx`).*
 > *Figure 70 — Per-institution curriculum management.*
 
 ### 14. Super Admin console
 
-The super admin dashboard centralizes the management of institutions, the global problem catalogue, the Free-tier / Pro-tier flags, the ban / unban actions and the platform statistics.
+The super admin manages every institution, the global problems, and the Free / Pro plan flags.
+They can also ban or unban users and view platform-wide statistics.
 
 > *Figure 71 — Super admin dashboard.*
 > *Figure 72 — Users-by-plan overview (charts).*
@@ -926,7 +938,8 @@ The super admin dashboard centralizes the management of institutions, the global
 
 ### 15. Pricing / Plan section
 
-The `PlanSection` component shows the three plans side-by-side with Stripe Checkout CTAs.
+This page shows the three plans (Free, Pro, Institution) side by side.
+Each plan has a Stripe checkout button to upgrade.
 
 > *Figure 76 — Pricing / Plan section with Stripe upgrade buttons.*
 
