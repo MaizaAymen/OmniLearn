@@ -56,7 +56,8 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 
 #### Student side
 
-The student can: join a classroom via code, view classrooms, see announcements, submit assignments, send messages and receive notifications.
+This diagram shows what a student can do in Sprint 3.
+They can join a class, read its content, send messages, and get notifications.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -101,7 +102,8 @@ flowchart LR
 
 #### Teacher side
 
-The teacher can: create a class, generate a class code, list enrolled students, create courses / modules / lessons, create assignments, attach problems to an assignment, post announcements and respond to messages.
+This diagram shows what a teacher can do in Sprint 3.
+They can create classes, add courses and assignments, post announcements, and reply to messages.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -147,7 +149,8 @@ flowchart LR
 
 #### 2.1. Sequence diagram — "Join a classroom"
 
-A student receives an invite code, opens `/join/:code`. The frontend calls `POST /api/classes/join`. The backend looks up the class by code, ensures the student belongs to the same institution, creates an `Enrollment`, and returns the class. The student is redirected to `MyClassrooms`.
+The student opens the join link with the class code.
+The server checks the code, adds the student to the class, and sends them to their classroom list.
 
 ```mermaid
 sequenceDiagram
@@ -181,7 +184,8 @@ sequenceDiagram
 
 #### 2.2. Sequence diagram — "Send a real-time message"
 
-A user opens `Messages.jsx`, picks a conversation and types a message. On submit, the frontend calls `POST /api/messages`. The backend persists the `Message`, then emits a `message:new` event on the conversation's Socket.IO room. All connected clients in the room receive the message and append it to the thread; a `Notification` is created for offline recipients.
+A user sends a message, and the server saves it then pushes it live to the other user.
+If the other user is offline, a notification is stored for them to see later.
 
 ```mermaid
 sequenceDiagram
@@ -246,18 +250,8 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-3 class diagram introduces the collaboration entities:
-
-- `Class` — `id`, `name`, `code`, `gradeId`, `specialityId`, `levelId`, `teacherId`, `institutionId`.
-- `Enrollment` — `id`, `classId`, `studentId`, `enrolledAt`.
-- `Course` — `id`, `name`, `teacherId`, `classId`, `levelId`.
-- `Module` — `id`, `name`, `courseId`.
-- `Lesson` — `id`, `title`, `content`, `pdfUrl?`, `moduleId?`, `courseId?`.
-- `ClassAssignment` — `id`, `name`, `moduleId`, `classId`, `dueAt`, `problemIds[]`.
-- `Announcement` — `id`, `title`, `body`, `classId`, `authorId`, `createdAt`.
-- `Conversation` — `id`, `name?`, `participantIds[]`, `createdAt`.
-- `Message` — `id`, `conversationId`, `senderId`, `body`, `createdAt`.
-- `Notification` — `id`, `userId`, `type`, `payload`, `readAt?`.
+This diagram shows the main data tables added in Sprint 3 (classes, courses, assignments, messages, notifications) and how they are linked.
+It explains how a teacher, a class, and its students share content and chat together.
 
 ```mermaid
 classDiagram
@@ -356,7 +350,8 @@ classDiagram
 
 ### 5. C4 Container view
 
-Sprint 3 introduces a second long-lived process — the **Socket.IO message hub** (`messageHub.js`) — that shares the same JWT and the same PostgreSQL database as the HTTP API. The SPA opens a WebSocket alongside its REST calls; the API emits message/notification events into the hub, which routes them by conversation room. Lesson PDFs go through Cloudinary.
+This view shows the main parts of the app: the web frontend, the API, the real-time message hub, and the database.
+The frontend talks to the API for normal requests and to the hub for live messages.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -379,7 +374,8 @@ flowchart LR
 
 ### 6. C4 Component view
 
-Sprint 3 adds the **collaboration plane** (classes, courses, modules, lessons, assignments, announcements, conversations, messages, notifications) and the **real-time plane** (`messageHub.js` Socket.IO server). The Component view shows every public endpoint and the internal building blocks of the hub (handshake, rooms, presence, broadcaster, fan-out, disconnect cleanup).
+This view zooms inside the API to show the routes for classes, courses, assignments, messages, and notifications.
+It also shows the inside of the message hub that handles live chat and notifications.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -492,43 +488,50 @@ flowchart TB
 
 ### 1. My classrooms (student)
 
-`MyClassrooms.jsx` is the student's entry point into the classroom system. It displays every class the student is enrolled in as a grid of cards, each showing the class name, the teacher, the linked subject, and the number of members, alongside a quick-access button to open the classroom. From this dashboard, the student can also join a new class by entering an invitation code, which routes them to the join confirmation page.
+This page shows all the classes the student has joined, as a grid of cards.
+The student can also join a new class here by entering an invitation code.
 
 > *Figure 48 — `MyClassrooms` listing of the student's enrolled classes.*
 
 ### 2. Classroom view
 
-`ClassroomView.jsx` centralizes every resource attached to a class inside a single interface. The content is organised into tabs — Modules, Lessons, Announcements and Assignments — so the student navigates seamlessly between course materials, teacher messages and the tasks to complete. A sidebar surfaces the enrolled members and the teacher's profile, keeping the social context one click away.
+This page gathers everything in one class: modules, lessons, announcements, and assignments, split into tabs.
+A side panel shows the teacher and the other students of the class.
 
 > *Figure 49 — Classroom view (modules, lessons, announcements).*
 
 ### 3. Join a classroom
 
-The `/join/:code` route opens `JoinClassroom.jsx`, which automatically resolves the class information from the invitation code embedded in the URL. The student is shown a summary of the class (name, teacher, subject) and confirms the enrolment with a single click. On success, the class is appended to their personal list and they are redirected to the classroom view to start exploring its content.
+This page shows a short summary of the class (name, teacher, subject) found from the invitation code.
+The student clicks one button to join and is sent directly into the classroom.
 
 > *Figure 50 — Join a classroom page.*
 
 ### 4. Assignments page
 
-`ClassAssignmentsPage.jsx` lists every assignment published by the teacher for a given class. Each entry exposes the title, description, due date, attached problems and current submission status (not started, in progress, submitted, graded). The student can open an assignment to access the linked exercises and submit their work directly from the platform, with all state updates reflected back in the listing.
+This page lists all the assignments given by the teacher, with the due date and the status of each one.
+The student can open an assignment, do the exercises, and submit the work from the same page.
 
 > *Figure 51 — Class assignments page.*
 
 ### 5. Classroom problem bank (teacher)
 
-`ClassroomProblemsTab.jsx`, embedded inside the teacher's classroom view, is the **per-class problem bank** that feeds the assignment editor. Problems the teacher creates here stay scoped to the current classroom — invisible to other classes and to the global catalogue — and forks from the public `/problems` bank also land here automatically. Two entry points sit at the top of the tab: a *Create manually* button that opens `ProblemCreatePage.jsx` with the `classId` already pre-bound in the URL, and an *AI generate* button that switches the same page to its AI authoring tab so the teacher can produce a problem from a natural-language prompt. The list below shows each problem with its title, difficulty (Easy / Medium / Hard), category and publication status, alongside a delete action. This bank is the catalogue the assignment modal in the next section draws from.
+This tab holds all the problems that belong only to the teacher's class.
+The teacher can add problems manually or generate them with AI, and later use them in assignments.
 
 > *Figure 51.1 — Classroom problem bank used by the teacher.*
 
 ### 6. Creating an assignment (teacher)
 
-`ModuleAssignmentsTab.jsx`, opened from a module on the teacher's classroom dashboard, is where coding practice sets are assembled and pushed to enrolled students. Clicking *New Assignment* opens a modal with three groups of inputs: assignment metadata (title, due date, optional maximum number of attempts), a **difficulty quick-filter** that auto-selects every problem of the chosen level from the class bank, and the **explicit problem checklist** populated from `GET /api/ai/ai/getallproblems`. On submit the frontend posts `{ moduleId, title, problemIds, dueDate, maxAttempts }` to `POST /api/assignments`, which materialises a `ClassAssignment` row — and from that moment the same entry becomes visible to every enrolled student in `ClassAssignmentsPage.jsx` (subsection 4 above). Each card in the resulting list exposes a *Stats* button that calls `GET /api/assignments/:id/stats` and renders per-problem completion progress, so the teacher can monitor the assignment without leaving the module view.
+This form lets the teacher set a title, a due date, and pick problems from the class bank to build an assignment.
+Once saved, the assignment shows up for all students, and the teacher can check their progress with a Stats button.
 
 > *Figure 51.2 — Teacher's assignment editor with the problem picker driven by the class bank.*
 
 ### 7. Real-time messaging (`Messages.jsx`)
 
-`Messages.jsx` ships a modern two-pane interface inspired by mainstream messaging apps. The left pane lists conversations (teachers, classmates, group chats) with a preview of the latest message and an unread-count badge. The right pane displays the full history of the active thread, with instant delivery over Socket.IO, typing indicators and read receipts — enabling fluid communication across the entire educational community.
+This page has two panels: the list of conversations on the left and the chosen chat on the right.
+Messages are sent and received instantly, like in a normal messaging app.
 
 > *Figure 53 — Real-time messaging page.*
 
