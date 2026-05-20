@@ -61,7 +61,8 @@ This second sprint focuses on the **core learning loop**: roadmaps, problems and
 
 #### Student side
 
-The student can: complete the roadmap onboarding, view the roadmap, click a node, track progress, download a certificate, browse problems, open a problem, run code, submit code and see the coding dashboard.
+This diagram shows what a student can do in Sprint 2.
+The student fills the onboarding, views the roadmap, solves problems, runs/submits code and checks the dashboard.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -109,7 +110,8 @@ flowchart LR
 
 #### Super admin side
 
-The super admin can: CRUD problems, toggle Free-tier, toggle Pro-tier, and import / export the problem dataset.
+This diagram shows what the super admin can do.
+They create, edit and delete problems, switch Free/Pro tiers, and import or export the catalogue.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -149,7 +151,8 @@ flowchart LR
 
 #### 2.1. Sequence diagram — "Generate personalized roadmap"
 
-The student opens the `OnboardingForm`, fills in career goal / interests / languages, and submits. The frontend calls `POST /api/roadmap/onboarding`. The backend persists the inputs on the `User` row, then invokes `RoadmapService.js` which calls the LLM (Groq / OpenAI), parses the JSON answer, validates it, and creates a `SavedRoadmap` linked to the user. The page navigates to `/roadmap` and renders the graph.
+This diagram shows how a roadmap is built after the student submits the onboarding form.
+The backend asks the AI for a roadmap, saves it, and the page displays it as a graph.
 
 ```mermaid
 sequenceDiagram
@@ -193,7 +196,8 @@ sequenceDiagram
 
 #### 2.2. Sequence diagram — "Submit a code solution"
 
-The student writes code in the CodeMirror editor and clicks "Submit". The frontend calls `POST /api/submissions` with the problem id, the source code and the language. The backend creates a pending `CodeSubmission`, runs the code in a sandbox, compares the output to the expected one, updates the submission with the verdict and returns it. The frontend updates the `OutputPanel` and the `CodingDashboard`.
+This diagram shows what happens when the student submits code.
+The backend runs the code, compares the output and returns a verdict shown in the output panel.
 
 ```mermaid
 sequenceDiagram
@@ -234,7 +238,8 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Toggle problem as Free-tier"
 
-The super admin opens the `FreeTierTab`, selects a problem and toggles the switch. The frontend calls `PATCH /api/admin/problems/:id { isFreeTier: true|false }`. The backend updates the row. Free users immediately see / hide that problem in their catalogue.
+This diagram shows how the admin marks a problem as Free-tier.
+The admin flips the switch and the problem instantly appears or disappears for Free users.
 
 ```mermaid
 flowchart TD
@@ -250,7 +255,8 @@ flowchart TD
 
 #### 3.2. Activity diagram — "Generate certificate"
 
-When the student reaches 100% roadmap progress, the `CertificateButton` becomes active. The user clicks it, the `Certificate` component renders the certificate HTML, `html2canvas` snapshots it, and `jspdf` exports it as a PDF download.
+This diagram shows how the certificate is created when the roadmap reaches 100%.
+The student clicks the button and the page is exported as a PDF.
 
 ```mermaid
 flowchart TD
@@ -271,7 +277,8 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-2 class diagram extends the Sprint-1 model with the entities required by the coding and roadmap features. A `Problem` entity carries the statement, difficulty, tags, target language, expected output and tier flags (`isFreeTier`, `isProTier`), and may optionally belong to an institution. Each attempt is persisted as a `CodeSubmission`, which links a user to a problem and stores the submitted source code, language, verdict and runtime. To group exercises generated for a learner, a `StudentProblemSet` holds the list of problem identifiers together with the goal that produced them, while `SavedRoadmap` stores the personalised learning graph as JSON nodes and edges along with the user's progress. On the relational side, a user can author many problems and submit many solutions (`User 1 — N Problem`, `User 1 — N CodeSubmission`), a problem aggregates all its attempts (`Problem 1 — N CodeSubmission`), and each user owns a single active roadmap (`User 1 — 1 SavedRoadmap`) and several generated problem sets (`User 1 — N StudentProblemSet`).
+This diagram shows the main data classes added in Sprint 2.
+A user has one roadmap and many problems, submissions and problem sets.
 
 ```mermaid
 classDiagram
@@ -334,7 +341,8 @@ classDiagram
 
 ### 5. C4 Container view
 
-Sprint 2 keeps the same two-tier shape but the API gains a synchronous AI orchestrator (`RoadmapService`) that talks to Groq, StackExchange and YouTube, and a sidecar **code-sandbox runner** that executes user submissions in isolation. PostgreSQL now stores roadmaps, problems and submissions on top of the Sprint 1 schema.
+This diagram shows the main containers of the app in Sprint 2.
+The API now talks to an AI service and a code sandbox to run user code.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -359,7 +367,8 @@ flowchart LR
 
 ### 6. C4 Component view
 
-Sprint 2 adds five route modules (`roadmapRoutes`, `problemRoutes`, `submissionRoutes`, `runRoutes`, `admin/problemsRoutes`) and the `RoadmapService` AI orchestrator. The Component view groups every public endpoint and exposes the internal building blocks of `RoadmapService.js` (prompt → LLM → repair → normalize → enrichment batcher).
+This diagram shows the internal components of the backend in Sprint 2.
+It groups the API routes and the AI roadmap service that builds and enriches the roadmap.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -465,49 +474,57 @@ flowchart TB
 
 ### 1. Onboarding form
 
-The roadmap onboarding form lets the student declare a career goal (e.g. "Full-stack web developer"), pick interests (frontend, backend, AI, mobile…), and select known programming languages.
+This screen lets the student set a career goal and pick interests and languages.
+These answers are used by the AI to build the personalized roadmap.
 
 > *Figure 29 — Onboarding form.*
 
 ### 2. Personalized roadmap graph
 
-The `RoadmapPage` renders the roadmap as a React Flow graph with custom node types — level labels, regular roadmap nodes and inheritance edges. Clicking a node opens a side panel with prerequisites, resources and a "mark as done" button.
+This screen shows the roadmap as an interactive graph.
+Each node is a topic the student needs to learn to reach their goal.
 
 > *Figure 30 — Personalized roadmap graph view.*
 
 ### 3. Roadmap node detail panel
 
-Clicking a node on the roadmap graph opens a side panel that displays the topic title, a short description and its list of prerequisites. The panel also exposes the curated learning resources (articles, videos, official docs) attached to the node by the AI generator. A "mark as done" button lets the student validate the node and propagate progress to the dependent edges.
+This panel opens when the student clicks a node on the roadmap.
+It shows the topic, its resources and a button to mark it as done.
 
 > *Figure 31 — Roadmap node detail panel.*
 
 ### 4. Certificate
 
-After 100% completion, the student can download a personalized certificate as a PDF.
+This is the certificate the student gets after finishing the roadmap.
+It can be downloaded as a PDF with the student's name.
 
 > *Figure 32 — Roadmap completion certificate.*
 
 ### 5. Problems page
 
-The `ProblemsPage` lists problems with filters by difficulty and tag. The catalogue is automatically scoped to the user's plan and institution. Each row shows the problem title, difficulty badge, associated tags and the student's solved/attempted status to make navigation easier. A search bar at the top allows quick lookup by keyword, while pagination keeps the list performant even with hundreds of statements.
+This page lists all coding problems available to the student.
+The student can search and filter by difficulty or tag.
 
 > *Figure 33 — Problems catalogue page.*
 
 ### 6. Problem page (statement + code editor)
 
-The `ProblemPage` combines the statement (left) with the CodeMirror code editor (right). A language selector lets the student switch between Java, Python, PHP and JavaScript. An `OutputPanel` shows the result of each "Run" and the verdict after each "Submit".
+This page shows the problem statement next to a code editor.
+The student writes, runs and submits the code, then sees the result.
 
 > *Figure 34 — Problem page with code editor and output panel.*
 
 ### 7. Coding dashboard
 
-The `CodingDashboard` aggregates the student's submissions and visualizes them as charts (success rate, problems-by-difficulty, recent submissions). KPI cards on top summarize the total number of attempts, accepted solutions and the current solve streak. A recent-activity feed lists the latest verdicts with a direct link back to the corresponding problem page.
+This page shows the student's coding stats with charts.
+It displays the success rate, last submissions and progress by difficulty.
 
 > *Figure 35 — Coding dashboard.*
 
 ### 8. Super-admin problems tabs (Free-tier / Pro-tier)
 
-In the super-admin console, two dedicated tabs let the platform owner curate which problems belong to the Free plan and which are reserved for the Pro plan. Each tab displays the global catalogue with a toggle that flips the `isPro` flag on the corresponding problem document. Changes take effect immediately and are reflected in the catalogue scoping used by the student-facing `ProblemsPage`.
+These two tabs let the admin choose which problems are Free or Pro.
+A simple switch turns the flag on or off for each problem.
 
 > *Figure 36 — `FreeTierTab` — toggle problems as free-tier.*
 > *Figure 37 — `ProTierTab` — toggle problems as pro-tier.*
