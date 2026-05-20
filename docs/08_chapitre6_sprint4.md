@@ -110,6 +110,9 @@ flowchart LR
   Probs -. "«extend»" .-> Imp
 ```
 
+This diagram shows everything the super admin can do on the platform.
+They manage institutions, users, plans, the problem catalogue, and view global statistics.
+
 > *Figure 53 — Use-case diagram of Sprint 4 — Super Admin side.*
 
 #### Institution Admin side
@@ -144,6 +147,9 @@ flowchart LR
   Dir -. "«extend»" .-> Role
   Onb -. "«include»" .-> Pay
 ```
+
+This diagram shows everything the institution admin can do.
+They onboard the institution, invite teachers and students, and manage its curriculum.
 
 > *Figure 54 — Use-case diagram of Sprint 4 — Institution Admin side.*
 
@@ -189,6 +195,9 @@ flowchart LR
   Mentor -. "«include»" .-> AI
   Correct -. "«include»" .-> AI
 ```
+
+This diagram shows all the AI features a student can use.
+They can chat with a PDF, ask the AI Mentor, get code corrected, and run slash commands.
 
 > *Figure 55 — Use-case diagram of Sprint 4 — Student (AI features).*
 
@@ -240,6 +249,9 @@ sequenceDiagram
 
 #### 2.3. Sequence diagram — "AI Mentor (Socratic streaming)"
 
+The student asks a question and the AI Mentor streams an answer word by word.
+The mentor gives hints instead of full solutions and always ends with a guiding question.
+
 ```mermaid
 sequenceDiagram
     actor Student
@@ -268,6 +280,9 @@ sequenceDiagram
 > *Figure 56.2 — Sequence diagram "AI Mentor".*
 
 #### 2.4. Sequence diagram — "AI code correction (Pro only)"
+
+A Pro user sends their failing code and the AI returns a corrected version with a list of changes.
+Free users instead see an upgrade message.
 
 ```mermaid
 sequenceDiagram
@@ -390,6 +405,9 @@ flowchart TD
 > *Figure 59 — Activity diagram "Onboard a new institution".*
 
 ### 4. Class Diagram
+
+This diagram shows the new entities added in Sprint 4 and how they connect to the User.
+The main new ones are Institution, InviteLink, PdfDocument, and the per-institution curriculum classes.
 
 Sprint 4 adds:
 
@@ -789,13 +807,23 @@ groq.chat.completions({
 | LLM returns invalid JSON | `JSON.parse` throws | catch + regex-extract `{…}`/`[…]` + retry pass at `temperature: 0.1` |
 | LLM returns empty content | `summary` is `undefined` | 502 "AI returned an empty summary" |
 
+The screenshot below shows the upload area and the chat panel of the PDF assistant.
+A student drops a PDF here and can immediately start asking questions about it.
+
 > *Figure 61 — PDF assistant — upload and chat view.*
+
+The screenshot below shows an AI answer with the source passages from the PDF.
+The student can see exactly which parts of the document the answer was based on.
+
 > *Figure 62 — PDF assistant — answer with grounded citations.*
 
 ### 2. Classroom PDF
 
 This is the PDF assistant tied to a classroom lesson, so every student in the class shares the same PDF.
 It uses the same routes and AI pipeline as the personal PDF assistant.
+
+The screenshot below shows the Classroom PDF assistant used by a class.
+Every student in the class sees the same lesson PDF and can ask questions about it.
 
 > *Figure 63 — Classroom PDF assistant.*
 
@@ -810,6 +838,9 @@ The endpoint accepts `{ code, language, question, problemTitle, history }`, inje
 > 3. Ask a guiding reflective question at the end of each response.
 
 The frontend renders tokens with a pulsing cursor glyph until it sees `[DONE]`. The UI also exposes five **quick actions** ("Explain this", "Why wrong?", "Give a hint", "Improve it", "What concept?") that simply prefill the prompt — the server still sees them as normal user questions.
+
+The screenshot below shows the AI Mentor panel next to the code editor.
+The student chats with the mentor while solving a problem and gets hints without full answers.
 
 > *Figure 64 — AI Mentor side panel.*
 
@@ -907,6 +938,9 @@ The Groq and HuggingFace fallback keys committed in the source are **placeholder
 After paying for the Institution plan, the user is sent to the onboarding page.
 They fill in the institution name, slug, and logo to register it.
 
+The screenshot below shows the institution onboarding form.
+The new admin enters the name, slug, and logo to register the institution.
+
 > *Figure 66 — Institution onboarding form.*
 
 ### 12. Invite links
@@ -914,7 +948,14 @@ They fill in the institution name, slug, and logo to register it.
 The institution admin creates invite links for either teachers or students.
 Each link has an expiration date and a maximum number of uses.
 
+The screenshot below shows the form used by the admin to generate an invite link.
+They choose the role (teacher or student), the expiration date, and the max number of uses.
+
 > *Figure 67 — Invite-link generation form.*
+
+The screenshot below shows the public page that invited people see.
+They confirm the institution and role, then sign in or sign up to join.
+
 > *Figure 68 — Public "Join institution" page (`JoinInstitution.jsx`).*
 
 ### 13. Institution Admin console
@@ -922,7 +963,14 @@ Each link has an expiration date and a maximum number of uses.
 The institution admin sees the list of members and the curriculum of their institution.
 They can also view the institution's classes and basic statistics.
 
+The screenshot below shows the directory of members in the institution.
+The admin can search, see each member's role, and update it from this page.
+
 > *Figure 69 — Institution member directory (`InstitutionTab.jsx`).*
+
+The screenshot below shows the page where the admin manages Grades, Specialities, and Levels.
+These define the curriculum that only belongs to this institution.
+
 > *Figure 70 — Per-institution curriculum management.*
 
 ### 14. Super Admin console
@@ -930,16 +978,38 @@ They can also view the institution's classes and basic statistics.
 The super admin manages every institution, the global problems, and the Free / Pro plan flags.
 They can also ban or unban users and view platform-wide statistics.
 
+The screenshot below shows the main super admin dashboard.
+It centralizes institutions, problems, plans, bans, and platform statistics.
+
 > *Figure 71 — Super admin dashboard.*
+
+The screenshot below shows charts of how many users belong to each plan.
+The super admin can quickly see the split between Free, Pro, and Institution users.
+
 > *Figure 72 — Users-by-plan overview (charts).*
+
+The screenshot below shows the tab that controls features available to Free users.
+The super admin can turn features on or off for the Free plan from here.
+
 > *Figure 73 — Free-tier management tab.*
+
+The screenshot below shows the tab that controls features available to Pro users.
+The super admin can toggle Pro-only features such as AI code correction.
+
 > *Figure 74 — Pro-tier management tab.*
+
+The screenshot below shows the page used to assign modules to classes or students.
+This lets the admin decide who has access to which learning modules.
+
 > *Figure 75 — Module assignments management.*
 
 ### 15. Pricing / Plan section
 
 This page shows the three plans (Free, Pro, Institution) side by side.
 Each plan has a Stripe checkout button to upgrade.
+
+The screenshot below shows the pricing page with the three plans side by side.
+Each plan card has a Stripe button that starts the checkout flow.
 
 > *Figure 76 — Pricing / Plan section with Stripe upgrade buttons.*
 
