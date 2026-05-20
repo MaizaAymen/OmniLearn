@@ -797,6 +797,38 @@ The student can see exactly which parts of the document the answer was based on.
 
 > *Figure 62 — PDF assistant — answer with grounded citations.*
 
+#### 1.7. Beyond chat — the assistant tabs
+
+Chat is only one of **six tabs** exposed by `PdfAssistant.jsx`. Each tab targets a different study workflow over the same uploaded PDF (or, in code mode, the same workspace code file). They all share the cache, the embeddings and the LLM client described above — the table below is the full feature surface.
+
+| Tab | What the student does | Backend endpoint | Notes |
+|---|---|---|---|
+| **Chat** | Multi-turn Q&A grounded in the PDF; top bar exposes a one-click **Summarize** button. | `POST /api/pdf/chat`, `POST /api/pdf/summarize` (code mode: `/api/workspace/code/analyze`, `/code/summarize`). | Replays the last user / assistant turns as `history` so the model can follow context. |
+| **Notes** | Selects text in the PDF (or code), opens a modal, attaches a free-text **note** and saves the **highlight**. Each saved item lists with a **Go** button that jumps back to the page (PDF) or scrolls the snippet into view (code). | `GET / POST / DELETE /api/pdf/highlights*`. Code-mode highlights live in `localStorage` under `code-highlights-<id>`. | Highlights persist server-side per user + per PDF, so notes survive a reload. |
+| **Bookmarks** | One-click **Bookmark this page** while reading; bookmarks are listed with a **Go** button that jumps back to the saved page. | `POST / DELETE /api/pdf/bookmarks*`. | PDF-only — page-based navigation does not apply in code mode. |
+| **Search** | Semantic **smart-search**: the query runs through the Chroma vector store (top-5 similarity, not keyword) and returns excerpts ranked by relevance. | `POST /api/pdf/smart-search`. | Same retrieval engine as Chat, exposed standalone for "find a concept" workflows. |
+| **Quiz** | Generates **10 or 20 MCQs** from the PDF. The student first picks a **page range** (`From` / `To`) to scope the quiz; in code mode the whole file (≤ 12 000 chars) is used. Each question is rendered with radio options; **Submit Quiz** scores answers locally (letter A–D or full-text matching via `normalizeAnswer()`); a result card shows `score / total` plus **Review Answers** and **Retry Quiz**. | `POST /api/pdf/quiz` / `POST /api/workspace/code/quiz`. | Quiz submission is auto-appended to the History tab (see below). |
+| **History** | Persistent **study history** — every quiz submission (`type: "quiz"`, with `score`, `total`, `questions`) and every "Explain this passage" call (`type: "explanation"`) is appended automatically. The tab header shows a **badge** with the count; each entry lists its date and score; per-entry **delete** and **Clear All** actions are available. | `GET / POST / DELETE /api/workspace/history*`. | Capped at **50 entries per user** server-side in `history.json` (see §V.7). |
+
+Two cross-tab interactions are worth calling out because they are easy to miss when only reading the routes:
+
+- **Quiz feeds History.** `submitQuiz()` calls `saveToHistory({ type: "quiz", score, total, questions })` right after scoring, which is why the History tab is the only place a student can review a past quiz attempt — the Quiz tab itself only keeps the *current* attempt in component state.
+- **Explain feeds History too.** Whenever the student selects PDF text and clicks **Explain**, the answer is also pushed as `{ type: "explanation", … }` so the History tab doubles as a "things the AI taught me today" log, not just a quiz scoreboard.
+
+Code mode reuses every tab except **Bookmarks**. The same component switches its data sources based on whether it was opened with a `pdfId` (PDF mode, routes under `/api/pdf/*`) or a `codeId` (code mode, routes under `/api/workspace/code/*`).
+
+The screenshot below shows the Quiz tab with the page-range picker, the 10 / 20-questions buttons, and the result card with per-question Correct / Wrong tags.
+
+> *Figure 62.1 — PDF assistant — Quiz tab with page-range scoping and scoring.*
+
+The screenshot below shows the Notes tab with saved highlights and their attached free-text notes, and the **Go** button that jumps back to the original page.
+
+> *Figure 62.2 — PDF assistant — Notes (highlights + notes) tab.*
+
+The screenshot below shows the History tab listing past quiz attempts (with score / total) and explanation entries, plus the per-entry delete and **Clear All** actions.
+
+> *Figure 62.3 — PDF assistant — Study History tab.*
+
 ### 2. Classroom PDF
 
 This is the PDF assistant tied to a classroom lesson, so every student in the class shares the same PDF.
