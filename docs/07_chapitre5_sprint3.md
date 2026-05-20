@@ -234,19 +234,13 @@ The teacher fills the form, picks problems, the server checks the rights, saves 
 
 ```mermaid
 flowchart TD
-  A([Start]) --> B[Teacher opens ModuleAssignmentsTab]
-  B --> C[Fill name, due date, description]
-  C --> D[Select a module / class]
-  D --> E{Attach problems?}
-  E -- Yes --> F[Pick problems from catalogue]
-  E -- No --> G
-  F --> G["POST /api/assignments"]
-  G --> H{Authorized as teacher of the class?}
-  H -- No --> I[403 Forbidden] --> Z([End])
-  H -- Yes --> J[INSERT ClassAssignment]
-  J --> K["Notify enrolled students (Notification + Socket.IO)"]
-  K --> L[Assignment appears in ClassAssignmentsPage]
-  L --> Z
+  A([Start]) --> B[Fill assignment form]
+  B --> C[Pick problems]
+  C --> D{Teacher of the class?}
+  D -- No --> E[Refused] --> Z([End])
+  D -- Yes --> F[Save assignment]
+  F --> G[Notify students]
+  G --> Z
 ```
 
 > *Figure 43 — Activity diagram "Create an assignment".*
