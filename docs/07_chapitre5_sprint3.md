@@ -189,38 +189,19 @@ If the other user is offline, a notification is stored for them to see later.
 
 ```mermaid
 sequenceDiagram
-    actor UserA
-    actor UserB
-    participant FE_A as Frontend A
+    actor Sender
+    participant FE as Frontend
     participant API as Backend
     participant Hub as Socket.IO
     participant DB as Database
-    participant FE_B as Frontend B
 
-    Note over UserA,DB: ref: Authenticate
-
-    UserA->>+FE_A: Type message
-    FE_A->>+API: POST /messages
-    API->>+DB: Insert Message
-    DB-->>-API: Saved
-    API->>+Hub: Emit message:new (room conv:id)
-
-    par Fan-out to room
-        Hub-->>FE_A: message:new (echo)
-        FE_A-->>UserA: Append to thread
-    and
-        Hub-->>FE_B: message:new
-        FE_B-->>UserB: Append to thread
-    end
-
-    opt Recipient offline
-        API->>+DB: Insert Notification
-        DB-->>-API: Saved
-    end
-
-    Hub-->>-API: Delivered
-    API-->>-FE_A: 201 message
-    FE_A-->>-UserA: Sent
+    Sender->>FE: Type message
+    FE->>API: POST /messages
+    API->>DB: Save message
+    API->>Hub: Emit message:new
+    Hub-->>FE: Deliver to recipients
+    API-->>FE: 201 Created
+    FE-->>Sender: Sent
 ```
 
 > *Figure 41 — Sequence diagram "Send a real-time message".*
