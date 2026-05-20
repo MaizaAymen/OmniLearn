@@ -841,9 +841,9 @@ Every student in the class sees the same lesson PDF and can ask questions about 
 
 ### 3. AI Mentor — Socratic streaming tutor
 
-`AIMentor.jsx` is a sidebar inside `ProblemPage.jsx` that streams a Socratic tutor over Server-Sent Events.
-It knows the student's current code, language, problem title, and the last 10 turns of conversation.
-Its system prompt pins three non-negotiable rules that shape every reply:
+The AI Mentor is a chat sidebar next to the code editor that helps the student like a real teacher.
+It reads the student's code and question, then streams the answer word by word in real time.
+It never gives the full solution — instead it follows three strict rules:
 
 > 1. NEVER give a complete solution or write the full corrected code.
 > 2. Always teach the WHY behind concepts and bugs.
