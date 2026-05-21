@@ -867,16 +867,18 @@ It never gives the full solution — instead it follows three strict rules:
 
 The prompt pins three critical rules: keep every `print` / test invocation at the bottom of the file; keep the original test inputs unless they cannot produce the expected output (in which case use inputs from `examples`); produce stdout that — after trimming each line and ignoring blank lines and case — **matches `expectedOutput` exactly**. The UI uses `changes[]` to drive a side-by-side diff view.
 
-### 5. AI problem generation
+### 5. Problem generation (AI and manual)
 
-Staff can ask the LLM for full problems with a single click. Routes ([Ai.js](../Server/src/ai/Ai.js)):
+Staff can create new problems in two ways: by hand through a form, or by asking the AI to generate them.
+The AI takes a topic and a difficulty, then returns ready-made problems that the teacher can review, edit, and save.
 
-- `POST /ai/ai/problems/generate-draft` — topic + difficulty + `count ∈ {1,3,5}` → **non-persisted draft(s)**, each with a complete learning roadmap.
-- `POST /ai/ai/problems/save-draft` — save a draft after the teacher edits it.
-- `POST /ai/ai/generate/problem-roadmap` — single problem → structured roadmap (theory → practice → implementation → optimization → final).
-- `POST /ai/ai/problems/:id/fork` — fork a problem into a `global / institution / module / class` scope.
+#### 5.1. Manual problem creation
 
-The prompt pins a strict JSON schema (title, difficulty, category, description.text, description.notes, examples[], constraints[], hints[], starterCode.{javascript,python,java}, expectedOutput.{...}, roadmap{...}). After parsing, every roadmap is normalised by `normalizeRoadmap()` and **auto-backfilled** with `generateProblemRoadmap()` if the model skipped it. A safety net runs when `JSON.parse` throws: the route re-asks the same model to *"fix this malformed JSON"* at `temperature: 0.1` before giving up — in practice this rescues ~95% of failures observed on `count: 5` batches.
+> *Figure 65 — Manual problem creation form.*
+
+#### 5.2. AI problem generation
+
+> *Figure 66 — AI problem generation.*
 
 ### 6. Personalised roadmap
 
