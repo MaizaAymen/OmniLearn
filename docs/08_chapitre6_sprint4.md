@@ -909,25 +909,25 @@ Each user can keep multiple roadmaps (`SavedRoadmap`, `isActive` flag for the cu
 
 ### 7. Workspace code AI
 
-`workspaceRoutes.js` (`/api/workspace/*`) is a per-user scratchpad of saved PDFs and pasted code. Plan caps: Free = 3 PDFs + 3 code files, Pro = 200, Institution = unlimited. On top of plain CRUD it exposes three AI endpoints that share a `loadCodeForUser()` helper (loads, validates ownership, truncates to 12 000 chars):
+The workspace is a personal space where the student saves PDFs and code files.
+On top of these saved files, three AI actions are available to help the student study:
 
 | Route | Purpose | Output |
 |---|---|---|
-| `POST /workspace/code/analyze` | Multi-turn code-review chat — the file goes into the system prompt once, then `history` replays user/assistant turns. Default first turn returns a 4-section overview (What it does / Key parts / Possible issues / Suggestions). | Markdown |
-| `POST /workspace/code/summarize` | Single-shot summary with fixed sections (Purpose / Main pieces / How it works / Notable details), capped at 250 words. | Markdown |
-| `POST /workspace/code/quiz` | 1–20 MCQs with letter-coded answers (`{question, options[4], answer: "A"}`). Falls back to a JSON-substring extraction if the model wraps the array in prose. | JSON array |
-
-A **study history** is kept on disk (`history.json`, 50 entries per user max). Every quiz attempt and every PDF "explain" is appended so the dashboard can show recent activity.
+| `POST /workspace/code/analyze` | Chat with the AI about the code to understand what it does and how to improve it. | Markdown |
+| `POST /workspace/code/summarize` | Get a short summary of the code in plain language. | Markdown |
+| `POST /workspace/code/quiz` | Generate multiple-choice questions from the code to test understanding. | JSON array |
 
 ### 8. Messenger slash commands
 
-In `Messages.jsx`, typing `/` opens an autocomplete dropdown with three commands. The bot reply is persisted as a message in the conversation, so a teacher can see what the student asked.
+Inside the chat, the student types `/` to open a small menu of quick commands.
+Each command brings an instant answer directly into the conversation without leaving the chat:
 
-| Command | What it does | Backend / API |
-|---|---|---|
-| `/ai <question>` | Single-shot LLM answer rendered as a "bot" bubble. | `POST /api/ai/ai/chat` → Groq |
-| `/stackoverflow <query>` | Top 5 answered SO questions by votes, rendered as cards. | Stack Exchange `search/advanced` |
-| `/video <query>` | 3 YouTube videos ordered by `viewCount`. | YouTube Data API v3 |
+| Command | What it does |
+|---|---|
+| `/ai <question>` | The AI replies with an explanation as a bot message. |
+| `/stackoverflow <query>` | Shows the top Stack Overflow answers for the question. |
+| `/video <query>` | Shows a few YouTube videos about the topic. |
 
 ### 9. Shared building blocks across the AI plane
 
@@ -938,15 +938,16 @@ Two design rules apply to every AI call in the codebase:
 
 ### 10. Environment variables
 
-| Variable | Used by | Default if missing |
-|---|---|---|
-| `GROQ_API_KEY` | every AI feature | hard-coded fallback in source (rotate before production) |
-| `HF_API_KEY` | PDF assistant embeddings | hard-coded fallback in source |
-| `CHROMA_URL` | PDF assistant | `http://127.0.0.1:8000` |
-| `CHROMA_PERSIST_DIR` | PDF assistant | `./chroma_db` |
-| `YOUTUBE_API_KEY` | `/video` slash, roadmap enrichment | feature returns `[]` silently |
+The AI features need a few secret keys to talk to the outside services they rely on.
+These keys are stored in a `.env` file so they stay out of the source code:
 
-The Groq and HuggingFace fallback keys committed in the source are **placeholders** — rotate them and move into `.env` before any production deployment, since both providers expose chargeable APIs.
+| Variable | Used by |
+|---|---|
+| `GROQ_API_KEY` | All AI features (chat, mentor, generation). |
+| `HF_API_KEY` | PDF assistant embeddings. |
+| `CHROMA_URL` | The Chroma vector database used by the PDF assistant. |
+| `CHROMA_PERSIST_DIR` | Where Chroma stores its data on disk. |
+| `YOUTUBE_API_KEY` | The `/video` command and the roadmap videos. |
 
 ### 11. Institution onboarding
 
