@@ -874,9 +874,15 @@ The AI takes a topic and a difficulty, then returns ready-made problems that the
 
 #### 5.1. Manual problem creation
 
+The teacher fills a form with the title, description, examples, constraints, and expected output.
+This way gives full control but takes more time when many problems are needed.
+
 > *Figure 65 — Manual problem creation form.*
 
 #### 5.2. AI problem generation
+
+The teacher only picks a topic and a difficulty, then the AI writes one or several complete problems in seconds.
+The teacher can still review and edit the result before saving it to the platform.
 
 > *Figure 66 — AI problem generation.*
 
