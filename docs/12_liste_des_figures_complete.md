@@ -7,6 +7,8 @@
 | 3  | LeetCode home page | Ch. 1 — Existing solutions |
 | 4  | Google Classroom home page | Ch. 1 — Existing solutions |
 | 5  | The Scrum method | Ch. 1 — SCRUM workspace |
+| 5.1 | OmniLearn release roadmap (4 sprints × 4 weeks) — Gantt chart | Ch. 2 — Sprint 0 |
+| 5.2 | OmniLearn detailed Gantt — 4 sprints, 16 weeks | Sprint planning & backlog |
 | 6  | Use-case diagram of Sprint 1 — Visitor side | Ch. 3 — Sprint 1 |
 | 7  | Use-case diagram of Sprint 1 — Student side | Ch. 3 — Sprint 1 |
 | 8  | Sequence diagram "Sign up" | Ch. 3 — Sprint 1 |
