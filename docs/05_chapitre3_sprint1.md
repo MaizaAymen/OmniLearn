@@ -17,6 +17,8 @@ The main objective of Sprint 1 is to deliver the building blocks that all later 
 
 ## III. Sprint 1 Backlog
 
+The table below lists all user stories and tasks planned for Sprint 1, grouped by actor (Visitor, Student, Cross-cutting). It is the work the team commits to deliver in this sprint.
+
 ### Table 5 — Sprint 1 Backlog
 
 | PBI | Main functionality | US Code | User story | Task ID | Tasks |
@@ -65,7 +67,7 @@ In this section we elaborate the use-case diagram, the sequence diagrams, the ac
 
 #### Visitor side
 
-The visitor can: browse the landing page, sign up, verify the email, choose a plan and sign in.
+A visitor (not logged in) can browse the landing page, sign up, verify their email, choose a plan and sign in.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -101,7 +103,7 @@ flowchart LR
 
 #### Student / authenticated user side
 
-The student can: sign in, manage profile (view / update / delete), reset password and enable 2FA.
+Once logged in, a student can manage their profile (view, update, delete), reset their password and enable 2FA for extra security.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -142,7 +144,7 @@ flowchart LR
 
 #### 2.1. Sequence diagram — "Sign up"
 
-A visitor opens the landing page, navigates to `/auth`, enters first name, last name, email, password and chosen plan. The frontend validates the inputs, then sends `POST /api/auth/register`. The backend validates the payload, hashes the password (bcryptjs), creates the `User` row, generates an `emailVerificationToken` and triggers a Nodemailer email. The user is redirected to a "check your inbox" screen.
+The visitor fills the sign-up form; the backend hashes the password, creates the user and sends a verification email. The user is then redirected to a "check your inbox" screen.
 
 ```mermaid
 sequenceDiagram
@@ -178,7 +180,7 @@ sequenceDiagram
 
 #### 2.2. Sequence diagram — "Sign in"
 
-A student opens `/auth`, enters email and password. The frontend sends `POST /api/auth/login`. The backend looks up the user, compares the password with bcryptjs, optionally challenges for a TOTP code (if `is2FAEnabled`), signs a JWT and returns it. The frontend stores the token and the user in cookies, then redirects to the role-appropriate dashboard.
+The student submits email and password; the backend checks them and — if 2FA is on — asks for a TOTP code. On success, a JWT is returned and stored in cookies, then the user is redirected to their dashboard.
 
 ```mermaid
 sequenceDiagram
@@ -218,7 +220,7 @@ sequenceDiagram
 
 #### 2.3. Sequence diagram — "Reset password"
 
-A user who has forgotten their password clicks "Forgot password?" on `/auth`, types their email and submits. The frontend calls `POST /api/auth/forgot-password`. The backend looks up the user and — only if the email actually exists — generates a one-hour `passwordResetToken`, saves it on the row and triggers a Nodemailer email with a link to `/reset-password?token=…`. To avoid email enumeration, the API answers with the same generic message either way. When the user clicks the link, the frontend renders the new-password form and calls `POST /api/auth/reset-password { token, newPassword }`. The backend re-finds the user by token (and not expired), updates the password (the `beforeUpdate` hook re-hashes with bcrypt), clears the token fields, and optionally sends a confirmation email.
+The user submits their email and receives a one-hour reset link; clicking it opens a form to set a new password. The API always returns the same generic message to avoid revealing whether the email exists.
 
 ```mermaid
 sequenceDiagram
@@ -255,7 +257,7 @@ sequenceDiagram
 
 #### 2.4. Sequence diagram — "Delete my account"
 
-The student opens the profile page, clicks "Delete my account". A confirmation modal is shown. On confirmation, the frontend sends `DELETE /api/profile/:id` with the JWT. The backend authorizes (own account or admin), removes the user and returns 204. The frontend clears the cookies and redirects to `/auth`.
+The student confirms deletion in a modal; the backend checks the JWT, removes the user and returns 204. The frontend then clears cookies and redirects to `/auth`.
 
 ```mermaid
 sequenceDiagram
@@ -291,6 +293,8 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Update profile"
 
+The user edits their avatar, bio and social links and submits; the server validates, saves the changes and signals `Guard` to re-check that the profile is complete.
+
 ```mermaid
 flowchart TD
   A([Start]) --> B[Open Profile page]
@@ -309,6 +313,8 @@ flowchart TD
 > *Figure 11 — Activity diagram "Update profile".*
 
 #### 3.2. Activity diagram — "Reset password"
+
+The user asks for a reset link, opens it from their inbox and sets a new password; the server checks the token is valid and not expired before updating.
 
 ```mermaid
 flowchart TD
@@ -332,7 +338,7 @@ flowchart TD
 
 ### 4. Class Diagram
 
-The Sprint-1 class diagram is organised around an **abstract `User`** that holds the authentication, profile and plan fields, specialised by four **role subclasses** — `Student`, `Teacher`, `Admin`, `InstitutionAdmin` — which the role-based sidebar branches on. `AuthToken` is the JWT returned by `login()` and is **transient** (stateless JWT, never persisted). Persistence uses single-table inheritance with a `role` discriminator column on the `users` table.
+An abstract `User` holds the auth, profile and plan fields, with four role subclasses (Student, Teacher, Admin, InstitutionAdmin). `AuthToken` is the JWT returned by `login()` — it lives only in memory and is never saved in the database.
 
 ```mermaid
 classDiagram
@@ -400,7 +406,7 @@ classDiagram
 
 ### 5. C4 Container view
 
-The Sprint 1 deployment is a thin three-tier stack: a React 19 SPA (Vite) talks to a single Express 5 API, which fans out to PostgreSQL and three managed services (SMTP for verification mails, Cloudinary for avatars, Stripe for paid plans). The JWT travels from the SPA in the `Authorization` header; the only inbound webhook is Stripe → API.
+A React SPA talks to a single Express API, which connects to PostgreSQL and three external services: SMTP (emails), Cloudinary (avatars) and Stripe (payments). Stripe also sends webhooks back to the API.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -424,7 +430,7 @@ flowchart LR
 
 ### 6. C4 Component view
 
-The Sprint 1 backend exposes three route modules (`authRoutes`, `profileRoutes`, `stripeRoutes`), one `authenticate` middleware, the `User` Sequelize model and a small set of supporting helpers (bcryptjs, jsonwebtoken, Speakeasy, qrcode, Nodemailer, Cloudinary, Stripe SDK). The Component view groups every public endpoint by module and shows which helpers and external systems each endpoint consumes.
+The backend has three route modules (`auth`, `profile`, `stripe`), one auth middleware and the `User` model. Each endpoint uses small helpers (bcrypt, JWT, Speakeasy, Nodemailer, Cloudinary, Stripe SDK) to reach the database or external services.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -504,44 +510,44 @@ In this section we present the interfaces built during the first sprint.
 
 ### 1. Home page (`/`)
 
-The landing page is the first view of OmniLearn. It introduces the three plans (Free, Pro, Institution), the key features (code editor, AI assistant, classrooms) and provides CTAs to `/auth` for sign-up.
+The first page a visitor sees: it presents the three plans (Free, Pro, Institution) and the main features. A button leads to `/auth` to sign up.
 
 > *Figure 14 — Home page.*
 
 ### 2. Sign-up page
 
-The sign-up tab of the `Auth` page lets the visitor enter first name, last name, email, password and the chosen plan. Inputs are validated client-side and server-side.
+The visitor fills name, email, password and chosen plan to create an account. Inputs are checked both in the browser and on the server.
 
 > *Figure 15 — Sign-up page.*
 
 ### 3. Sign-in page
 
-The sign-in tab provides a secure, simple form. If 2FA is enabled on the account, a second step prompts for the TOTP code.
+A simple email + password form. If 2FA is on, a second step asks for the 6-digit TOTP code.
 
 > *Figure 16 — Sign-in page.*
 
 ### 4. Email verification page
 
-After sign-up, the user receives an email with a link to `/verify-email?token=...`. The page calls the backend, then redirects to the dashboard.
+The user clicks the link received by email; the page confirms the token with the backend and then sends them to the dashboard.
 
 > *Figure 17 — Email verification page.*
 
 ### 5. Password-reset pages
 
-A two-step flow: enter the email, then receive a tokenized link that opens the "set new password" page.
+Two simple steps: first the user types their email, then they open the link from their inbox to set a new password.
 
 > *Figure 18 — "Enter your email" page (forgot password).*
 > *Figure 19 — "Set new password" page.*
 
 ### 6. Profile management page
 
-The profile page lets the user update avatar (Cloudinary upload), bio, GitHub URL, LinkedIn URL — and enable 2FA (QR code from Speakeasy).
+The user can change their avatar, bio, GitHub and LinkedIn links. From here they can also turn on 2FA by scanning a QR code.
 
 > *Figure 20 — Profile management page.*
 
 ### 7. Plan upgrade (Stripe Checkout)
 
-From the profile / pricing section, a Free user can upgrade to Pro. The Pro CTA opens Stripe Checkout in a new tab; on success, the Stripe webhook flips `users.plan` to `pro`.
+A Free user clicks the Pro button, which opens Stripe Checkout in a new tab to pay. After a successful payment, a Stripe webhook updates the user's plan to `pro`.
 
 > *Figure 21 — Pricing / plan-upgrade section.*
 

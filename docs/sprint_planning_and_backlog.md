@@ -24,6 +24,8 @@ gantt
 
 <p align="center"><em><strong>Figure 5.2</strong> — OmniLearn detailed Gantt chart of the four delivery sprints.</em></p>
 
+**Table 21 — Release plan summary: sprint goals, velocity and demo deliverables**
+
 | Sprint | Goal | Velocity (estimate) | Demo deliverables |
 |---|---|---|---|
 | **Sprint 1** | Authentication, profile, 2FA, plans foundation | ≈ 34 SP | Sign up → verify email → sign in → 2FA → profile → upgrade to Pro (Stripe) |
@@ -69,6 +71,8 @@ A user story is "done" only if:
 
 ### 4.1. Sprint 1 backlog (story points + acceptance criteria)
 
+**Table 22 — Sprint 1 detailed backlog: story points and acceptance criteria**
+
 | US Code | Story | SP | Acceptance criteria |
 |---|---|---:|---|
 | US1.1 | Landing page | 2 | Hero, three plans, CTAs, no console error |
@@ -99,6 +103,8 @@ A user story is "done" only if:
 **Sprint goal:** "From an authenticated student, deliver a complete personal learning loop: pick a goal → get a personalized roadmap → practice problems in the code editor → see progress → earn a certificate."
 
 ### 5.1. Sprint 2 backlog (story points + acceptance criteria)
+
+**Table 23 — Sprint 2 detailed backlog: story points and acceptance criteria**
 
 | US Code | Story | SP | Acceptance criteria |
 |---|---|---:|---|
@@ -132,6 +138,8 @@ A user story is "done" only if:
 
 ### 6.1. Sprint 3 backlog (story points + acceptance criteria)
 
+**Table 24 — Sprint 3 detailed backlog: story points and acceptance criteria**
+
 | US Code | Story | SP | Acceptance criteria |
 |---|---|---:|---|
 | US20.1–3 | Class management (create, code, members) | 5 | Code is unique, copy-to-clipboard, enrollment listing |
@@ -154,6 +162,8 @@ A user story is "done" only if:
 **Sprint goal:** "Round off OmniLearn with the AI tutor grounded in user content, and the full Institution + Super Admin management consoles + Stripe."
 
 ### 7.1. Sprint 4 backlog (story points + acceptance criteria)
+
+**Table 25 — Sprint 4 detailed backlog: story points and acceptance criteria**
 
 | US Code | Story | SP | Acceptance criteria |
 |---|---|---:|---|
@@ -183,6 +193,8 @@ A user story is "done" only if:
 
 ## 8. Burn-down summary
 
+**Table 26 — Cross-sprint burn-down: committed vs. completed story points**
+
 | Sprint | Committed SP | Completed SP | Carry-over |
 |---|---:|---:|---:|
 | Sprint 1 | 34 | 34 | 0 |
@@ -196,6 +208,8 @@ Carry-overs were rolled into a post-release "Maintenance & polish" iteration (mo
 ---
 
 ## 9. Sprint retrospectives — synthesis
+
+**Table 27 — Sprint retrospectives: what worked well vs. what to improve**
 
 | Sprint | What worked well | What to improve |
 |---|---|---|

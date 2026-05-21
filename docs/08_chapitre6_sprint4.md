@@ -762,6 +762,8 @@ groq.chat.completions({
 
 #### 1.5. Numerical defaults
 
+**Table 20 — PDF assistant numerical defaults (chunk size, top-k, timeouts)**
+
 | Constant | Value | Where |
 |---|---|---|
 | Max PDF size | **50 MB** | `multer` `limits.fileSize` |
