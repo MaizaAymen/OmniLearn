@@ -120,13 +120,13 @@ gantt
     dateFormat  YYYY-MM-DD
     axisFormat  %b %d
     todayMarker off
-    section Sprint 1 — Auth & plans
-    Authentication, profile, plans foundation          :active, s1, 2025-02-03, 4w
-    section Sprint 2 — Learning loop
-    Roadmap, problems, code editor, coding dashboard   :s2, after s1, 4w
-    section Sprint 3 — Collaboration
-    Classrooms, assignments, messaging                 :s3, after s2, 4w
-    section Sprint 4 — AI & administration
+    section Sprint 1
+    Authentication, profile, plans foundation           :active, s1, 2025-02-03, 4w
+    section Sprint 2
+    Roadmap, problems, code editor, coding dashboard    :s2, after s1, 4w
+    section Sprint 3
+    Classrooms, assignments, messaging                  :s3, after s2, 4w
+    section Sprint 4
     PDF assistant, AI mentor, institution & super admin :s4, after s3, 4w
 ```
 

@@ -12,14 +12,14 @@ gantt
   dateFormat YYYY-MM-DD
   axisFormat %b %d
   todayMarker off
-  section Sprint 1 — Auth & plans
-  Auth + Profile + 2FA + initial plan         :active, a1, 2025-02-03, 28d
-  section Sprint 2 — Learning loop
-  Roadmap + Problems + Editor + Catalogue     :a2, after a1, 28d
-  section Sprint 3 — Collaboration
-  Classrooms + Assignments + Messaging        :a3, after a2, 28d
-  section Sprint 4 — AI & administration
-  PDF assistant + Institution + Super admin   :a4, after a3, 28d
+  section Sprint 1
+  Auth + Profile + 2FA + initial plan       :active, a1, 2025-02-03, 28d
+  section Sprint 2
+  Roadmap + Problems + Editor + Catalogue   :a2, after a1, 28d
+  section Sprint 3
+  Classrooms + Assignments + Messaging      :a3, after a2, 28d
+  section Sprint 4
+  PDF assistant + Institution + Super admin :a4, after a3, 28d
 ```
 
 <p align="center"><em><strong>Figure 5.2</strong> — OmniLearn detailed Gantt chart of the four delivery sprints.</em></p>
