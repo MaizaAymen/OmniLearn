@@ -191,7 +191,7 @@ They can chat with a PDF, ask the AI Mentor, get code corrected, and run slash c
 
 ### 2. Sequence Diagrams
 
-#### 2.1. Sequence diagram — "Ask a question to the PDF assistant"
+#### 2.1. PDF Assistant Question Handling Workflow
 
 The student uploads a PDF and asks a question.
 The system finds the most relevant parts of the PDF and uses the AI model to answer based on them.
@@ -233,9 +233,9 @@ sequenceDiagram
     FE-->>-Student: Render answer
 ```
 
-> *Figure 56 — Sequence diagram "Ask the PDF assistant".*
+> *Figure 56. Sequence diagram of the PDF assistant question handling workflow.*
 
-#### 2.3. Sequence diagram — "AI Mentor (Socratic streaming)"
+#### 2.2. AI Mentor Socratic Streaming Interaction
 
 The student asks a question and the AI Mentor streams an answer word by word.
 The mentor gives hints instead of full solutions and always ends with a guiding question.
@@ -265,9 +265,9 @@ sequenceDiagram
     FE-->>-Student: Done streaming
 ```
 
-> *Figure 56.2 — Sequence diagram "AI Mentor".*
+> *Figure 56.2. Sequence diagram of the AI Mentor Socratic streaming interaction.*
 
-#### 2.4. Sequence diagram — "AI code correction (Pro only)"
+#### 2.3. AI Code Correction for Pro Users
 
 A Pro user sends their failing code and the AI returns a corrected version with a list of changes.
 Free users instead see an upgrade message.
@@ -299,9 +299,9 @@ sequenceDiagram
     FE-->>-Student: Done
 ```
 
-> *Figure 56.3 — Sequence diagram "AI code correction".*
+> *Figure 56.3. Sequence diagram of the AI code correction process for Pro users.*
 
-#### 2.2. Sequence diagram — "Join an institution via invite link"
+#### 2.4. Institution Enrollment via Invite Link
 
 A visitor opens the invite link and sees the institution and assigned role.
 After signing in, the backend links the user to the institution and sends them to the dashboard.
@@ -328,11 +328,11 @@ sequenceDiagram
     end
 ```
 
-> *Figure 57 — Sequence diagram "Join an institution via invite link".*
+> *Figure 57. Sequence diagram of institution enrollment via invite link.*
 
 ### 3. Activity Diagrams
 
-#### 3.1. Activity diagram — "Ban a user"
+#### 3.1. User Account Suspension Process
 
 The super admin picks a user and clicks Ban, then confirms in a modal.
 The user is marked inactive and signed out automatically on their next request.
@@ -348,9 +348,9 @@ flowchart TD
   F --> Z
 ```
 
-> *Figure 58 — Activity diagram "Ban a user".*
+> *Figure 58. Activity diagram of the user account suspension process.*
 
-#### 3.2. Activity diagram — "Onboard a new institution"
+#### 3.2. New Institution Onboarding Workflow
 
 After paying for the Institution plan, the user is redirected to the onboarding form.
 They fill it in, and the backend creates the institution and makes them its admin.
@@ -370,7 +370,7 @@ flowchart TD
   K --> L[Redirect to Institution Admin dashboard] --> Z
 ```
 
-> *Figure 59 — Activity diagram "Onboard a new institution".*
+> *Figure 59. Activity diagram of the new institution onboarding workflow.*
 
 ### 4. Class Diagram
 
