@@ -188,32 +188,26 @@ sequenceDiagram
     participant FE as Frontend
     participant API as Backend
     participant DB as Database
-    participant TOTP as Speakeasy
 
-    Student->>+FE: Submit credentials
-    FE->>+API: POST /auth/login
-    API->>+DB: Find user by email
-    DB-->>-API: User row
-    API->>API: bcrypt.compare
+    Student->>FE: Enter email and password
+    FE->>API: Send login request
+    API->>DB: Look up user
+    DB-->>API: User found
+    API->>API: Check password
 
-    alt Invalid credentials
-        API-->>FE: 401 Unauthorized
-    else Valid + 2FA off
-        API->>API: jwt.sign
-        API-->>FE: 200 token + user
-    else Valid + 2FA on
-        API-->>FE: require2FA
-        Student->>FE: Enter TOTP code
-        FE->>API: POST /auth/login/2fa
-        API->>+TOTP: Verify(secret, code)
-        TOTP-->>-API: OK
-        API->>API: jwt.sign
-        API-->>FE: 200 token + user
+    alt Wrong password
+        API-->>FE: Login failed
+        FE-->>Student: Show error
+    else 2FA is off
+        API-->>FE: Token + user
+        FE-->>Student: Open dashboard
+    else 2FA is on
+        API-->>FE: Ask for 6-digit code
+        Student->>FE: Enter code
+        FE->>API: Send code
+        API-->>FE: Token + user
+        FE-->>Student: Open dashboard
     end
-
-    API-->>-FE: Tokens issued
-    FE->>FE: Set cookies (token, user)
-    FE-->>-Student: Redirect to dashboard
 ```
 
 > *Figure 9 — Sequence diagram "Sign in".*
