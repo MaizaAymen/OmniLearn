@@ -6,19 +6,7 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 
 ## II. Sprint Objectives
 
-Sprint 4 wraps the platform with the **AI tutor** and the full **multi-tenant administration** layer:
-
-- The **PDF assistant** (`PdfAssistant.jsx`, `ClassroomPdf.jsx`) — upload a course PDF, ingest it into a Chroma vector store, and chat with an LLM grounded in the PDF (RAG). Built on `@langchain/community`, `chromadb`, `pdf-parse`, `@huggingface/inference` (embeddings via `sentence-transformers/all-MiniLM-L6-v2`) and `groq-sdk` (completions via `llama-3.3-70b-versatile`). The RAG pipeline lives inline in [pdfRoutes.js](../Server/src/routes/pdfRoutes.js). A keyword-search fallback fires if Chroma is unreachable.
-- The **AI Mentor** sidebar ([AIMentor.jsx](../Client/src/components/AIMentor.jsx)) — a Socratic streaming tutor over Server-Sent Events. Knows the student's current code, language, problem title, and the last 10 turns; refuses to hand over complete solutions and always closes with a guiding question.
-- **AI-assisted code correction** (`/api/ai/ai/correct-code`) — gated to Pro / Institution plans, returns a JSON diff (`changes[]`) plus a corrected file that must match the problem's `expectedOutput`.
-- **AI problem generation** (`/api/ai/ai/problems/generate-draft`, …) — staff can ask the LLM for 1 / 3 / 5 problems with full roadmaps; a JSON-repair retry pass rescues most invalid responses.
-- **Messenger slash commands** (`/ai`, `/stackoverflow`, `/video`) — quick entry points to explanations, references and tutorials for faster self-study, with answers rendered as bot bubbles inside the conversation.
-- **Workspace code AI** ([workspaceRoutes.js](../Server/src/routes/workspaceRoutes.js)) — analyze / summarize / quiz endpoints over a per-user file workspace with plan-based storage caps (Free = 3, Pro = 200).
-- The **Institution onboarding** flow (`OnboardInstitution.jsx`) — name, slug, logo, and the first super-user becoming `institution_admin`.
-- **Invite links** (`InviteLink` model) used by an institution admin to enroll teachers / students at a specific role (`JoinInstitution.jsx`).
-- The **Institution Admin console** — directory of members, role management, per-institution curriculum management (Grades / Specialities / Levels) through `institutionCurriculumRoutes.js`.
-- The **Super Admin console** (`AdminDashboard.jsx`) — manage all institutions, manage problems globally, manage Free-tier / Pro-tier flags (`FreeTierTab`, `ProTierTab`), and view "users by plan" overview (`UsersByPlanTab`, `UsersByPlanOverview`).
-- The **Stripe** end-to-end flow for both the Pro plan and the Institution plan (`stripeRoutes.js`, `PlanSection.jsx`).
+This final sprint adds the **AI tutor** and the **multi-tenant administration** layer to complete OmniLearn. Students get an AI mentor that guides them as they code, a PDF assistant that answers questions from course documents, and slash commands in the messenger for quick help. Schools can onboard as institutions, invite their teachers and students through links, and manage their own members and curriculum from a dedicated console. Super admins oversee all institutions and problems globally, while Stripe handles payments for both the Pro plan and the Institution plan.
 
 ## III. Sprint 4 Backlog
 
