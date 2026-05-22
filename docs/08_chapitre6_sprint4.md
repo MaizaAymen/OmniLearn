@@ -6,7 +6,7 @@ In this chapter — after the elaboration of Sprint 3 features — we precisely 
 
 ## II. Sprint Objectives
 
-This final sprint adds the **AI tutor** (mentor, PDF chat, slash commands) and the **multi-tenant administration** layer (institutions, admin consoles, Stripe payments) to complete OmniLearn.
+This final sprint completes OmniLearn by adding the **AI tutor** and the **multi-tenant administration** layer. Students get an AI mentor that guides them while coding, a PDF assistant to chat with their courses, and slash commands for quick help in the messenger. Schools can onboard as institutions and manage their members, while super admins oversee everything globally and Stripe handles payments for the Pro and Institution plans.
 
 ## III. Sprint 4 Backlog
 
