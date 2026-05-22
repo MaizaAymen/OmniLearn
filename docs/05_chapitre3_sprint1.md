@@ -291,17 +291,16 @@ The user edits their avatar, bio and social links and submits; the server valida
 
 ```mermaid
 flowchart TD
-  A([Start]) --> B[Open Profile page]
-  B --> C{Pick an avatar?}
-  C -- Yes --> D[Upload to Cloudinary] --> E[Receive avatar URL]
-  C -- No --> E
-  E --> F[Edit bio / GitHub / LinkedIn]
-  F --> G[Submit PATCH /api/profile/:id]
-  G --> H{Server validates payload}
-  H -- Invalid --> I[Show field errors] --> F
-  H -- Valid --> J[UPDATE users SET ...] --> K[Emit 'profile-updated' event]
-  K --> L[Guard re-checks profile completeness]
-  L --> M([End])
+  A([Start]) --> B[Open profile page]
+  B --> C{Change avatar?}
+  C -- Yes --> D[Upload new avatar]
+  C -- No --> E[Edit bio and social links]
+  D --> E
+  E --> F[Click Save]
+  F --> G{Inputs valid?}
+  G -- No --> H[Show errors] --> E
+  G -- Yes --> I[Save changes]
+  I --> J([End])
 ```
 
 > *Figure 11 — Activity diagram "Update profile".*
@@ -314,18 +313,14 @@ The user asks for a reset link, opens it from their inbox and sets a new passwor
 flowchart TD
   A([Start]) --> B[Click &quot;Forgot password?&quot;]
   B --> C[Enter email]
-  C --> D[POST /api/auth/forgot-password]
-  D --> E{User exists?}
-  E -- No --> F[Generic success message] --> Z([End])
-  E -- Yes --> G[Generate passwordResetToken + expiry]
-  G --> H[Send email via Nodemailer]
-  H --> I[User clicks email link]
-  I --> J[Open /reset-password?token=...]
-  J --> K[Enter new password]
-  K --> L[POST /api/auth/reset-password]
-  L --> M{Token valid & not expired?}
-  M -- No --> N[Show &quot;Link expired&quot;] --> Z
-  M -- Yes --> O[bcrypt.hash + UPDATE users] --> P[Clear reset token] --> Q[Redirect to /auth] --> Z
+  C --> D[Show &quot;Check your inbox&quot;]
+  D --> E[Open link from email]
+  E --> F[Enter new password]
+  F --> G{Link still valid?}
+  G -- No --> H[Show &quot;Link expired&quot;] --> Z([End])
+  G -- Yes --> I[Update password]
+  I --> J[Go to sign-in page]
+  J --> Z
 ```
 
 > *Figure 12 — Activity diagram "Reset password".*
