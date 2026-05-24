@@ -536,10 +536,13 @@ The user can change their avatar, bio, GitHub and LinkedIn links. From here they
 
 ### 7. Security tab (account protection)
 
-The Security tab groups everything that protects the account in one place.
-It exposes a **Change password** form that calls the secure route `POST /api/users/change-password`, which requires the current password before saving the new one.
-It also lets the user enable **2FA** through `POST /api/auth/2fa/setup` and `/2fa/enable`, which generate a Speakeasy TOTP secret, render a QR code, and confirm it with a 6-digit code.
-Disabling 2FA also asks for a fresh TOTP code, so a stolen session alone is not enough to turn the second factor off.
+The Security tab keeps all account protection settings in one place.
+
+It has a **Change password** form. To save a new password, the user must first type their current one, so nobody can change it from a stolen session.
+
+It also lets the user turn on **2FA** (two-factor authentication). The app shows a QR code, the user scans it with an authenticator app (like Google Authenticator), then types the 6-digit code to confirm.
+
+To turn 2FA off, the user must enter a fresh 6-digit code again — this way, a stolen session alone is not enough to disable it.
 
 ```mermaid
 sequenceDiagram
