@@ -546,32 +546,38 @@ sequenceDiagram
     autonumber
     actor User
     participant FE as Profile (Security tab)
+    participant Auth as authenticate middleware
     participant API as Auth API
     participant DB as Database
     participant App as Authenticator app
 
-    Note over User,App: Setup (one time)
+    Note over User,App: Setup (one time — user must be signed in)
     User->>FE: Click "Enable 2FA"
-    FE->>API: POST /auth/2fa/setup
+    FE->>Auth: POST /auth/2fa/setup (JWT in header)
+    Auth->>Auth: Verify JWT → req.user.id
+    Auth->>API: forward authenticated request
     API->>API: Speakeasy generates TOTP secret
     API->>DB: Save secret (is2FAEnabled = false)
     API-->>FE: Return QR code + secret
     FE-->>User: Show QR code
     User->>App: Scan QR with authenticator app
     User->>FE: Enter 6-digit code
-    FE->>API: POST /auth/2fa/enable { otp }
+    FE->>Auth: POST /auth/2fa/enable { otp } (JWT)
+    Auth->>API: forward authenticated request
     API->>API: Verify TOTP with secret
     API->>DB: is2FAEnabled = true
     API-->>FE: 200 OK — 2FA active
 
-    Note over User,App: Sign-in (every time)
+    Note over User,App: Sign-in (every time — no JWT yet)
     User->>FE: Email + password
     FE->>API: POST /auth/signin
-    API-->>FE: 2FA required
+    API->>DB: Check credentials
+    API-->>FE: 2FA required (userId returned)
     User->>App: Open authenticator app
     App-->>User: Current 6-digit code
     User->>FE: Enter code
-    FE->>API: POST /auth/2fa/verify { otp }
+    FE->>API: POST /auth/2fa/verify { userId, otp }
+    API->>API: Verify TOTP (no JWT — unauthenticated route)
     API-->>FE: JWT token (signed in)
 ```
 
