@@ -37,8 +37,13 @@
 | 30 | Personalized roadmap graph view | Ch. 4 — Sprint 2 |
 | 31 | Roadmap node detail panel | Ch. 4 — Sprint 2 |
 | 32 | Roadmap completion certificate | Ch. 4 — Sprint 2 |
+| 32.1 | Profile — Roadmaps & Certifications tab | Ch. 4 — Sprint 2 |
 | 33 | Problems catalogue page | Ch. 4 — Sprint 2 |
 | 34 | Problem page with code editor and output panel | Ch. 4 — Sprint 2 |
+| 34.1 | Problem page — Description tab | Ch. 4 — Sprint 2 |
+| 34.2 | Problem page — Hints tab | Ch. 4 — Sprint 2 |
+| 34.3 | Problem page — Paint tab | Ch. 4 — Sprint 2 |
+| 34.4 | Problem page — Roadmap tab | Ch. 4 — Sprint 2 |
 | 35 | Coding dashboard | Ch. 4 — Sprint 2 |
 | 36 | `FreeTierTab` — toggle problems as free-tier | Ch. 4 — Sprint 2 |
 | 37 | `ProTierTab` — toggle problems as pro-tier | Ch. 4 — Sprint 2 |

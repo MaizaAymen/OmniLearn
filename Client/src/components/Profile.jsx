@@ -1278,198 +1278,378 @@ export default function Profile() {
               )
             ) : selectedKey === "security" ? (
               /*
-               * ─── SECURITY TAB ────────────────────────────────────────────────────────
-               * Rendered when the user clicks "Security" in the sidebar menu.
-               * Contains two independent sections:
-               *   1. Change Password  — update the account password
-               *   2. Two-Factor Authentication (2FA) — TOTP-based second factor
-               *
-               * Both sections share state declared at the top of the component
-               * (changingPassword / passwordForm for passwords;
-               *  twoFA* variables for 2FA).
+               * ─── SECURITY TAB ────────────────────────────────────────────────
+               * Sections:
+               *   1. Overview header with status pills
+               *   2. Password card — opens the change-password modal
+               *   3. 2FA card — TOTP-based second factor
+               *   4. Security tips
+               * All sensitive forms (password + 2FA) live in modals to keep the
+               * page clean and focused.
                */
-              <Space direction="vertical" size={24} style={{ width: "100%" }}>
+              <Space direction="vertical" size={20} style={{ width: "100%" }}>
 
-                {/* ── SECTION 1: Change Password ───────────────────────────────────────
-                    The header is always visible. The form itself is only mounted when
-                    `changingPassword` is true — toggled by "Change password" / "Cancel".
-                    handlePasswordChange() is defined earlier in the component and sends
-                    the old + new password to PUT /api/users/:id. */}
-                <div>
-                  <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
-                    <Col>
-                      <Title level={5} style={{ margin: 0 }}>
-                        <LockOutlined style={{ marginRight: 8, color: "#1677ff" }} />
-                        Change Password
-                      </Title>
-                      {/* Only show the subtitle when the form is hidden to avoid visual noise */}
-                      {!changingPassword && (
-                        <Text type="secondary" style={{ fontSize: 13, display: "block", marginTop: 4 }}>
-                          Ensure your account is secure with a strong password.
-                        </Text>
-                      )}
+                {/* Overview / hero */}
+                <Card
+                  bordered={false}
+                  style={{
+                    borderRadius: 14,
+                    background:
+                      "linear-gradient(135deg, rgba(79,70,229,0.08) 0%, rgba(34,197,94,0.06) 100%)",
+                    border: "1px solid #ECECF6",
+                  }}
+                  bodyStyle={{ padding: 20 }}
+                >
+                  <Row align="middle" gutter={[16, 16]} wrap>
+                    <Col flex="56px">
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 14,
+                          background: "#4F46E5",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 26,
+                          boxShadow: "0 8px 24px rgba(79,70,229,0.35)",
+                        }}
+                      >
+                        <SafetyCertificateOutlined />
+                      </div>
                     </Col>
-                    <Col>
-                      {/* Toggle button: "Change password" expands the form;
-                          "Cancel" collapses it and resets all field values. */}
-                      {!changingPassword ? (
-                        <Button onClick={() => setChangingPassword(true)} style={{ borderRadius: 6 }}>
-                          Change password
-                        </Button>
-                      ) : (
-                        <Button
-                          type="text"
-                          danger
-                          icon={<CloseOutlined />}
-                          onClick={() => { setChangingPassword(false); passwordForm.resetFields(); }}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                    </Col>
-                  </Row>
-
-                  {/* Password form — only mounted when the section is expanded */}
-                  {changingPassword && (
-                    <Card
-                      bordered={false}
-                      style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 12, marginTop: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}
-                    >
-                      <Form form={passwordForm} layout="vertical">
-                        {/* Field 1: Current password — proves the logged-in user
-                            knows the existing password before letting them change it. */}
-                        <Form.Item
-                          label={<Text strong style={{ color: "#595959" }}>Current Password</Text>}
-                          name="currentPassword"
-                          rules={[{ required: true, message: "Please enter your current password" }]}
-                          style={{ marginBottom: 16 }}
-                        >
-                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Enter your current password" style={{ borderRadius: 8 }} />
-                        </Form.Item>
-
-                        {/* Field 2: New password — minimum 6 characters enforced
-                            both here (client validation) and on the server. */}
-                        <Form.Item
-                          label={<Text strong style={{ color: "#595959" }}>New Password</Text>}
-                          name="newPassword"
-                          rules={[
-                            { required: true, message: "Please enter a new password" },
-                            { min: 6, message: "Password must be at least 6 characters" },
-                          ]}
-                          style={{ marginBottom: 16 }}
-                          extra={<Text type="secondary" style={{ fontSize: 12 }}>Password must be at least 6 characters long.</Text>}
-                        >
-                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Create a new strong password" style={{ borderRadius: 8 }} />
-                        </Form.Item>
-
-                        {/* Field 3: Confirm password — antd `dependencies` makes this
-                            field re-validate automatically whenever "newPassword" changes.
-                            The custom validator compares both values client-side. */}
-                        <Form.Item
-                          label={<Text strong style={{ color: "#595959" }}>Confirm New Password</Text>}
-                          name="confirmPassword"
-                          dependencies={["newPassword"]}
-                          rules={[
-                            { required: true, message: "Please confirm your new password" },
-                            ({ getFieldValue }) => ({
-                              validator(_, value) {
-                                if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
-                                return Promise.reject(new Error("The two passwords do not match!"));
-                              },
-                            }),
-                          ]}
-                          style={{ marginBottom: 24 }}
-                        >
-                          <Input.Password size="large" prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />} placeholder="Re-enter your new password" style={{ borderRadius: 8 }} />
-                        </Form.Item>
-
-                        {/* Submit — calls handlePasswordChange which validates
-                            the form then PUTs to the server. */}
-                        <Button type="primary" icon={<SaveOutlined />} loading={saving} block onClick={handlePasswordChange} size="large" style={{ borderRadius: 8, fontWeight: 600 }}>
-                          Save New Password
-                        </Button>
-                      </Form>
-                    </Card>
-                  )}
-                </div>
-
-                <Divider />
-
-                {/* ── SECTION 2: Two-Factor Authentication (TOTP) ─────────────────────
-                    TOTP = Time-based One-Time Password (RFC 6238).
-                    Every 30 seconds the authenticator app derives a 6-digit code from
-                    a shared secret using HMAC-SHA1. The server (speakeasy library) does
-                    the same derivation and accepts codes within a ±30 s window.
-
-                    Flow:
-                      Enable  → handle2FASetup (get QR) → handle2FAEnable (verify code)
-                      Disable → handle2FADisable (verify code to confirm)          */}
-                <div>
-                  <Row justify="space-between" align="middle">
-                    <Col>
+                    <Col flex={1} style={{ minWidth: 220 }}>
                       <Title level={5} style={{ margin: 0 }}>
-                        <SafetyCertificateOutlined style={{ marginRight: 8, color: "#52c41a" }} />
-                        Two-Factor Authentication
+                        Your account security
                       </Title>
-                      <Text type="secondary" style={{ fontSize: 13, display: "block", marginTop: 4 }}>
-                        Add an extra layer of security using an authenticator app (TOTP).
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        Keep your account safe with a strong password and two-factor authentication.
                       </Text>
                     </Col>
                     <Col>
-                      <Space>
-                        {/* Live status badge — reads user.is2FAEnabled which is updated
-                            optimistically in state after a successful enable/disable call. */}
-                        <Tag color={user.is2FAEnabled ? "success" : "default"}>
-                          {user.is2FAEnabled ? "Enabled" : "Disabled"}
+                      <Space size={8} wrap>
+                        <Tag
+                          bordered={false}
+                          color={user.is2FAEnabled ? "success" : "warning"}
+                          style={{ borderRadius: 999, padding: "4px 12px", fontWeight: 500 }}
+                        >
+                          {user.is2FAEnabled ? "2FA on" : "2FA off"}
                         </Tag>
-
-                        {/* Button switches based on current 2FA status:
-                            - Enabled  → show "Disable 2FA" (opens disable confirmation modal)
-                            - Disabled → show "Enable 2FA"  (calls handle2FASetup to get QR) */}
-                        {user.is2FAEnabled ? (
-                          <Button danger onClick={() => { setTwoFAOtp(""); setTwoFADisableModal(true); }}>
-                            Disable 2FA
-                          </Button>
-                        ) : (
-                          <Button type="primary" onClick={handle2FASetup} loading={twoFALoading}>
-                            Enable 2FA
-                          </Button>
-                        )}
+                        <Tag
+                          bordered={false}
+                          color={user.isEmailVerified ? "success" : "default"}
+                          style={{ borderRadius: 999, padding: "4px 12px", fontWeight: 500 }}
+                        >
+                          {user.isEmailVerified ? "Email verified" : "Email unverified"}
+                        </Tag>
                       </Space>
                     </Col>
                   </Row>
+                </Card>
 
-                  {/* Success banner — only shown when 2FA is already active.
-                      Reminds the user which app to open at login. */}
-                  {user.is2FAEnabled && (
-                    <Card size="small" style={{ marginTop: 12, background: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 8 }}>
-                      <Space>
-                        <SafetyCertificateOutlined style={{ color: "#52c41a", fontSize: 18 }} />
-                        <Text style={{ color: "#389e0d" }}>
-                          Your account is protected with time-based one-time passwords (TOTP). Use an app like Google Authenticator or Authy to generate login codes.
-                        </Text>
+                {/* Password card — opens the change-password modal */}
+                <Card
+                  bordered={false}
+                  hoverable
+                  style={{
+                    borderRadius: 14,
+                    border: "1px solid #F0F0F0",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                  }}
+                  bodyStyle={{ padding: 20 }}
+                >
+                  <Row align="middle" gutter={[16, 16]} wrap>
+                    <Col flex="48px">
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          background: "rgba(22,119,255,0.10)",
+                          color: "#1677ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 22,
+                        }}
+                      >
+                        <LockOutlined />
+                      </div>
+                    </Col>
+                    <Col flex={1} style={{ minWidth: 220 }}>
+                      <Title level={5} style={{ margin: 0 }}>
+                        Password
+                      </Title>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        Set a unique password to keep your account secure. We recommend at least 8 characters with numbers and symbols.
+                      </Text>
+                    </Col>
+                    <Col>
+                      <Button
+                        type="primary"
+                        icon={<EditOutlined />}
+                        onClick={() => { passwordForm.resetFields(); setChangingPassword(true); }}
+                        style={{ borderRadius: 8, fontWeight: 500 }}
+                      >
+                        Change password
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+
+                {/* Two-Factor Authentication (TOTP) */}
+                <Card
+                  bordered={false}
+                  hoverable
+                  style={{
+                    borderRadius: 14,
+                    border: "1px solid #F0F0F0",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                  }}
+                  bodyStyle={{ padding: 20 }}
+                >
+                  <Row align="middle" gutter={[16, 16]} wrap>
+                    <Col flex="48px">
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          background: user.is2FAEnabled
+                            ? "rgba(82,196,26,0.12)"
+                            : "rgba(250,173,20,0.12)",
+                          color: user.is2FAEnabled ? "#52c41a" : "#faad14",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 22,
+                        }}
+                      >
+                        <SafetyCertificateOutlined />
+                      </div>
+                    </Col>
+                    <Col flex={1} style={{ minWidth: 220 }}>
+                      <Space size={8} align="center">
+                        <Title level={5} style={{ margin: 0 }}>
+                          Two-factor authentication
+                        </Title>
+                        <Tag
+                          bordered={false}
+                          color={user.is2FAEnabled ? "success" : "default"}
+                          style={{ borderRadius: 999, fontWeight: 500 }}
+                        >
+                          {user.is2FAEnabled ? "Enabled" : "Disabled"}
+                        </Tag>
                       </Space>
-                    </Card>
-                  )}
-                </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 13 }}>
+                          Add an extra layer of security using an authenticator app such as Google Authenticator or Authy.
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col>
+                      {user.is2FAEnabled ? (
+                        <Button
+                          danger
+                          onClick={() => { setTwoFAOtp(""); setTwoFADisableModal(true); }}
+                          style={{ borderRadius: 8, fontWeight: 500 }}
+                        >
+                          Disable 2FA
+                        </Button>
+                      ) : (
+                        <Button
+                          type="primary"
+                          onClick={handle2FASetup}
+                          loading={twoFALoading}
+                          style={{ borderRadius: 8, fontWeight: 500 }}
+                        >
+                          Enable 2FA
+                        </Button>
+                      )}
+                    </Col>
+                  </Row>
 
-                {/* ── MODAL 1: Enable 2FA — scan QR + enter first OTP ─────────────────
-                    Opened by handle2FASetup after the server returns the QR image.
-                    destroyOnClose resets internal React state (inputs) each time
-                    the modal is closed so stale values never linger. */}
+                  {user.is2FAEnabled && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: "10px 14px",
+                        background: "#f6ffed",
+                        border: "1px solid #b7eb8f",
+                        borderRadius: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <SafetyCertificateOutlined style={{ color: "#52c41a", fontSize: 18 }} />
+                      <Text style={{ color: "#389e0d", fontSize: 13 }}>
+                        Your account is protected with time-based one-time passwords. You'll be asked for a code at each sign in.
+                      </Text>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Security tips */}
+                <Card
+                  bordered={false}
+                  style={{
+                    borderRadius: 14,
+                    border: "1px dashed #E5E7EB",
+                    background: "#FAFAFB",
+                  }}
+                  bodyStyle={{ padding: 20 }}
+                >
+                  <Title level={5} style={{ margin: 0, marginBottom: 12 }}>
+                    Security tips
+                  </Title>
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Space>
+                      <CheckOutlined style={{ color: "#52c41a" }} />
+                      <Text style={{ fontSize: 13 }}>Use a unique password you don't use anywhere else.</Text>
+                    </Space>
+                    <Space>
+                      <CheckOutlined style={{ color: "#52c41a" }} />
+                      <Text style={{ fontSize: 13 }}>Enable two-factor authentication on every account that supports it.</Text>
+                    </Space>
+                    <Space>
+                      <CheckOutlined style={{ color: "#52c41a" }} />
+                      <Text style={{ fontSize: 13 }}>Never share your verification codes — OmniLearn will never ask for them.</Text>
+                    </Space>
+                  </Space>
+                </Card>
+
+                {/* MODAL: Change password */}
                 <Modal
-                  title={<Space><QrcodeOutlined /> Set up Two-Factor Authentication</Space>}
+                  title={
+                    <Space size={10} align="center">
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          background: "rgba(22,119,255,0.10)",
+                          color: "#1677ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 18,
+                        }}
+                      >
+                        <LockOutlined />
+                      </div>
+                      <span style={{ fontWeight: 600 }}>Change password</span>
+                    </Space>
+                  }
+                  open={changingPassword}
+                  onCancel={() => { setChangingPassword(false); passwordForm.resetFields(); }}
+                  footer={null}
+                  width={460}
+                  destroyOnClose
+                  centered
+                >
+                  <Text type="secondary" style={{ fontSize: 13, display: "block", marginBottom: 16 }}>
+                    Enter your current password and choose a new one. You'll stay signed in on this device.
+                  </Text>
+
+                  <Form form={passwordForm} layout="vertical" onFinish={handlePasswordChange}>
+                    <Form.Item
+                      label={<Text strong style={{ color: "#595959" }}>Current password</Text>}
+                      name="currentPassword"
+                      rules={[{ required: true, message: "Please enter your current password" }]}
+                      style={{ marginBottom: 16 }}
+                    >
+                      <Input.Password
+                        size="large"
+                        prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />}
+                        placeholder="Enter your current password"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+
+                    <Form.Item
+                      label={<Text strong style={{ color: "#595959" }}>New password</Text>}
+                      name="newPassword"
+                      rules={[
+                        { required: true, message: "Please enter a new password" },
+                        { min: 6, message: "Password must be at least 6 characters" },
+                      ]}
+                      style={{ marginBottom: 16 }}
+                      extra={
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          At least 6 characters. Mix letters, numbers, and symbols for best security.
+                        </Text>
+                      }
+                    >
+                      <Input.Password
+                        size="large"
+                        prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />}
+                        placeholder="Create a new strong password"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+
+                    <Form.Item
+                      label={<Text strong style={{ color: "#595959" }}>Confirm new password</Text>}
+                      name="confirmPassword"
+                      dependencies={["newPassword"]}
+                      rules={[
+                        { required: true, message: "Please confirm your new password" },
+                        ({ getFieldValue }) => ({
+                          validator(_, value) {
+                            if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
+                            return Promise.reject(new Error("The two passwords do not match!"));
+                          },
+                        }),
+                      ]}
+                      style={{ marginBottom: 24 }}
+                    >
+                      <Input.Password
+                        size="large"
+                        prefix={<LockOutlined style={{ color: "#bfbfbf", marginRight: 4 }} />}
+                        placeholder="Re-enter your new password"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+
+                    <Row justify="end" gutter={8}>
+                      <Col>
+                        <Button
+                          onClick={() => { setChangingPassword(false); passwordForm.resetFields(); }}
+                          style={{ borderRadius: 8 }}
+                        >
+                          Cancel
+                        </Button>
+                      </Col>
+                      <Col>
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          icon={<SaveOutlined />}
+                          loading={saving}
+                          style={{ borderRadius: 8, fontWeight: 500 }}
+                        >
+                          Save new password
+                        </Button>
+                      </Col>
+                    </Row>
+                  </Form>
+                </Modal>
+
+                {/* MODAL: Enable 2FA (scan QR + enter first OTP) */}
+                <Modal
+                  title={<Space><QrcodeOutlined /> Set up two-factor authentication</Space>}
                   open={twoFASetupModal}
                   onCancel={() => setTwoFASetupModal(false)}
                   footer={null}
                   width={420}
                   destroyOnClose
+                  centered
                 >
                   <Space direction="vertical" size={16} style={{ width: "100%" }}>
                     <Text>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</Text>
 
-                    {/* The QR code is a base64 PNG returned by the server.
-                        It encodes an otpauth:// URI containing the TOTP secret. */}
                     {twoFAQrCode && (
                       <div style={{ textAlign: "center", padding: "16px 0" }}>
                         <img src={twoFAQrCode} alt="2FA QR Code" style={{ width: 200, height: 200, border: "1px solid #f0f0f0", borderRadius: 8 }} />
@@ -1478,10 +1658,6 @@ export default function Profile() {
 
                     <Text>Then enter the 6-digit code from your app to verify:</Text>
 
-                    {/* OTP input:
-                        - replace(/\D/g, "") strips any non-digit characters the user pastes
-                        - .slice(0, 6) hard-caps at 6 digits
-                        - monospace + letter-spacing makes the code easy to read */}
                     <Input
                       placeholder="000000"
                       value={twoFAOtp}
@@ -1491,8 +1667,6 @@ export default function Profile() {
                       style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 22, fontFamily: "monospace" }}
                     />
 
-                    {/* Verify button disabled until exactly 6 digits are entered
-                        to prevent sending obviously incomplete codes to the server. */}
                     <Button
                       type="primary"
                       block
@@ -1500,27 +1674,25 @@ export default function Profile() {
                       loading={twoFALoading}
                       disabled={twoFAOtp.length !== 6}
                       onClick={handle2FAEnable}
+                      style={{ borderRadius: 8, fontWeight: 500 }}
                     >
-                      Verify & Enable 2FA
+                      Verify & enable 2FA
                     </Button>
                   </Space>
                 </Modal>
 
-                {/* ── MODAL 2: Disable 2FA — confirm with OTP ─────────────────────────
-                    Requires the user to enter a valid OTP before the server will
-                    clear their 2FA secret. This stops an attacker with session
-                    access from silently turning off the second factor. */}
+                {/* MODAL: Disable 2FA (confirm with OTP) */}
                 <Modal
-                  title="Disable Two-Factor Authentication"
+                  title="Disable two-factor authentication"
                   open={twoFADisableModal}
                   onCancel={() => setTwoFADisableModal(false)}
                   footer={null}
                   destroyOnClose
+                  centered
                 >
                   <Space direction="vertical" size={16} style={{ width: "100%" }}>
                     <Text>Enter the 6-digit code from your authenticator app to confirm disabling 2FA:</Text>
 
-                    {/* Same digit-only input as the setup modal */}
                     <Input
                       placeholder="000000"
                       value={twoFAOtp}
@@ -1530,7 +1702,6 @@ export default function Profile() {
                       style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 22, fontFamily: "monospace" }}
                     />
 
-                    {/* Styled red to communicate this is a destructive action */}
                     <Button
                       danger
                       type="primary"
@@ -1539,8 +1710,9 @@ export default function Profile() {
                       loading={twoFALoading}
                       disabled={twoFAOtp.length !== 6}
                       onClick={handle2FADisable}
+                      style={{ borderRadius: 8, fontWeight: 500 }}
                     >
-                      Confirm & Disable 2FA
+                      Confirm & disable 2FA
                     </Button>
                   </Space>
                 </Modal>

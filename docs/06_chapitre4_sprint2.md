@@ -493,6 +493,13 @@ It can be downloaded as a PDF with the student's name.
 
 > *Figure 32 — Roadmap completion certificate.*
 
+#### 4.1. Roadmaps & Certifications (Profile tab)
+
+This profile tab gathers all the learning paths the student started and the certificates they earned.
+From here the student can resume a roadmap or download a certificate again.
+
+> *Figure 32.1 — Profile — Roadmaps & Certifications tab.*
+
 ### 5. Problems page
 
 This page lists all coding problems available to the student.
@@ -506,6 +513,36 @@ This page shows the problem statement next to a code editor.
 The student writes, runs and submits the code, then sees the result.
 
 > *Figure 34 — Problem page with code editor and output panel.*
+
+The left panel has four tabs that help the student understand and plan the solution.
+
+#### 6.1. Description tab
+
+Shows the problem statement, examples and the expected output.
+The student reads it first to understand what the code must do.
+
+> *Figure 34.1 — Problem page — Description tab.*
+
+#### 6.2. Hints tab
+
+Lists short hints the student can read when stuck.
+Each hint gives one small clue without revealing the full solution.
+
+> *Figure 34.2 — Problem page — Hints tab.*
+
+#### 6.3. Paint tab
+
+A free drawing area to sketch ideas, diagrams or pseudo-code.
+The student uses it to plan the approach before writing the code.
+
+> *Figure 34.3 — Problem page — Paint tab.*
+
+#### 6.4. Roadmap tab
+
+A visual graph of the steps to follow to solve the problem.
+Clicking a node shows the step title, an example and a hint.
+
+> *Figure 34.4 — Problem page — Roadmap tab.*
 
 ### 7. Coding dashboard
 
