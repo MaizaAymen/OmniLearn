@@ -36,6 +36,10 @@
 | 29 | Onboarding form | Ch. 4 — Sprint 2 |
 | 30 | Personalized roadmap graph view | Ch. 4 — Sprint 2 |
 | 31 | Roadmap node detail panel | Ch. 4 — Sprint 2 |
+| 31.1 | Node detail panel — Docs tab | Ch. 4 — Sprint 2 |
+| 31.2 | Node detail panel — YouTube tab | Ch. 4 — Sprint 2 |
+| 31.3 | Node detail panel — Stack Overflow tab | Ch. 4 — Sprint 2 |
+| 31.4 | Node detail panel — Quiz tab | Ch. 4 — Sprint 2 |
 | 32 | Roadmap completion certificate | Ch. 4 — Sprint 2 |
 | 32.1 | Profile — Roadmaps & Certifications tab | Ch. 4 — Sprint 2 |
 | 33 | Problems catalogue page | Ch. 4 — Sprint 2 |

@@ -486,6 +486,34 @@ It shows the topic, its resources and a button to mark it as done.
 
 > *Figure 31 — Roadmap node detail panel.*
 
+#### 3.1. Docs tab
+
+Lists official documentation and articles for the topic.
+The student opens them to read the reference material.
+
+> *Figure 31.1 — Node detail panel — Docs tab.*
+
+#### 3.2. YouTube tab
+
+Shows curated video tutorials with thumbnail and channel.
+The student watches them to learn the topic visually.
+
+> *Figure 31.2 — Node detail panel — YouTube tab.*
+
+#### 3.3. Stack Overflow tab
+
+Shows top Stack Overflow questions linked to the topic.
+The student opens them to see real problems and answers.
+
+> *Figure 31.3 — Node detail panel — Stack Overflow tab.*
+
+#### 3.4. Quiz tab
+
+A short multiple-choice quiz to test the topic.
+The student must pass it to mark the step as completed.
+
+> *Figure 31.4 — Node detail panel — Quiz tab.*
+
 ### 4. Certificate
 
 This is the certificate the student gets after finishing the roadmap.

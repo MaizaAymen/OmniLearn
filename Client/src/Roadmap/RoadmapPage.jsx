@@ -278,8 +278,13 @@ function RoadmapSwitcher({ activeId, onSwitch, onDelete, onNew, generating, road
 
 /* ── Main page ─────────────────────────────────────────────────────── */
 function RoadmapInner() {
-  const storedPlan = (() => { try { return JSON.parse(Cookies.get("user") || "{}").plan || "free"; } catch { return "free"; } })();
+  const storedUser = (() => { try { return JSON.parse(Cookies.get("user") || "{}"); } catch { return {}; } })();
+  const storedPlan = storedUser.plan || "free";
   const roadmapLimit = ROADMAP_LIMITS[storedPlan] ?? ROADMAP_LIMITS.free;
+  const userFullName = [storedUser.firstname, storedUser.lastname]
+    .filter(Boolean)
+    .join(" ")
+    .trim() || storedUser.name || storedUser.email || "Student";
 
   const [profile, setProfile]         = useState(null);
   const [graph, setGraph]             = useState(null);
@@ -467,7 +472,7 @@ function RoadmapInner() {
           ))}
           <CertificateButton
             graph={graph}
-            userName={profile?.careerGoal ? undefined : "Student"}
+            userName={userFullName}
             roadmapTitle={profile?.careerGoal || "AI Learning Roadmap"}
             certificateIssuedAt={certIssuedAt}
             onIssued={(date) => setCertIssuedAt(date)}
