@@ -1,49 +1,55 @@
 /* ── Base ── */
 .admin-dashboard {
   min-height: 100%;
-  background: #f8f9fb;
+  background: transparent;
 }
 
 /* ── Cards ── */
 .admin-card {
-  background: #fff;
-  border: 1px solid #e8eaed;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 1px 6px rgba(15, 23, 42, 0.02);
+  transition: box-shadow 0.2s ease;
+}
+
+.admin-card:hover {
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.04);
 }
 
 .admin-card .ant-card-head {
-  background: #fff;
-  border-bottom: 1px solid #e8eaed;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .admin-card .ant-card-head-title {
   font-weight: 600;
-  color: #202124;
+  color: #0f172a;
 }
 
 /* ── Overview welcome banner ── */
 .overview-welcome {
-  background: #fff;
-  border: 1px solid #e8eaed;
-  border-radius: 12px;
-  padding: 28px 32px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  padding: 32px 36px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 1px 6px rgba(15, 23, 42, 0.02);
 }
 
 /* ── Stat cards ── */
 .stat-card {
-  background: #fff;
-  border: 1px solid #e8eaed;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
   cursor: pointer;
-  transition: box-shadow 0.18s, transform 0.18s;
+  transition: box-shadow 0.18s, transform 0.18s, border-color 0.18s;
   padding: 4px 0;
 }
 
 .stat-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.08);
+  border-color: #e2e8f0;
   transform: translateY(-2px);
 }
 
@@ -52,37 +58,39 @@
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.5px;
+  color: #0f172a;
 }
 
 .stat-label {
   font-size: 13px;
-  color: #5f6368;
+  color: #64748b;
   font-weight: 500;
   margin-top: 4px;
 }
 
 /* ── Section header ── */
 .section-form-header {
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .section-form-title {
-  font-size: 16px !important;
-  font-weight: 600 !important;
-  color: #202124 !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.2px;
 }
 
 .admin-hint {
   display: block;
   font-size: 12px;
-  color: #80868b;
-  margin-top: 2px;
+  color: #94a3b8;
+  margin-top: 4px;
 }
 
 /* ── Section divider ── */
 .section-divider {
-  margin: 20px 0;
-  border-color: #e8eaed;
+  margin: 22px 0;
+  border-color: #f1f3f5;
 }
 
 /* ── Forms ── */
@@ -91,7 +99,7 @@
 }
 
 .admin-form .ant-form-item {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .admin-form-secondary {
@@ -99,30 +107,51 @@
   background: transparent;
 }
 
+.admin-form .ant-input,
+.admin-form .ant-input-number,
+.admin-form .ant-select-selector {
+  border-color: #e2e8f0 !important;
+  border-radius: 8px !important;
+}
+
+.admin-form .ant-input:hover,
+.admin-form .ant-input-number:hover,
+.admin-form .ant-select:hover .ant-select-selector {
+  border-color: #cbd5e1 !important;
+}
+
+.admin-form .ant-input:focus,
+.admin-form .ant-input-focused,
+.admin-form .ant-input-number-focused,
+.admin-form .ant-select-focused .ant-select-selector {
+  border-color: #1a73e8 !important;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12) !important;
+}
+
 /* ── Table ── */
 .admin-card .ant-table {
-  background: #fff;
-  border-radius: 8px;
+  background: #ffffff;
+  border-radius: 10px;
   overflow: hidden;
 }
 
 .admin-card .ant-table-thead > tr > th {
-  background: #f8f9fa;
-  color: #3c4043;
+  background: #f8fafc;
+  color: #475569;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  border-bottom: 1px solid #e8eaed;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #eef0f3;
 }
 
 .admin-card .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #f1f3f4;
-  color: #202124;
+  border-bottom: 1px solid #f4f6f9;
+  color: #0f172a;
 }
 
 .admin-card .ant-table-tbody > tr:hover > td {
-  background: #f8f9fa;
+  background: #f8fafc;
 }
 
 .admin-card .ant-table-tbody > tr:last-child > td {
@@ -131,75 +160,90 @@
 
 /* ── Classroom grid cards ── */
 .classroom-drill-card {
-  background: #fff;
-  border: 1px solid #e8eaed !important;
-  border-radius: 12px !important;
+  background: #ffffff;
+  border: 1px solid #eef0f3 !important;
+  border-radius: 14px !important;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 1px 6px rgba(15, 23, 42, 0.02);
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
 }
 
 .classroom-drill-card:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border-color: #e2e8f0 !important;
+  transform: translateY(-3px);
 }
 
 .classroom-card-banner {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 20px 20px 18px;
+  padding: 22px 22px 20px;
   cursor: pointer;
-  min-height: 110px;
+  min-height: 118px;
   position: relative;
   transition: filter 0.15s;
 }
 
+.classroom-card-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 60%);
+  pointer-events: none;
+}
+
 .classroom-card-banner:hover {
-  filter: brightness(0.95);
+  filter: brightness(0.96);
 }
 
 .classroom-card-title {
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: #ffffff;
   line-height: 1.25;
   letter-spacing: -0.2px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  position: relative;
+  z-index: 1;
 }
 
 .classroom-card-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.9);
   margin-top: 6px;
   font-weight: 500;
+  position: relative;
+  z-index: 1;
 }
 
 .classroom-card-avatar {
-  background: rgba(255, 255, 255, 0.28) !important;
-  color: #fff !important;
+  background: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
   font-weight: 700 !important;
   font-size: 16px !important;
-  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  border: 2px solid rgba(255, 255, 255, 0.55) !important;
   flex-shrink: 0;
   width: 40px !important;
   height: 40px !important;
   line-height: 36px !important;
+  position: relative;
+  z-index: 1;
 }
 
 .classroom-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-top: 1px solid #f1f3f4;
-  background: #fff;
-  min-height: 48px;
+  padding: 12px 18px;
+  border-top: 1px solid #f1f3f5;
+  background: #ffffff;
+  min-height: 50px;
 }
 
 .classroom-card-teacher-name {
   font-size: 13px;
-  color: #5f6368;
+  color: #64748b;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -210,38 +254,38 @@
 .classroom-card-footer-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .classroom-card-footer-actions .ant-btn {
-  color: #80868b;
-  border-radius: 6px;
+  color: #94a3b8;
+  border-radius: 8px;
 }
 
 .classroom-card-footer-actions .ant-btn:hover {
-  color: #202124;
-  background: #f1f3f4;
+  color: #0f172a;
+  background: #f4f6f9;
 }
 
 /* ── Add classroom card ── */
 .classroom-add-card {
-  border: 2px dashed #dadce0 !important;
-  background: #fafbfc !important;
+  border: 2px dashed #dbe2ea !important;
+  background: #ffffff !important;
   cursor: pointer;
-  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s, transform 0.18s;
   box-shadow: none !important;
 }
 
 .classroom-add-card:hover {
   border-color: #1a73e8 !important;
-  background: #f0f4ff !important;
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.1) !important;
+  background: #f5f9ff !important;
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.1) !important;
   transform: translateY(-2px);
 }
 
 .classroom-add-card .ant-card-body {
-  color: #80868b;
+  color: #94a3b8;
 }
 
 .classroom-add-card:hover .ant-card-body {
@@ -263,10 +307,10 @@
 
 /* ── Classroom courses inline list ── */
 .classroom-courses {
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e8eaed;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #eef0f3;
 }
 
 /* ── Lesson type tag ── */
@@ -322,7 +366,7 @@
 
 @media (max-width: 768px) {
   .overview-welcome {
-    padding: 20px 16px;
+    padding: 22px 18px;
   }
 
   .stat-value {
@@ -334,8 +378,8 @@
   }
 
   .classroom-card-banner {
-    padding: 16px;
-    min-height: 96px;
+    padding: 18px;
+    min-height: 100px;
   }
 
   .classroom-card-title {
@@ -343,7 +387,7 @@
   }
 
   .classroom-card-footer {
-    padding: 10px 12px;
+    padding: 10px 14px;
   }
 
   .classroom-card-teacher-name {
@@ -353,7 +397,7 @@
 
 @media (max-width: 480px) {
   .overview-welcome {
-    padding: 16px 12px;
+    padding: 18px 14px;
   }
 
   .stat-value {

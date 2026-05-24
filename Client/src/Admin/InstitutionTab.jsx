@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, List, Modal,
-  Popconfirm, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, message,
+  Button, Card, Drawer, Empty, Form, Input, InputNumber, List, Modal,
+  Popconfirm, Progress, Row, Col, Segmented, Select, Space, Statistic, Table, Tabs, Tag, Typography, message,
 } from "antd";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 // Icons used by the Institution Problem Bank tabs (create / fork / search / edit)
-import { PlusOutlined, ForkOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined, ForkOutlined, SearchOutlined, DeleteOutlined, EditOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 // useNavigate lets the panel open the SAME admin /problems/create page (locked to institution scope)
 import { useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
@@ -984,6 +987,151 @@ const ForkGlobalInstTab = ({ institutionId, onSaved }) => {
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INSTITUTION vs GLOBAL chart : visualises how this institution's private
+// problem bank compares to the global (public) bank. Two lines on the same
+// axes; the X axis can be pivoted by difficulty / status / top categories so
+// admins can quickly spot where their bank is under- or over-represented.
+// ─────────────────────────────────────────────────────────────────────────────
+const COMPARE_BREAKDOWN_OPTIONS = [
+  { value: "difficulty", label: "Difficulty" },
+  { value: "status",     label: "Status" },
+  { value: "category",   label: "Category" },
+];
+
+const DIFFICULTY_ORDER = ["Easy", "Medium", "Hard"];
+const STATUS_ORDER     = ["draft", "review", "published", "archived"];
+const CATEGORY_TOP_N   = 6;
+
+const countBy = (problems, key) => {
+  const counts = {};
+  problems.forEach((p) => {
+    const raw = p?.[key];
+    const k = (raw == null || raw === "") ? "—" : String(raw);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return counts;
+};
+
+const InstitutionVsGlobalChart = ({ refreshKey }) => {
+  const [breakdown, setBreakdown] = useState("difficulty");
+  const [loading, setLoading] = useState(true);
+  const [instProblems, setInstProblems] = useState([]);
+  const [globalProblems, setGlobalProblems] = useState([]);
+
+  const reload = () => {
+    setLoading(true);
+    Promise.all([
+      fetch(`${AI_API}/getallproblems?scope=institution&status=all`, { headers: authHeaders() })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => (Array.isArray(d) ? d : []))
+        .catch(() => []),
+      fetch(`${AI_API}/getallproblems?status=all`, { headers: authHeaders() })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => (Array.isArray(d) ? d : []).filter((p) => p.scope !== "institution"))
+        .catch(() => []),
+    ])
+      .then(([inst, glob]) => { setInstProblems(inst); setGlobalProblems(glob); })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { reload(); /* refreshKey triggers a re-pull after create/fork */ }, [refreshKey]);
+
+  const data = useMemo(() => {
+    const instCounts = countBy(instProblems, breakdown);
+    const globCounts = countBy(globalProblems, breakdown);
+
+    let keys;
+    if (breakdown === "difficulty") {
+      keys = DIFFICULTY_ORDER.filter((k) => instCounts[k] != null || globCounts[k] != null);
+      [...Object.keys(instCounts), ...Object.keys(globCounts)].forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+    } else if (breakdown === "status") {
+      keys = STATUS_ORDER.filter((k) => instCounts[k] != null || globCounts[k] != null);
+      [...Object.keys(instCounts), ...Object.keys(globCounts)].forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+    } else {
+      const all = new Set([...Object.keys(instCounts), ...Object.keys(globCounts)]);
+      keys = Array.from(all)
+        .sort((a, b) =>
+          ((globCounts[b] || 0) + (instCounts[b] || 0)) -
+          ((globCounts[a] || 0) + (instCounts[a] || 0)))
+        .slice(0, CATEGORY_TOP_N);
+    }
+
+    return keys.map((k) => ({
+      name: k,
+      institution: instCounts[k] || 0,
+      global: globCounts[k] || 0,
+    }));
+  }, [instProblems, globalProblems, breakdown]);
+
+  const instTotal   = instProblems.length;
+  const globalTotal = globalProblems.length;
+  // Coverage = how big the institution bank is relative to the global one.
+  const coverage = globalTotal === 0 ? 0 : Math.round((instTotal / globalTotal) * 100);
+
+  return (
+    <Card
+      loading={loading}
+      style={{ borderRadius: 8, marginBottom: 16 }}
+      title={
+        <Space size={12} wrap>
+          <span>Institution vs Global problem bank</span>
+          <Tag color="blue">Institution: {instTotal}</Tag>
+          <Tag color="purple">Global: {globalTotal}</Tag>
+          <Tag color={coverage >= 50 ? "green" : "default"}>Coverage: {coverage}%</Tag>
+        </Space>
+      }
+      extra={
+        <Space wrap>
+          <Segmented
+            size="small"
+            value={breakdown}
+            onChange={setBreakdown}
+            options={COMPARE_BREAKDOWN_OPTIONS}
+          />
+          <Button size="small" icon={<ReloadOutlined />} onClick={reload}>Refresh</Button>
+        </Space>
+      }
+    >
+      {data.length === 0 ? (
+        <Empty description="Nothing to compare yet — create or fork some problems first." />
+      ) : (
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart data={data} margin={{ top: 8, right: 24, bottom: 8, left: 0 }}>
+            <CartesianGrid stroke="#e5e7eb" strokeDasharray="5 5" />
+            <XAxis dataKey="name" stroke="#6b7280" />
+            <YAxis width={48} stroke="#6b7280" allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="institution"
+              name="Institution"
+              stroke="#1677ff"
+              strokeWidth={2}
+              dot={{ fill: "#fff", stroke: "#1677ff", r: 4 }}
+              activeDot={{ stroke: "#fff", strokeWidth: 2, r: 6 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="global"
+              name="Global"
+              stroke="#722ed1"
+              strokeWidth={2}
+              dot={{ fill: "#fff", stroke: "#722ed1", r: 4 }}
+              activeDot={{ stroke: "#fff", strokeWidth: 2, r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  );
+};
+
 // ── Orchestrator: list + fork sub-tabs, plus a header CTA that opens the
 //    shared admin /problems/create page (which auto-locks scope to institution
 //    for institution_admin users, giving them the exact same Manual / AI
@@ -1016,6 +1164,8 @@ const InstitutionProblemsPanel = ({ institutionId }) => {
           New Problem
         </Button>
       </div>
+
+      <InstitutionVsGlobalChart refreshKey={refreshKey} />
 
       <Tabs
         defaultActiveKey="mine"

@@ -482,7 +482,11 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const currentRole = getCurrentRole();
   const [activeSection, setActiveSection] = useState(
-    currentRole === "teacher" ? "classrooms" : "grades"
+    currentRole === "teacher"
+      ? "classrooms"
+      : currentRole === "institution_admin"
+        ? "institution"
+        : "grades"
   );
 
   const [grades, setGrades] = useState([]);

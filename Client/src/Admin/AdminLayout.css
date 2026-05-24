@@ -1,16 +1,14 @@
+/* ── Shell ── */
 .admin-shell {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #fafbfc;
 }
 
+/* ── Sider ── */
 .admin-sider {
   background: #ffffff !important;
-  border-right: 1px solid #e6e6e6;
-}
-
-.admin-brand {
-  padding: 18px 18px 10px;
-  border-bottom: 1px solid #ededed;
+  border-right: 1px solid #eef0f3;
+  box-shadow: 1px 0 0 rgba(15, 23, 42, 0.02);
 }
 
 .admin-sider .ant-layout-sider-children {
@@ -18,112 +16,143 @@
   flex-direction: column;
 }
 
+.admin-brand {
+  padding: 22px 20px 14px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
 .admin-title {
   margin: 0;
-  color: #000;
+  color: #0f172a;
   font-weight: 700;
+  letter-spacing: -0.2px;
 }
 
 .admin-subtitle {
-  color: #8a8a8a;
-  font-size: 12px;
+  color: #94a3b8;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 2px;
+  font-weight: 600;
 }
 
+/* ── Menu ── */
 .admin-menu {
   border-right: 0;
   font-weight: 500;
-  padding: 12px 10px 18px;
+  padding: 14px 12px 18px;
+  background: #ffffff;
 }
 
 .admin-menu .ant-menu-item {
-  margin: 6px 0;
+  margin: 4px 0;
   border-radius: 10px;
-  height: 44px;
-  line-height: 44px;
-  padding-left: 16px !important;
+  height: 42px;
+  line-height: 42px;
+  padding-left: 14px !important;
+  color: #475569;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-menu .ant-menu-item .ant-menu-item-icon {
+  color: #94a3b8;
+  font-size: 16px;
 }
 
 .admin-menu .ant-menu-item:hover {
-  background: #f2f2f2 !important;
-  color: #000 !important;
+  background: #f4f6f9 !important;
+  color: #0f172a !important;
+}
+
+.admin-menu .ant-menu-item:hover .ant-menu-item-icon {
+  color: #1a73e8 !important;
 }
 
 .admin-menu .ant-menu-item-selected {
-  background: #000 !important;
-  color: #fff !important;
+  background: #eaf2fe !important;
+  color: #1a73e8 !important;
+  font-weight: 600;
 }
 
 .admin-menu .ant-menu-item-selected .ant-menu-item-icon {
-  color: #fff !important;
+  color: #1a73e8 !important;
 }
 
 .admin-menu .ant-menu-item-selected::after {
   border-right: 0;
 }
 
+/* ── Header ── */
 .admin-header {
   background: #ffffff;
-  border-bottom: 1px solid #ededed;
-  padding: 16px 28px;
+  border-bottom: 1px solid #eef0f3;
+  padding: 18px 32px;
+  height: auto;
+  line-height: 1.3;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
 }
 
 .admin-header-inner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .admin-collapse-button {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  color: #000;
+  color: #475569;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .admin-collapse-button:hover {
-  background: #f2f2f2 !important;
-  color: #000 !important;
+  background: #f4f6f9 !important;
+  border-color: #eef0f3;
+  color: #0f172a !important;
 }
 
 .admin-header-title {
-  margin: 0;
-  color: #000;
+  margin: 0 !important;
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  font-size: 22px !important;
 }
 
 .admin-header-text {
-  color: #6f6f6f;
+  color: #94a3b8;
   font-size: 13px;
 }
 
+/* ── Content ── */
 .admin-content {
-  padding: 24px 28px 40px;
+  padding: 28px 32px 48px;
+  background: #fafbfc;
 }
 
 @media (max-width: 992px) {
   .admin-content {
-    padding: 20px 16px 32px;
+    padding: 22px 18px 36px;
   }
 
   .admin-header {
-    padding: 16px 20px;
+    padding: 16px 22px;
   }
 }
 
 @media (max-width: 640px) {
   .admin-content {
-    padding: 14px 10px 24px;
+    padding: 16px 12px 28px;
   }
 
   .admin-header {
-    padding: 10px 12px;
-    height: auto !important;
-    line-height: 1.3 !important;
+    padding: 12px 14px;
   }
 
   .admin-header-inner {
-    gap: 8px;
+    gap: 10px;
   }
 
   .admin-header-title {

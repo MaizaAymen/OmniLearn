@@ -534,7 +534,57 @@ The user can change their avatar, bio, GitHub and LinkedIn links. From here they
 
 > *Figure 20 — Profile management page.*
 
-### 7. Plan upgrade (Stripe Checkout)
+### 7. Security tab (account protection)
+
+The Security tab groups everything that protects the account in one place.
+It exposes a **Change password** form that calls the secure route `POST /api/users/change-password`, which requires the current password before saving the new one.
+It also lets the user enable **2FA** through `POST /api/auth/2fa/setup` and `/2fa/enable`, which generate a Speakeasy TOTP secret, render a QR code, and confirm it with a 6-digit code.
+Disabling 2FA also asks for a fresh TOTP code, so a stolen session alone is not enough to turn the second factor off.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Profile (Security tab)
+    participant API as Auth API
+    participant DB as Database
+    participant App as Authenticator app
+
+    Note over User,App: Setup (one time)
+    User->>FE: Click "Enable 2FA"
+    FE->>API: POST /auth/2fa/setup
+    API->>API: Speakeasy generates TOTP secret
+    API->>DB: Save secret (is2FAEnabled = false)
+    API-->>FE: Return QR code + secret
+    FE-->>User: Show QR code
+    User->>App: Scan QR with authenticator app
+    User->>FE: Enter 6-digit code
+    FE->>API: POST /auth/2fa/enable { otp }
+    API->>API: Verify TOTP with secret
+    API->>DB: is2FAEnabled = true
+    API-->>FE: 200 OK — 2FA active
+
+    Note over User,App: Sign-in (every time)
+    User->>FE: Email + password
+    FE->>API: POST /auth/signin
+    API-->>FE: 2FA required
+    User->>App: Open authenticator app
+    App-->>User: Current 6-digit code
+    User->>FE: Enter code
+    FE->>API: POST /auth/2fa/verify { otp }
+    API-->>FE: JWT token (signed in)
+```
+
+The screenshot below shows the Change password form with current / new / confirm fields.
+> *Figure 20.1 — Security tab — Change password form.*
+
+The screenshot below shows the 2FA panel with the QR code and the 6-digit verification input.
+> *Figure 20.2 — Security tab — Enable 2FA (QR + TOTP).*
+
+The screenshot below shows the 2FA setup and sign-in flow as a sequence diagram.
+> *Figure 20.3 — 2FA setup and sign-in sequence (Speakeasy TOTP).*
+
+### 8. Plan upgrade (Stripe Checkout)
 
 A Free user clicks the Pro button, which opens Stripe Checkout in a new tab to pay. After a successful payment, a Stripe webhook updates the user's plan to `pro`.
 
