@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { User, SavedRoadmap } = require("../models");
+const { User, SavedRoadmap, Class, Enrollment } = require("../models");
 const { authenticate } = require("../middleware/Authmiddleware");
 const {
   generateRoadmapGraph,
@@ -260,6 +260,242 @@ router.get("/node/:nodeId/resources", authenticate, async (req, res) => {
     fetchDocs(node.title, node.youtubeQuery),
   ]);
   res.json({ stackoverflow, youtube, docs });
+});
+
+/* ═════════════════════════════════════════════════════════════════════
+ * CLASSROOM ROADMAPS — teacher publishes one master roadmap to a class,
+ * every enrolled student gets their own copy with personal progress.
+ * ═════════════════════════════════════════════════════════════════════ */
+
+// helper: is this user the teacher of this classroom (or platform admin)?
+async function isClassTeacher(user, classId) {
+  if (user.role === "admin") return true;
+  const klass = await Class.findByPk(classId);
+  return !!klass && klass.teacherId === user.id;
+}
+
+// helper: is this user enrolled in this classroom?
+async function isEnrolledStudent(user, classId) {
+  const e = await Enrollment.findOne({ where: { classId, studentId: user.id } });
+  return !!e;
+}
+
+/* ── POST /classroom/:classId/generate — teacher creates + auto-shares ── */
+router.post("/classroom/:classId/generate", authenticate, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    if (!(await isClassTeacher(req.user, classId))) {
+      return res.status(403).json({ error: "Only the classroom's teacher can create a roadmap." });
+    }
+
+    const { title, careerGoal, interests = [], programmingLanguages = [] } = req.body || {};
+
+    // Generate + enrich using the SAME pipeline as personal roadmaps.
+    const graph = await generateRoadmapGraph({
+      careerGoal: careerGoal || title || "General Learning",
+      interests,
+      programmingLanguages,
+      problems: [],
+      solved: [],
+    });
+    await enrichGraphWithResources(graph);
+
+    // Remove any previous master for this class (only one classroom roadmap at a time).
+    const oldMasters = await SavedRoadmap.findAll({ where: { classId, parentRoadmapId: null } });
+    for (const m of oldMasters) {
+      await SavedRoadmap.destroy({ where: { parentRoadmapId: m.id } }); // drop old student copies
+      await m.destroy();
+    }
+
+    // Create the teacher's master roadmap.
+    const master = await SavedRoadmap.create({
+      userId: req.user.id,
+      classId,
+      parentRoadmapId: null,
+      title: title || careerGoal || "Classroom Roadmap",
+      graph: JSON.parse(JSON.stringify(graph)),
+      progress: 0,
+      isActive: false,
+    });
+
+    // Clone one copy per enrolled student.
+    const enrollments = await Enrollment.findAll({ where: { classId } });
+    for (const e of enrollments) {
+      const cleanGraph = JSON.parse(JSON.stringify(graph));
+      (cleanGraph.nodes || []).forEach((n) => {
+        n.status = "pending";
+        n.quizAttempts = [];
+        n.bestScore = 0;
+      });
+      await SavedRoadmap.create({
+        userId: e.studentId,
+        classId,
+        parentRoadmapId: master.id,
+        title: master.title,
+        graph: cleanGraph,
+        progress: 0,
+        isActive: false,
+      });
+    }
+
+    res.json({ ok: true, roadmapId: master.id, title: master.title, graph: master.graph });
+  } catch (err) {
+    console.error("[classroom-roadmap/generate]", err);
+    res.status(500).json({ error: err.message || "generation failed" });
+  }
+});
+
+/* ── GET /classroom/:classId — current roadmap for this user in this class ── */
+// Teacher: returns the master. Student: returns their own copy (auto-creates one if missing).
+router.get("/classroom/:classId", authenticate, async (req, res) => {
+  const { classId } = req.params;
+
+  const master = await SavedRoadmap.findOne({ where: { classId, parentRoadmapId: null } });
+  if (!master) return res.json({ roadmap: null });
+
+  if (await isClassTeacher(req.user, classId)) {
+    return res.json({ roadmap: master, isTeacher: true });
+  }
+
+  if (!(await isEnrolledStudent(req.user, classId))) {
+    return res.status(403).json({ error: "Not enrolled in this classroom." });
+  }
+
+  let mine = await SavedRoadmap.findOne({
+    where: { classId, parentRoadmapId: master.id, userId: req.user.id },
+  });
+
+  // Student joined after publish — create their copy on the fly.
+  if (!mine) {
+    const cleanGraph = JSON.parse(JSON.stringify(master.graph || { nodes: [], edges: [] }));
+    (cleanGraph.nodes || []).forEach((n) => {
+      n.status = "pending";
+      n.quizAttempts = [];
+      n.bestScore = 0;
+    });
+    mine = await SavedRoadmap.create({
+      userId: req.user.id,
+      classId,
+      parentRoadmapId: master.id,
+      title: master.title,
+      graph: cleanGraph,
+      progress: 0,
+      isActive: false,
+    });
+  }
+
+  res.json({ roadmap: mine, isTeacher: false });
+});
+
+/* ── GET /classroom/:classId/dashboard — teacher only ── */
+router.get("/classroom/:classId/dashboard", authenticate, async (req, res) => {
+  const { classId } = req.params;
+  if (!(await isClassTeacher(req.user, classId))) {
+    return res.status(403).json({ error: "Teacher only." });
+  }
+
+  const master = await SavedRoadmap.findOne({ where: { classId, parentRoadmapId: null } });
+  if (!master) return res.json({ master: null, students: [], classAverage: 0 });
+
+  const copies = await SavedRoadmap.findAll({
+    where: { classId, parentRoadmapId: master.id },
+    include: [{ model: User, as: "user", attributes: ["id", "firstname", "lastname", "email"] }],
+  });
+
+  const students = copies.map((c) => {
+    const nodes = c.graph?.nodes || [];
+    const scored = nodes.filter((n) => typeof n.bestScore === "number" && (n.quizAttempts || []).length);
+    const avgQuizScore = scored.length
+      ? Math.round(scored.reduce((s, n) => s + (n.bestScore || 0), 0) / scored.length)
+      : 0;
+    return {
+      studentId: c.user?.id,
+      name: c.user ? `${c.user.firstname || ""} ${c.user.lastname || ""}`.trim() || c.user.email : "—",
+      email: c.user?.email,
+      progress: c.progress || 0,
+      avgQuizScore,
+      lastActivityAt: c.updatedAt,
+      certificateIssuedAt: c.certificateIssuedAt,
+    };
+  });
+
+  const classAverage = students.length
+    ? Math.round(students.reduce((s, x) => s + x.progress, 0) / students.length)
+    : 0;
+
+  res.json({
+    master: { id: master.id, title: master.title, graph: master.graph, createdAt: master.createdAt },
+    classAverage,
+    students,
+  });
+});
+
+/* ── DELETE /classroom/:classId — teacher removes the class roadmap ── */
+router.delete("/classroom/:classId", authenticate, async (req, res) => {
+  const { classId } = req.params;
+  if (!(await isClassTeacher(req.user, classId))) {
+    return res.status(403).json({ error: "Teacher only." });
+  }
+  const master = await SavedRoadmap.findOne({ where: { classId, parentRoadmapId: null } });
+  if (!master) return res.json({ ok: true });
+  await SavedRoadmap.destroy({ where: { parentRoadmapId: master.id } });
+  await master.destroy();
+  res.json({ ok: true });
+});
+
+/* ── POST /classroom/:classId/node/:nodeId/status — student marks status on own copy ── */
+router.post("/classroom/:classId/node/:nodeId/status", authenticate, async (req, res) => {
+  const { classId, nodeId } = req.params;
+  const { status } = req.body || {};
+  if (!["pending", "in_progress", "completed"].includes(status)) {
+    return res.status(400).json({ error: "invalid status" });
+  }
+  const mine = await SavedRoadmap.findOne({
+    where: { classId, userId: req.user.id },
+  });
+  if (!mine || mine.parentRoadmapId == null) {
+    return res.status(404).json({ error: "no student copy found" });
+  }
+  const graph = JSON.parse(JSON.stringify(mine.graph));
+  const node = (graph.nodes || []).find((n) => n.id === nodeId);
+  if (!node) return res.status(404).json({ error: "node not found" });
+  node.status = status;
+  mine.graph = graph;
+  mine.progress = computeProgress(graph);
+  mine.changed("graph", true);
+  await mine.save();
+  res.json({ ok: true, progress: mine.progress });
+});
+
+/* ── POST /classroom/:classId/node/:nodeId/quiz-submit — same as personal, on own copy ── */
+router.post("/classroom/:classId/node/:nodeId/quiz-submit", authenticate, async (req, res) => {
+  const { classId, nodeId } = req.params;
+  const { score } = req.body || {};
+  if (typeof score !== "number") return res.status(400).json({ error: "score required" });
+
+  const mine = await SavedRoadmap.findOne({
+    where: { classId, userId: req.user.id },
+  });
+  if (!mine || mine.parentRoadmapId == null) {
+    return res.status(404).json({ error: "no student copy found" });
+  }
+  const graph = JSON.parse(JSON.stringify(mine.graph));
+  const node = (graph.nodes || []).find((n) => n.id === nodeId);
+  if (!node) return res.status(404).json({ error: "node not found" });
+
+  const passing = node.quiz?.passingScore ?? 80;
+  const passed = score >= passing;
+  node.status = passed ? "completed" : score >= 50 ? "in_progress" : node.status || "pending";
+  if (!node.quizAttempts) node.quizAttempts = [];
+  node.quizAttempts.push({ score, passed, date: new Date().toISOString() });
+  node.bestScore = Math.max(node.bestScore ?? 0, score);
+
+  mine.graph = graph;
+  mine.progress = computeProgress(graph);
+  mine.changed("graph", true);
+  await mine.save();
+
+  res.json({ ok: true, status: node.status, passed, progress: mine.progress, bestScore: node.bestScore });
 });
 
 module.exports = router;

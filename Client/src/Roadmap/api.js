@@ -22,4 +22,16 @@ export const roadmapApi = {
   issueCertificate: () =>
     axios.post(`${BASE}/certificate/issue`, {}, auth()).then((r) => r.data),
   resources:    (nodeId)     => axios.get(`${BASE}/node/${nodeId}/resources`, auth()).then((r) => r.data),
+
+  // ── Classroom roadmap (teacher publishes, every student gets a copy) ────────
+  classroom: {
+    get:        (classId)               => axios.get(`${BASE}/classroom/${classId}`, auth()).then((r) => r.data),
+    dashboard:  (classId)               => axios.get(`${BASE}/classroom/${classId}/dashboard`, auth()).then((r) => r.data),
+    generate:   (classId, payload)      => axios.post(`${BASE}/classroom/${classId}/generate`, payload, auth()).then((r) => r.data),
+    remove:     (classId)               => axios.delete(`${BASE}/classroom/${classId}`, auth()).then((r) => r.data),
+    setStatus:  (classId, nodeId, status) =>
+      axios.post(`${BASE}/classroom/${classId}/node/${nodeId}/status`, { status }, auth()).then((r) => r.data),
+    quizSubmit: (classId, nodeId, score)  =>
+      axios.post(`${BASE}/classroom/${classId}/node/${nodeId}/quiz-submit`, { score }, auth()).then((r) => r.data),
+  },
 };

@@ -9,7 +9,18 @@ const TABS = [
   { id: "quiz",          label: "Quiz",           icon: "🧠" },
 ];
 
-export default function NodeDetailPanel({ node, onClose, onStatusChange, embedded = false }) {
+export default function NodeDetailPanel({
+  node,
+  onClose,
+  onStatusChange,
+  embedded = false,
+  // Optional API overrides — classroom roadmap passes classroom-scoped versions.
+  // When omitted, falls through to the personal roadmap api (existing behavior).
+  setStatusFn,
+  quizSubmitFn,
+  getResourcesFn,
+  readOnly = false,
+}) {
   const [resources, setResources] = useState({ stackoverflow: [], youtube: [], docs: [] });
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
@@ -19,21 +30,25 @@ export default function NodeDetailPanel({ node, onClose, onStatusChange, embedde
     let cancelled = false;
     setLoading(true);
     setTab("docs");
-    roadmapApi
-      .resources(node.id)
-      .then((r) => !cancelled && setResources({ stackoverflow: [], youtube: [], docs: [], ...r }))
+    const fetcher = getResourcesFn
+      ? Promise.resolve(getResourcesFn(node))
+      : roadmapApi.resources(node.id);
+    Promise.resolve(fetcher)
+      .then((r) => !cancelled && setResources({ stackoverflow: [], youtube: [], docs: [], ...(r || {}) }))
       .catch(() => !cancelled && setResources({ stackoverflow: [], youtube: [], docs: [] }))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [node.id]);
+  }, [node.id, getResourcesFn]);
 
   const meta = NODE_META[node.type] || NODE_META.concept;
   const status = node.status || "pending";
 
   const setStatus = async (s) => {
+    if (readOnly) return;
     setSaving(true);
     try {
-      await roadmapApi.setStatus(node.id, s);
+      if (setStatusFn) await setStatusFn(node.id, s);
+      else await roadmapApi.setStatus(node.id, s);
       onStatusChange(node.id, s);
     } finally {
       setSaving(false);
@@ -68,13 +83,15 @@ export default function NodeDetailPanel({ node, onClose, onStatusChange, embedde
           return (
             <button
               key={s}
-              onClick={() => !saving && setStatus(s)}
-              disabled={saving}
+              onClick={() => !saving && !readOnly && setStatus(s)}
+              disabled={saving || readOnly}
               style={{
                 ...styles.statusBtn,
                 background: active ? sm.color : "#F8FAFC",
                 color: active ? "#FFFFFF" : "#475569",
                 borderColor: active ? sm.color : "#E2E8F0",
+                cursor: readOnly ? "not-allowed" : "pointer",
+                opacity: readOnly && !active ? 0.55 : 1,
               }}
             >
               {active && <span style={styles.statusDot} />}
@@ -179,7 +196,12 @@ export default function NodeDetailPanel({ node, onClose, onStatusChange, embedde
         )}
 
         {tab === "quiz" && (
-          <QuizTab node={node} onStatusChange={onStatusChange} />
+          <QuizTab
+            node={node}
+            onStatusChange={onStatusChange}
+            quizSubmitFn={quizSubmitFn}
+            readOnly={readOnly}
+          />
         )}
 
         {tab === "stackoverflow" && (
@@ -228,7 +250,7 @@ export default function NodeDetailPanel({ node, onClose, onStatusChange, embedde
 }
 
 /* ── Quiz component ──────────────────────────────────────────────── */
-function QuizTab({ node, onStatusChange }) {
+function QuizTab({ node, onStatusChange, quizSubmitFn, readOnly = false }) {
   const questions = node.quiz?.questions || [];
   const passing   = node.quiz?.passingScore ?? 80;
   const attempts  = node.quizAttempts || [];   // saved attempts from DB
@@ -315,11 +337,14 @@ function QuizTab({ node, onStatusChange }) {
 
   // ── Submit all answers ──────────────────────────────────────────
   const handleSubmit = async () => {
+    if (readOnly) return;
     const correct = questions.filter((q, i) => answers[i] === q.answer).length;
     const score   = Math.round((correct / total) * 100);
     setSubmitting(true);
     try {
-      const res = await roadmapApi.quizSubmit(node.id, score);
+      const res = quizSubmitFn
+        ? await quizSubmitFn(node.id, score)
+        : await roadmapApi.quizSubmit(node.id, score);
       setResult({ score, correct, passed: res.passed });
       if (res.passed) onStatusChange(node.id, "completed");
       else if (score >= 50) onStatusChange(node.id, "in_progress");

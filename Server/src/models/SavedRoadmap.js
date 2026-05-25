@@ -37,6 +37,18 @@ const SavedRoadmap = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
+    // null = personal roadmap. Set = belongs to a classroom (master or student copy).
+    classId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
+    },
+    // null = teacher's master roadmap. Set = student copy pointing at the master.
+    parentRoadmapId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "saved_roadmaps",

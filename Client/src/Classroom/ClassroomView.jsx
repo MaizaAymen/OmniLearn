@@ -50,6 +50,7 @@ import {
   TeamOutlined,
   UserDeleteOutlined,
   EditOutlined,
+  DeploymentUnitOutlined,
 } from "@ant-design/icons";
 import {
   createCourse,
@@ -64,6 +65,7 @@ import {
   updateLesson,
 } from "../Admin/api";
 import ClassroomProblemsTab from "./ClassroomProblemsTab";
+import ClassroomRoadmapTab from "./ClassroomRoadmapTab";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import Prism from "prismjs";
@@ -1821,6 +1823,15 @@ export default function ClassroomView() {
                 </Space>
               ),
               children: assignmentsTab,
+            },
+            {
+              key: "roadmap",
+              label: (
+                <Space size={6}>
+                  <DeploymentUnitOutlined /> Roadmap
+                </Space>
+              ),
+              children: <ClassroomRoadmapTab classId={classId} canManage={canManage} />,
             },
             ...(canManage
               ? [

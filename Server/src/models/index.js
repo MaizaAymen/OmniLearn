@@ -29,6 +29,14 @@ const SavedRoadmap = require("./SavedRoadmap");
 User.hasMany(SavedRoadmap, { foreignKey: "userId", as: "savedRoadmaps" });
 SavedRoadmap.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// Classroom roadmaps: a SavedRoadmap can belong to a Class (master OR student copy)
+Class.hasMany(SavedRoadmap, { foreignKey: "classId", as: "classroomRoadmaps", constraints: false });
+SavedRoadmap.belongsTo(Class, { foreignKey: "classId", as: "class", constraints: false });
+
+// Student copies point at the teacher's master via parentRoadmapId (self-FK)
+SavedRoadmap.hasMany(SavedRoadmap, { foreignKey: "parentRoadmapId", as: "studentCopies", constraints: false });
+SavedRoadmap.belongsTo(SavedRoadmap, { foreignKey: "parentRoadmapId", as: "master", constraints: false });
+
 // ─── Grade ↔ Speciality (1:N) ─────────────────────────────────────────────────
 Grade.hasMany(Speciality, { foreignKey: "gradeId", as: "specialities" });
 Speciality.belongsTo(Grade, { foreignKey: "gradeId", as: "grade" });
