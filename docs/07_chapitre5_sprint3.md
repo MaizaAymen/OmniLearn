@@ -506,21 +506,37 @@ The student can open an assignment, do the exercises, and submit the work from t
 
 > *Figure 51 — Class assignments page.*
 
-### 5. Classroom problem bank (teacher)
+### 5. Create a classroom (teacher)
+
+The teacher fills a short form to start a new class and shares it with students through an auto-generated invite link and class code.
+
+#### 5.1. Create-classroom form
+
+The teacher names the class and links it to a Grade, Speciality and Level.
+
+> *Figure 50.1 — Teacher's create-classroom form.*
+
+#### 5.2. Invite link and class code
+
+Once saved, the system shows a shareable invite link and a short code students use to join the class.
+
+> *Figure 50.2 — Created classroom showing the invite link and class code.*
+
+### 6. Classroom problem bank (teacher)
 
 This tab holds all the problems that belong only to the teacher's class.
 The teacher can add problems manually or generate them with AI, and later use them in assignments.
 
 > *Figure 51.1 — Classroom problem bank used by the teacher.*
 
-### 6. Creating an assignment (teacher)
+### 7. Creating an assignment (teacher)
 
 This form lets the teacher set a title, a due date, and pick problems from the class bank to build an assignment.
 Once saved, the assignment shows up for all students, and the teacher can check their progress with a Stats button.
 
 > *Figure 51.2 — Teacher's assignment editor with the problem picker driven by the class bank.*
 
-### 7. Real-time messaging (`Messages.jsx`)
+### 8. Real-time messaging (`Messages.jsx`)
 
 This page has two panels: the list of conversations on the left and the chosen chat on the right.
 Messages are sent and received instantly, like in a normal messaging app.

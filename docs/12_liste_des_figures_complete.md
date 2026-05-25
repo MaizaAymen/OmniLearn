@@ -60,6 +60,8 @@
 | 48 | `MyClassrooms` listing | Ch. 5 — Sprint 3 |
 | 49 | Classroom view (modules, lessons, announcements) | Ch. 5 — Sprint 3 |
 | 50 | Join a classroom page | Ch. 5 — Sprint 3 |
+| 50.1 | Teacher's create-classroom form | Ch. 5 — Sprint 3 |
+| 50.2 | Created classroom showing the invite link and class code | Ch. 5 — Sprint 3 |
 | 51 | Class assignments page | Ch. 5 — Sprint 3 |
 | 52 | Real-time messaging page | Ch. 5 — Sprint 3 |
 | 53 | Use-case diagram of Sprint 4 — Super Admin side | Ch. 6 — Sprint 4 |
