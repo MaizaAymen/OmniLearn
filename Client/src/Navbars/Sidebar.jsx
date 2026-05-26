@@ -51,10 +51,10 @@ const ROLE_COLOR = {
 const ROLE_MENU = {
   '/problems':      ['admin', 'institution_admin', 'teacher', 'student'],
   '/classroom-pdf': ['admin', 'institution_admin', 'teacher', 'student'],
-  '/my-classrooms': ['admin', 'institution_admin', 'teacher', 'student'],
+  '/my-classrooms': ['institution_admin', 'teacher', 'student'],
   '/messages':      ['admin', 'institution_admin', 'teacher', 'student'],
-  '/pdf-assistant': ['admin', 'institution_admin', 'teacher', 'student'],
-  '/roadmap':       ['admin', 'institution_admin', 'teacher', 'student'],
+  '/pdf-assistant': ['institution_admin', 'teacher', 'student'],
+  '/roadmap':       [ 'institution_admin', 'teacher', 'student'],
   '/users':         ['admin'],
   '/education':     ['admin', 'institution_admin'],
   '/profile':       ['admin', 'institution_admin', 'teacher', 'student'],

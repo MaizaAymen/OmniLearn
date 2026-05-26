@@ -8,6 +8,17 @@ const Notification = require("../models/Notification");
 const { emitNotification } = require("../realtime/messageHub");
 const {slugify} = require("../utils/slugify");
 const { authenticate, optionalAuth, requirePro } = require("../middleware/Authmiddleware");
+const { fetchYouTube } = require("./RoadmapService");
+
+async function addVideosToRoadmap(roadmap) {
+  if (!roadmap?.nodes?.length) return roadmap;
+  await Promise.all(
+    roadmap.nodes.map(async (node) => {
+      node.videos = await fetchYouTube(node.title, 3);
+    })
+  );
+  return roadmap;
+}
 
 async function notifyAllOnProblemPublished(req, problem) {
   try {
@@ -208,7 +219,9 @@ Rules:
   text = text.replace(/```json/g, "").replace(/```/g, "").trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (match) text = match[0];
-  return normalizeRoadmap(JSON.parse(text));
+  const roadmap = normalizeRoadmap(JSON.parse(text));
+  await addVideosToRoadmap(roadmap);
+  return roadmap;
 }
 
 router.post("/generate/problem-roadmap", async (req, res) => {
@@ -669,6 +682,8 @@ REQUIREMENTS:
             console.error("Roadmap backfill failed:", err.message);
             roadmap = null;
           }
+        } else {
+          await addVideosToRoadmap(roadmap);
         }
         return { ...p, roadmap };
       })

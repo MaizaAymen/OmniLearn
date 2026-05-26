@@ -52,6 +52,9 @@ const isProfileComplete = (user) => {
 
 const needsInstitutionOnboarding = () => {
   const user = getStoredUser();
+  // Super admin (role === "admin") is platform-wide and never belongs to a
+  // single institution, so it must never be routed through institution onboarding.
+  if (user?.role === "admin") return false;
   return user?.plan === "institution" && !user?.institutionId;
 };
 
@@ -59,6 +62,9 @@ const Guard = ({ allow, children, allowIncompleteProfile = false, profileStatus,
   const role = getRole();
   if (!role) return <Navigate to="/auth" replace />;
   if (!allow.includes(role)) return <Navigate to="/" replace />;
+  // Super admin (platform-wide) bypasses institution onboarding AND the
+  // profile-completeness gate — these are end-user flows.
+  if (role === "admin") return children;
   if (!skipInstitutionCheck && needsInstitutionOnboarding()) return <Navigate to="/onboarding/institution" replace />;
   if (!allowIncompleteProfile) {
     if (profileStatus?.loading) {

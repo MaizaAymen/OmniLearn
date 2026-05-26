@@ -378,6 +378,41 @@ function ProblemDescription({
                               {activeRoadmapNode.hint || "(no hint)"}
                             </div>
                           </div>
+
+                          {activeRoadmapNode.videos?.length > 0 && (
+                            <div>
+                              <div className="text-[11px] font-semibold text-base-content/60 mb-1">
+                                Videos
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                {activeRoadmapNode.videos.slice(0, 3).map((v, i) => (
+                                  <a
+                                    key={i}
+                                    href={v.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex gap-2 p-2 rounded-lg border border-base-300 bg-base-200/40 hover:border-error/50"
+                                  >
+                                    {v.thumbnail && (
+                                      <img
+                                        src={v.thumbnail}
+                                        alt=""
+                                        className="w-20 h-12 rounded object-cover shrink-0"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-[11px] font-medium line-clamp-2 leading-tight">
+                                        {v.title}
+                                      </div>
+                                      <div className="text-[10px] text-base-content/50 mt-0.5 truncate">
+                                        {v.channel}
+                                      </div>
+                                    </div>
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-sm text-base-content/40">
