@@ -623,12 +623,8 @@ classDiagram
     <<abstract>>
   }
   class IndependentStudent {
-    institutionId = null
-    plan in {free, pro}
   }
   class InstitutionStudent {
-    institutionId != null
-    plan = institution
   }
   class Teacher {
   }
@@ -670,8 +666,8 @@ classDiagram
   User ..> AuthToken : «returns»
 
   note for Student "Disjoint subtypes:\ndiscriminated by institutionId\n(null vs not-null)"
-  note for IndependentStudent "Signs up alone,\nself-paced learning,\npays for own plan."
-  note for InstitutionStudent "Joins via an institution\ninvite or seat;\nplan inherited from institution."
+  note for IndependentStudent "institutionId = null\nplan in (free, pro)\nSelf-paced, pays own plan."
+  note for InstitutionStudent "institutionId != null\nplan = institution\nEnrolled via an invite/seat."
 ```
 
 > *Figure 13 — Class diagram of Sprint 1.*
