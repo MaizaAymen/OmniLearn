@@ -236,6 +236,195 @@ flowchart LR
 
 *Sign in*, *Sign in with Google* and *Reset password* are reachable from the sign-in screen even though the actor is labelled *Student* — they are the bridge from the visitor scope into the authenticated scope. *Sign out* is a frontend-only action (it clears the JWT and refresh-token cookies); it is shown as a Student use case because it is part of the authenticated experience, but it does not need to include *Authenticate* on the server side.
 
+#### Admin side
+
+The **Admin** is the platform super-user. They inherit every authenticated-user capability (everything in the Student diagram above) and gain four additional platform-wide management areas: **users**, **global curriculum**, **classrooms** and **announcements** — plus a read-only **statistics** dashboard. Authorisation is enforced by the `requireAdmin` middleware (mounted in [UserRoutes.js](Server/src/routes/UserRoutes.js) and [adminRoutes.js](Server/src/routes/adminRoutes.js)), modelled here as the shared `Authenticate (admin role)` `«include»` step.
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  classDef actor   fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef ext     fill:#fef9c3,stroke:#a16207,stroke-width:2px,color:#713f12
+  classDef parent  fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+  classDef uc      fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef shared  fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,stroke-dasharray:4 2,color:#0f172a
+  classDef sys     fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  Admin((Admin)):::actor
+
+  subgraph S["OmniLearn — Admin scope"]
+    direction TB
+
+    %% Parent (manage) use cases
+    MU(["Manage users"]):::parent
+    MC(["Manage global curriculum"]):::parent
+    MK(["Manage classrooms"]):::parent
+    MA(["Manage announcements"]):::parent
+
+    %% Users specialisations
+    LU(["List all users"]):::uc
+    CU(["Create user"]):::uc
+    UU(["Update user"]):::uc
+    DU(["Delete user"]):::uc
+
+    %% Curriculum specialisations
+    MG(["Manage grades"]):::uc
+    MSP(["Manage specialities"]):::uc
+    ML(["Manage levels"]):::uc
+    MCO(["Manage courses"]):::uc
+    MM(["Manage modules"]):::uc
+    MLS(["Manage lessons"]):::uc
+
+    %% Classrooms specialisations
+    CK(["Create classroom"]):::uc
+    UK(["Update classroom"]):::uc
+    DK(["Delete classroom"]):::uc
+    AKS(["Add student to classroom"]):::uc
+    RKS(["Remove student from classroom"]):::uc
+
+    %% Announcements specialisations
+    CAN(["Publish announcement"]):::uc
+    EAN(["Edit announcement"]):::uc
+    DAN(["Delete announcement"]):::uc
+
+    %% Standalone
+    VS(["View platform statistics"]):::uc
+
+    %% Shared
+    AUTH(["Authenticate (admin role)"]):::shared
+    UPF(["Upload lesson file"]):::shared
+  end
+  class S sys
+
+  %% Secondary actors
+  Cloud((Cloudinary)):::ext
+  DB((Database)):::ext
+
+  %% Admin → top-level use cases
+  Admin --- MU
+  Admin --- MC
+  Admin --- MK
+  Admin --- MA
+  Admin --- VS
+
+  %% Generalisation (specialise — solid arrow toward the parent)
+  LU --> MU
+  CU --> MU
+  UU --> MU
+  DU --> MU
+
+  MG  --> MC
+  MSP --> MC
+  ML  --> MC
+  MCO --> MC
+  MM  --> MC
+  MLS --> MC
+
+  CK  --> MK
+  UK  --> MK
+  DK  --> MK
+  AKS --> MK
+  RKS --> MK
+
+  CAN --> MA
+  EAN --> MA
+  DAN --> MA
+
+  %% «include» — always happens
+  MU -. "«include»" .-> AUTH
+  MC -. "«include»" .-> AUTH
+  MK -. "«include»" .-> AUTH
+  MA -. "«include»" .-> AUTH
+  VS -. "«include»" .-> AUTH
+
+  %% «extend» — conditional
+  MLS -. "«extend»" .-> UPF
+
+  %% Secondary actors → use cases they collaborate on
+  UPF --- Cloud
+  VS  --- DB
+```
+
+> *Figure 7.1 — Use-case diagram of Sprint 1 — Admin side.*
+
+**Reading the diagram**
+
+- The Admin actor **inherits all Student capabilities** (sign in, profile, 2FA, plan…); they are not redrawn here to keep the figure focused on what is *Admin-only*.
+- The four parent use cases (`Manage users`, `Manage global curriculum`, `Manage classrooms`, `Manage announcements`) are each specialised by their concrete CRUD operations — solid arrows pointing to the parent.
+- Every Admin-only use case `«include»`s `Authenticate (admin role)`, which models both the JWT check (`authenticate` middleware) and the role check (`requireAdmin`) in one step.
+- `Manage lessons` `«extend»`s to `Upload lesson file` because file upload is optional — a lesson can also be a plain text/markdown body. When it does happen, **Cloudinary** stores the file.
+- `View platform statistics` is a read-only standalone use case; it talks directly to the **Database** secondary actor to aggregate counts of users, classrooms, courses and submissions.
+
+#### Institution Admin side
+
+The **Institution Admin** is scoped to *one* institution: they manage the academic catalogue of their own organisation but never see other institutions' data. The scope boundary is enforced server-side by the `requireInstitutionAdmin` middleware combined with the `router.param("institutionId", …)` guard in [institutionCurriculumRoutes.js](Server/src/routes/institutionCurriculumRoutes.js) — the diagram models this as a shared `Authenticate (institution-admin role + scope)` `«include»` step.
+
+```mermaid
+%%{init: {"theme":"neutral"} }%%
+flowchart LR
+  classDef actor   fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef ext     fill:#fef9c3,stroke:#a16207,stroke-width:2px,color:#713f12
+  classDef parent  fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+  classDef uc      fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef shared  fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,stroke-dasharray:4 2,color:#0f172a
+  classDef sys     fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+
+  IA((Institution Admin)):::actor
+
+  subgraph S["OmniLearn — Institution Admin scope"]
+    direction TB
+
+    %% Parent
+    MIC(["Manage institution curriculum"]):::parent
+
+    %% Curriculum specialisations
+    IG(["Manage institution grades"]):::uc
+    ISP(["Manage institution specialities"]):::uc
+    IL(["Manage institution levels"]):::uc
+
+    %% Standalone use cases
+    SD(["Seed curriculum from defaults"]):::uc
+    VIM(["Consult institution members"]):::uc
+
+    %% Shared
+    AUTH(["Authenticate (institution-admin role + scope)"]):::shared
+  end
+  class S sys
+
+  %% Secondary actors
+  Inst((Institution)):::ext
+  DB((Database)):::ext
+
+  %% IA → top-level use cases
+  IA --- MIC
+  IA --- SD
+  IA --- VIM
+
+  %% Generalisation
+  IG  --> MIC
+  ISP --> MIC
+  IL  --> MIC
+
+  %% «include»
+  MIC -. "«include»" .-> AUTH
+  SD  -. "«include»" .-> AUTH
+  VIM -. "«include»" .-> AUTH
+
+  %% Secondary actors
+  MIC --- Inst
+  SD  --- DB
+  VIM --- Inst
+```
+
+> *Figure 7.2 — Use-case diagram of Sprint 1 — Institution Admin side.*
+
+**Reading the diagram**
+
+- Like the Admin, the Institution Admin **inherits every Student capability**; only institution-scoped powers are drawn here.
+- `Manage institution curriculum` is the single parent use case, specialised into the three scoped CRUD families: **grades**, **specialities** and **levels**. The institution boundary check is implicit in every child — it lives inside the shared `Authenticate (institution-admin role + scope)` step.
+- `Seed curriculum from defaults` is a one-shot bootstrap action (the `POST /:institutionId/seed-from-defaults` route). It is *not* a specialisation of `Manage institution curriculum` because it does not edit an entity — it copies a template tree into the institution. Kept standalone for that reason.
+- `Consult institution members` is the read-only view of the people that belong to the same institution (`institutionId === req.user.institutionId`). The **Institution** secondary actor represents the data perimeter — every authorised query is scoped to it.
+
 ### 2. Sequence Diagrams
 
 #### 2.1. Sequence diagram — "Sign up"
