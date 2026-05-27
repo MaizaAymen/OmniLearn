@@ -103,96 +103,138 @@ flowchart LR
 
 #### Student / authenticated user side
 
-Once authenticated, a student has a much richer surface than a visitor. Three concerns coexist in this scope:
+The student's scope is organised around four **management** use cases — *Manage profile*, *Manage 2FA*, *Manage Google account*, *Manage subscription* — each of which is **specialised** into the concrete actions the user can perform (consult, update, delete, activate, link…). All four management use cases share a common `«include» Authenticate` step (the JWT check performed by the `authenticate` middleware), so authorisation is modelled once and reused.
 
-1. **Identity** — how the student enters the platform (password sign-in, Google sign-in), proves they still own the account (2FA), and leaves it (sign out).
-2. **Profile** — first-time completion enforced by the `Guard` component in `App.jsx`, day-to-day updates (avatar, bio, social URLs), and the destructive *delete account* action.
-3. **Plan & security extras** — resending the verification email when the inbox check was missed, resetting a forgotten password, linking or unlinking the Google account, and upgrading the subscription through Stripe Checkout.
-
-The diagram below maps every Sprint 1 use case available to an authenticated student and the `«include» / «extend»` relations between them. Compared to a naïve view, three details matter:
-
-- *Sign in* only branches into *Verify TOTP code* when `is2FAEnabled = true` on the user record — hence `«extend»`, not `«include»`.
-- *Update profile* only uploads an avatar **if** the user picks a file — `Upload avatar` is therefore an `«extend»`, not an `«include»`.
-- *Enable 2FA*, *Disable 2FA* and *Upgrade plan* are always wired to a confirmation step (TOTP verification or Stripe payment), so those links are `«include»`.
+Around the actor, the diagram also shows the **standalone** use cases that do not fit under a "manage" parent (*Sign in*, *Sign in with Google*, *Sign out*, *Reset password*, *Resend verification email*) and three **secondary actors** the system collaborates with to complete the user's intent: Google OAuth (federated identity), Stripe (paid plans), Cloudinary (avatar storage) and the Mailer (transactional emails).
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
-  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
-  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
-  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+  classDef actor   fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef ext     fill:#fef9c3,stroke:#a16207,stroke-width:2px,color:#713f12
+  classDef parent  fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+  classDef uc      fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef shared  fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,stroke-dasharray:4 2,color:#0f172a
+  classDef sys     fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
   Student((Student)):::actor
 
-  subgraph S["OmniLearn — Sprint 1 (Authenticated user scope)"]
+  subgraph S["OmniLearn — Authenticated user scope (Sprint 1)"]
     direction TB
 
-    %% Identity
-    L(["Sign in"]):::uc
-    LG(["Sign in with Google"]):::uc
-    SO(["Sign out"]):::uc
-    CT(["Verify TOTP code"]):::uc
+    %% Parent (manage) use cases
+    GP(["Manage profile"]):::parent
+    G2(["Manage 2FA"]):::parent
+    GG(["Manage Google account"]):::parent
+    GS(["Manage subscription"]):::parent
 
-    %% Profile
-    VP(["View profile"]):::uc
-    CP(["Complete profile (first login)"]):::uc
+    %% Profile specialisations
+    VP(["Consult profile"]):::uc
+    CP(["Complete profile"]):::uc
     UP(["Update profile"]):::uc
-    UA(["Upload avatar (Cloudinary)"]):::uc
     DP(["Delete account"]):::uc
 
-    %% Account security
-    RP(["Reset password"]):::uc
-    SV(["Resend verification email"]):::uc
+    %% 2FA specialisations
     E2(["Enable 2FA (TOTP + QR)"]):::uc
     D2(["Disable 2FA"]):::uc
+
+    %% Google specialisations
     GL(["Link Google account"]):::uc
     GU(["Unlink Google account"]):::uc
 
-    %% Plan
+    %% Plan specialisations
     VPL(["View current plan"]):::uc
     UPL(["Upgrade plan (Pro / Institution)"]):::uc
-    PAY(["Pay via Stripe Checkout"]):::uc
+
+    %% Standalone use cases
+    L(["Sign in"]):::uc
+    LG(["Sign in with Google"]):::uc
+    SO(["Sign out"]):::uc
+    RP(["Reset password"]):::uc
+    SV(["Resend verification email"]):::uc
+
+    %% Shared / sub use cases
+    AUTH(["Authenticate"]):::shared
+    CT(["Verify TOTP code"]):::shared
+    UA(["Upload avatar"]):::shared
+    PAY(["Pay via Stripe Checkout"]):::shared
   end
   class S sys
 
+  %% Secondary actors
+  Google((Google OAuth)):::ext
+  Stripe((Stripe)):::ext
+  Cloud((Cloudinary)):::ext
+  Mail((Mailer)):::ext
+
+  %% Student → top-level use cases
+  Student --- GP
+  Student --- G2
+  Student --- GG
+  Student --- GS
   Student --- L
   Student --- LG
   Student --- SO
-  Student --- VP
-  Student --- CP
-  Student --- UP
-  Student --- DP
   Student --- RP
   Student --- SV
-  Student --- E2
-  Student --- D2
-  Student --- GL
-  Student --- GU
-  Student --- VPL
-  Student --- UPL
 
-  L   -. "«extend»"  .-> CT
-  LG  -. "«extend»"  .-> CP
-  UP  -. "«extend»"  .-> UA
+  %% Generalisation (specialise — solid arrow toward the parent)
+  VP  --> GP
+  CP  --> GP
+  UP  --> GP
+  DP  --> GP
+  E2  --> G2
+  D2  --> G2
+  GL  --> GG
+  GU  --> GG
+  VPL --> GS
+  UPL --> GS
+
+  %% «include» — always happens
+  GP  -. "«include»" .-> AUTH
+  G2  -. "«include»" .-> AUTH
+  GG  -. "«include»" .-> AUTH
+  GS  -. "«include»" .-> AUTH
+  SO  -. "«include»" .-> AUTH
+  SV  -. "«include»" .-> AUTH
   E2  -. "«include»" .-> CT
   D2  -. "«include»" .-> CT
   UPL -. "«include»" .-> PAY
+
+  %% «extend» — conditional / optional branch
+  L  -. "«extend»" .-> CT
+  UP -. "«extend»" .-> UA
+  LG -. "«extend»" .-> CP
+
+  %% Secondary actors → use cases they collaborate on
+  LG  --- Google
+  GL  --- Google
+  PAY --- Stripe
+  UA  --- Cloud
+  RP  --- Mail
+  SV  --- Mail
 ```
 
 > *Figure 7 — Use-case diagram of Sprint 1 — Student side.*
 
-**Reading the relations**
+**Reading the diagram**
+
+- **Solid arrows toward a "Manage X" parent** are *generalisations*: the child use case is a specialised form of the parent (e.g. *Consult profile*, *Update profile*, *Delete account* and *Complete profile* are four ways of *Managing profile*). The student does not connect to the leaves directly — choosing the parent gives access to all of its children.
+- **Dashed arrows labelled `«include»`** mark a step that always runs as part of the parent: every *Manage X* always includes *Authenticate*; *Enable 2FA* and *Disable 2FA* always include *Verify TOTP code*; *Upgrade plan* always includes *Pay via Stripe Checkout*.
+- **Dashed arrows labelled `«extend»`** mark a conditional branch: *Sign in* only extends to *Verify TOTP code* when `is2FAEnabled = true`; *Update profile* only extends to *Upload avatar* when the user picks a new image; *Sign in with Google* only extends to *Complete profile* on the first OAuth landing (when `Guard` detects missing `firstname` / `lastname` / `username`).
+- **Secondary actors** on the right (Google OAuth, Stripe, Cloudinary, Mailer) are external systems that collaborate with specific use cases — they are not the primary actor but they participate in the realisation of the scenario.
 
 | Link | Type | Meaning |
 |---|---|---|
-| Sign in → Verify TOTP code | `«extend»` | Triggered only when the user has `is2FAEnabled = true`. A user without 2FA never sees this step. |
-| Sign in with Google → Complete profile | `«extend»` | Triggered only on the first OAuth landing, when `firstname`, `lastname` or `username` are still empty and `Guard` redirects to `/complete-profile`. |
-| Update profile → Upload avatar | `«extend»` | The avatar field is optional; the Cloudinary upload only runs when the user picks a new image. |
-| Enable 2FA → Verify TOTP code | `«include»` | Activation is gated by a successful TOTP verification — the server only sets `is2FAEnabled = true` after `POST /auth/2fa/verify` succeeds. |
-| Disable 2FA → Verify TOTP code | `«include»` | Symmetrical: turning 2FA off also requires a fresh code so a stolen session cannot silently weaken the account. |
+| Manage profile / 2FA / Google / subscription → Authenticate | `«include»` | JWT validation by the `authenticate` middleware runs before any authenticated route resolves. |
+| Sign in → Verify TOTP code | `«extend»` | Only when `is2FAEnabled = true`; a user without 2FA never sees this step. |
+| Sign in with Google → Complete profile | `«extend»` | First OAuth landing only, when `Guard` redirects to `/complete-profile`. |
+| Update profile → Upload avatar | `«extend»` | Avatar is optional; Cloudinary upload only runs when an image is picked. |
+| Enable 2FA → Verify TOTP code | `«include»` | The server only sets `is2FAEnabled = true` after `POST /auth/2fa/verify` succeeds. |
+| Disable 2FA → Verify TOTP code | `«include»` | Symmetrical: a fresh code is required so a stolen session cannot silently weaken the account. |
 | Upgrade plan → Pay via Stripe Checkout | `«include»` | Every upgrade path goes through the hosted Stripe Checkout session before the webhook flips `users.plan`. |
 
-*Reset password* is reachable from the sign-in screen even though the actor is labelled *Student* — once the new password is set, the user authenticates and re-enters the authenticated scope. *Sign out* is a pure frontend action (clears the JWT and refresh token from cookies) and therefore has no `«include»` link, but it is still a first-class student capability.
+*Sign in*, *Sign in with Google* and *Reset password* are reachable from the sign-in screen even though the actor is labelled *Student* — they are the bridge from the visitor scope into the authenticated scope. *Sign out* is a frontend-only action (it clears the JWT and refresh-token cookies); it is shown as a Student use case because it is part of the authenticated experience, but it does not need to include *Authenticate* on the server side.
 
 ### 2. Sequence Diagrams
 
