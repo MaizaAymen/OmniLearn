@@ -103,9 +103,7 @@ flowchart LR
 
 #### Student / authenticated user side
 
-The student's scope is organised around four **management** use cases — *Manage profile*, *Manage 2FA*, *Manage Google account*, *Manage subscription* — each of which is **specialised** into the concrete actions the user can perform (consult, update, delete, activate, link…). All four management use cases share a common `«include» Authenticate` step (the JWT check performed by the `authenticate` middleware), so authorisation is modelled once and reused.
-
-Around the actor, the diagram also shows the **standalone** use cases that do not fit under a "manage" parent (*Sign in*, *Sign in with Google*, *Sign out*, *Reset password*, *Resend verification email*) and three **secondary actors** the system collaborates with to complete the user's intent: Google OAuth (federated identity), Stripe (paid plans), Cloudinary (avatar storage) and the Mailer (transactional emails).
+The Student manages profile, 2FA, Google account and subscription; all *Manage X* parents share the same *Authenticate* check. Standalone actions (sign in, sign out, reset password, resend verification) sit outside, with secondary actors Google OAuth, Stripe, Cloudinary and Mailer.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -217,28 +215,11 @@ flowchart LR
 
 > *Figure 7 — Use-case diagram of Sprint 1 — Student side.*
 
-**Reading the diagram**
-
-- **Solid arrows toward a "Manage X" parent** are *generalisations*: the child use case is a specialised form of the parent (e.g. *Consult profile*, *Update profile*, *Delete account* and *Complete profile* are four ways of *Managing profile*). The student does not connect to the leaves directly — choosing the parent gives access to all of its children.
-- **Dashed arrows labelled `«include»`** mark a step that always runs as part of the parent: every *Manage X* always includes *Authenticate*; *Enable 2FA* and *Disable 2FA* always include *Verify TOTP code*; *Upgrade plan* always includes *Pay via Stripe Checkout*.
-- **Dashed arrows labelled `«extend»`** mark a conditional branch: *Sign in* only extends to *Verify TOTP code* when `is2FAEnabled = true`; *Update profile* only extends to *Upload avatar* when the user picks a new image; *Sign in with Google* only extends to *Complete profile* on the first OAuth landing (when `Guard` detects missing `firstname` / `lastname` / `username`).
-- **Secondary actors** on the right (Google OAuth, Stripe, Cloudinary, Mailer) are external systems that collaborate with specific use cases — they are not the primary actor but they participate in the realisation of the scenario.
-
-| Link | Type | Meaning |
-|---|---|---|
-| Manage profile / 2FA / Google / subscription → Authenticate | `«include»` | JWT validation by the `authenticate` middleware runs before any authenticated route resolves. |
-| Sign in → Verify TOTP code | `«extend»` | Only when `is2FAEnabled = true`; a user without 2FA never sees this step. |
-| Sign in with Google → Complete profile | `«extend»` | First OAuth landing only, when `Guard` redirects to `/complete-profile`. |
-| Update profile → Upload avatar | `«extend»` | Avatar is optional; Cloudinary upload only runs when an image is picked. |
-| Enable 2FA → Verify TOTP code | `«include»` | The server only sets `is2FAEnabled = true` after `POST /auth/2fa/verify` succeeds. |
-| Disable 2FA → Verify TOTP code | `«include»` | Symmetrical: a fresh code is required so a stolen session cannot silently weaken the account. |
-| Upgrade plan → Pay via Stripe Checkout | `«include»` | Every upgrade path goes through the hosted Stripe Checkout session before the webhook flips `users.plan`. |
-
-*Sign in*, *Sign in with Google* and *Reset password* are reachable from the sign-in screen even though the actor is labelled *Student* — they are the bridge from the visitor scope into the authenticated scope. *Sign out* is a frontend-only action (it clears the JWT and refresh-token cookies); it is shown as a Student use case because it is part of the authenticated experience, but it does not need to include *Authenticate* on the server side.
+Solid arrows are generalisations (child → parent), `«include»` marks always-on steps (Authenticate, Verify TOTP, Stripe Checkout) and `«extend»` marks conditional ones (TOTP only if 2FA on, avatar only if picked, Complete profile only on first Google sign-in).
 
 #### Admin side
 
-The **Admin** is the platform super-user. They inherit every authenticated-user capability (everything in the Student diagram above) and gain four additional platform-wide management areas: **users**, **global curriculum**, **classrooms** and **announcements** — plus a read-only **statistics** dashboard. Authorisation is enforced by the `requireAdmin` middleware (mounted in [UserRoutes.js](Server/src/routes/UserRoutes.js) and [adminRoutes.js](Server/src/routes/adminRoutes.js)), modelled here as the shared `Authenticate (admin role)` `«include»` step.
+The Admin manages users, the global curriculum, classrooms and announcements, and reads platform statistics. All actions go through the shared *Authenticate (admin role)* check.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -347,17 +328,11 @@ flowchart LR
 
 > *Figure 7.1 — Use-case diagram of Sprint 1 — Admin side.*
 
-**Reading the diagram**
-
-- The Admin actor **inherits all Student capabilities** (sign in, profile, 2FA, plan…); they are not redrawn here to keep the figure focused on what is *Admin-only*.
-- The four parent use cases (`Manage users`, `Manage global curriculum`, `Manage classrooms`, `Manage announcements`) are each specialised by their concrete CRUD operations — solid arrows pointing to the parent.
-- Every Admin-only use case `«include»`s `Authenticate (admin role)`, which models both the JWT check (`authenticate` middleware) and the role check (`requireAdmin`) in one step.
-- `Manage lessons` `«extend»`s to `Upload lesson file` because file upload is optional — a lesson can also be a plain text/markdown body. When it does happen, **Cloudinary** stores the file.
-- `View platform statistics` is a read-only standalone use case; it talks directly to the **Database** secondary actor to aggregate counts of users, classrooms, courses and submissions.
+The Admin inherits every Student capability; only Admin-only powers are drawn. *Manage lessons* extends to *Upload lesson file* (optional, stored on Cloudinary).
 
 #### Institution Admin side
 
-The **Institution Admin** is scoped to *one* institution: they manage the academic catalogue of their own organisation but never see other institutions' data. The scope boundary is enforced server-side by the `requireInstitutionAdmin` middleware combined with the `router.param("institutionId", …)` guard in [institutionCurriculumRoutes.js](Server/src/routes/institutionCurriculumRoutes.js) — the diagram models this as a shared `Authenticate (institution-admin role + scope)` `«include»` step.
+The Institution Admin manages the academic catalogue (grades, specialities, levels) of a single institution. Every action is scoped to their own institution through the shared *Authenticate (institution-admin role + scope)* check.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -418,12 +393,7 @@ flowchart LR
 
 > *Figure 7.2 — Use-case diagram of Sprint 1 — Institution Admin side.*
 
-**Reading the diagram**
-
-- Like the Admin, the Institution Admin **inherits every Student capability**; only institution-scoped powers are drawn here.
-- `Manage institution curriculum` is the single parent use case, specialised into the three scoped CRUD families: **grades**, **specialities** and **levels**. The institution boundary check is implicit in every child — it lives inside the shared `Authenticate (institution-admin role + scope)` step.
-- `Seed curriculum from defaults` is a one-shot bootstrap action (the `POST /:institutionId/seed-from-defaults` route). It is *not* a specialisation of `Manage institution curriculum` because it does not edit an entity — it copies a template tree into the institution. Kept standalone for that reason.
-- `Consult institution members` is the read-only view of the people that belong to the same institution (`institutionId === req.user.institutionId`). The **Institution** secondary actor represents the data perimeter — every authorised query is scoped to it.
+The Institution Admin inherits every Student capability; only institution-scoped powers are drawn. *Seed curriculum from defaults* is standalone because it copies a template instead of editing an entity.
 
 ### 2. Sequence Diagrams
 
