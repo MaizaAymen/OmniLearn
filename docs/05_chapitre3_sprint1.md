@@ -103,7 +103,17 @@ flowchart LR
 
 #### Student / authenticated user side
 
-Once logged in, a student can manage their profile (view, update, delete), reset their password and enable 2FA for extra security.
+Once authenticated, a student has a much richer surface than a visitor. Three concerns coexist in this scope:
+
+1. **Identity** — how the student enters the platform (password sign-in, Google sign-in), proves they still own the account (2FA), and leaves it (sign out).
+2. **Profile** — first-time completion enforced by the `Guard` component in `App.jsx`, day-to-day updates (avatar, bio, social URLs), and the destructive *delete account* action.
+3. **Plan & security extras** — resending the verification email when the inbox check was missed, resetting a forgotten password, linking or unlinking the Google account, and upgrading the subscription through Stripe Checkout.
+
+The diagram below maps every Sprint 1 use case available to an authenticated student and the `«include» / «extend»` relations between them. Compared to a naïve view, three details matter:
+
+- *Sign in* only branches into *Verify TOTP code* when `is2FAEnabled = true` on the user record — hence `«extend»`, not `«include»`.
+- *Update profile* only uploads an avatar **if** the user picks a file — `Upload avatar` is therefore an `«extend»`, not an `«include»`.
+- *Enable 2FA*, *Disable 2FA* and *Upgrade plan* are always wired to a confirmation step (TOTP verification or Stripe payment), so those links are `«include»`.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -116,29 +126,73 @@ flowchart LR
 
   subgraph S["OmniLearn — Sprint 1 (Authenticated user scope)"]
     direction TB
+
+    %% Identity
     L(["Sign in"]):::uc
-    VP(["View profile"]):::uc
-    UP(["Update profile"]):::uc
-    DP(["Delete account"]):::uc
-    R(["Reset password"]):::uc
-    T(["Enable 2FA (TOTP + QR)"]):::uc
-    U(["Upload avatar (Cloudinary)"]):::uc
+    LG(["Sign in with Google"]):::uc
+    SO(["Sign out"]):::uc
     CT(["Verify TOTP code"]):::uc
+
+    %% Profile
+    VP(["View profile"]):::uc
+    CP(["Complete profile (first login)"]):::uc
+    UP(["Update profile"]):::uc
+    UA(["Upload avatar (Cloudinary)"]):::uc
+    DP(["Delete account"]):::uc
+
+    %% Account security
+    RP(["Reset password"]):::uc
+    SV(["Resend verification email"]):::uc
+    E2(["Enable 2FA (TOTP + QR)"]):::uc
+    D2(["Disable 2FA"]):::uc
+    GL(["Link Google account"]):::uc
+    GU(["Unlink Google account"]):::uc
+
+    %% Plan
+    VPL(["View current plan"]):::uc
+    UPL(["Upgrade plan (Pro / Institution)"]):::uc
+    PAY(["Pay via Stripe Checkout"]):::uc
   end
   class S sys
 
   Student --- L
+  Student --- LG
+  Student --- SO
   Student --- VP
+  Student --- CP
   Student --- UP
   Student --- DP
-  Student --- R
-  Student --- T
-  UP -. "«include»" .-> U
-  L  -. "«extend»"  .-> CT
-  T  -. "«include»" .-> CT
+  Student --- RP
+  Student --- SV
+  Student --- E2
+  Student --- D2
+  Student --- GL
+  Student --- GU
+  Student --- VPL
+  Student --- UPL
+
+  L   -. "«extend»"  .-> CT
+  LG  -. "«extend»"  .-> CP
+  UP  -. "«extend»"  .-> UA
+  E2  -. "«include»" .-> CT
+  D2  -. "«include»" .-> CT
+  UPL -. "«include»" .-> PAY
 ```
 
 > *Figure 7 — Use-case diagram of Sprint 1 — Student side.*
+
+**Reading the relations**
+
+| Link | Type | Meaning |
+|---|---|---|
+| Sign in → Verify TOTP code | `«extend»` | Triggered only when the user has `is2FAEnabled = true`. A user without 2FA never sees this step. |
+| Sign in with Google → Complete profile | `«extend»` | Triggered only on the first OAuth landing, when `firstname`, `lastname` or `username` are still empty and `Guard` redirects to `/complete-profile`. |
+| Update profile → Upload avatar | `«extend»` | The avatar field is optional; the Cloudinary upload only runs when the user picks a new image. |
+| Enable 2FA → Verify TOTP code | `«include»` | Activation is gated by a successful TOTP verification — the server only sets `is2FAEnabled = true` after `POST /auth/2fa/verify` succeeds. |
+| Disable 2FA → Verify TOTP code | `«include»` | Symmetrical: turning 2FA off also requires a fresh code so a stolen session cannot silently weaken the account. |
+| Upgrade plan → Pay via Stripe Checkout | `«include»` | Every upgrade path goes through the hosted Stripe Checkout session before the webhook flips `users.plan`. |
+
+*Reset password* is reachable from the sign-in screen even though the actor is labelled *Student* — once the new password is set, the user authenticates and re-enters the authenticated scope. *Sign out* is a pure frontend action (clears the JWT and refresh token from cookies) and therefore has no `«include»` link, but it is still a first-class student capability.
 
 ### 2. Sequence Diagrams
 
