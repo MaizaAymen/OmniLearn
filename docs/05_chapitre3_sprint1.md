@@ -582,7 +582,7 @@ flowchart TD
 
 ### 4. Class Diagram
 
-An abstract `User` holds the auth, profile and plan fields, with four role subclasses (Student, Teacher, Admin, InstitutionAdmin). `AuthToken` is the JWT returned by `login()` — it lives only in memory and is never saved in the database.
+An abstract `User` holds the auth, profile and plan fields, with four role subclasses (Student, Teacher, Admin, InstitutionAdmin). `Student` is further specialised into `IndependentStudent` (free/pro plan, no institution) and `InstitutionStudent` (belongs to one `Institution`). `AuthToken` is the JWT returned by `login()` — it lives only in memory and is never saved in the database.
 
 ```mermaid
 classDiagram
@@ -620,12 +620,33 @@ classDiagram
   }
 
   class Student {
+    <<abstract>>
+  }
+  class IndependentStudent {
+    institutionId = null
+    plan in {free, pro}
+  }
+  class InstitutionStudent {
+    institutionId != null
+    plan = institution
   }
   class Teacher {
   }
   class Admin {
   }
   class InstitutionAdmin {
+  }
+
+  class Institution {
+    +UUID id
+    +string name
+    +UUID adminUserId
+    +int seatLimit
+    +enum type  (school|university|training_center|company)
+    +string logo
+    +string description
+    +string contactEmail
+    +bool isActive
   }
 
   class AuthToken {
@@ -635,18 +656,27 @@ classDiagram
     +Date expiresAt
   }
 
-  Student          --|> User
-  Teacher          --|> User
-  Admin            --|> User
-  InstitutionAdmin --|> User
+  Student            --|> User
+  Teacher            --|> User
+  Admin              --|> User
+  InstitutionAdmin   --|> User
+  IndependentStudent --|> Student
+  InstitutionStudent --|> Student
+
+  Institution "1" *-- "1..*" InstitutionStudent : enrols
+  Institution "1" *-- "0..*" Teacher            : employs
+  Institution "1" --  "1"    InstitutionAdmin   : owned by
 
   User ..> AuthToken : «returns»
 
-  note for User "Single-table inheritance:\nrole discriminator on `users` table"
-  note for Student "Role-specific methods\narrive in Sprint 2+"
+  note for Student "Disjoint subtypes:\ndiscriminated by institutionId\n(null vs not-null)"
+  note for IndependentStudent "Signs up alone,\nself-paced learning,\npays for own plan."
+  note for InstitutionStudent "Joins via an institution\ninvite or seat;\nplan inherited from institution."
 ```
 
 > *Figure 13 — Class diagram of Sprint 1.*
+
+The split between `IndependentStudent` and `InstitutionStudent` is discriminated by `institutionId` (null vs not-null) and aligned with the `plan` enum: an independent student is on `free` or `pro`, an institution student is on the `institution` plan and consumes one seat from `Institution.seatLimit`.
 
 ### 5. C4 Container view
 
