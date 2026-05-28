@@ -535,15 +535,52 @@ flowchart TB
 ### 4. Class Diagram
 
 This diagram shows the main data tables added in Sprint 3 (classes, courses, assignments, messages, notifications) and how they are linked.
-It explains how a teacher, a class, and its students share content and chat together.
+The `User` entity is specialized by **role** — `Teacher`, `Student`, `InstitutionAdmin` and `Admin` — because every Sprint 3 association
+is role-driven: only a teacher *teaches* a class and *authors* its catalog / announcements, only a student *enrolls* and *submits*, while
+messaging and notifications stay on the abstract `User` since they belong to every authenticated actor regardless of role.
 
 ```mermaid
 classDiagram
+  %% ── Actor hierarchy (role discriminator) ─────────────────
   class User {
+    <<abstract>>
     +UUID id
-    +enum role
+    +string email
+    +string fullName
+    +Role role
     +UUID institutionId
   }
+  class Role {
+    <<enumeration>>
+    admin
+    institution_admin
+    teacher
+    student
+  }
+  class Teacher {
+    +createClass()
+    +publishAssignment()
+    +postAnnouncement()
+  }
+  class Student {
+    +joinClass(code)
+    +submitAssignment()
+  }
+  class InstitutionAdmin {
+    +managePlan()
+    +manageMembers()
+  }
+  class Admin {
+    +manageInstitutions()
+  }
+
+  User <|-- Teacher          : role = teacher
+  User <|-- Student          : role = student
+  User <|-- InstitutionAdmin : role = institution_admin
+  User <|-- Admin            : role = admin
+  User ..> Role              : typed by
+
+  %% ── Domain entities ──────────────────────────────────────
   class Class {
     +UUID id
     +string name
@@ -617,20 +654,28 @@ classDiagram
     +Date readAt
   }
 
-  User "1"  --> "*" Class       : teaches
-  User "1"  --> "*" Enrollment  : enrolls
-  Class "1" --> "*" Enrollment  : has
-  Class "1" --> "*" Course      : contains
-  Course "1" --> "*" Module     : contains
-  Module "1" --> "*" Lesson     : contains
-  Module "1" --> "*" ClassAssignment : produces
-  Class "1" --> "*" Announcement     : has
-  User  "1" --> "*" Conversation     : participates
-  Conversation "1" --> "*" Message   : holds
-  User  "1" --> "*" Notification     : receives
+  %% ── Role-specific associations ──────────────────────────
+  Teacher "1"  --> "*" Class           : teaches
+  Teacher "1"  --> "*" Course          : authors
+  Teacher "1"  --> "*" Announcement    : posts
+  Student "1"  --> "*" Enrollment      : enrolls
+
+  %% ── Structural associations ─────────────────────────────
+  Class   "1" --> "*" Enrollment       : has
+  Class   "1" --> "*" Course           : contains
+  Course  "1" --> "*" Module           : contains
+  Module  "1" --> "*" Lesson           : contains
+  Module  "1" --> "*" ClassAssignment  : produces
+  Class   "1" --> "*" Announcement     : broadcasts
+
+  %% ── Cross-role associations (any authenticated user) ───
+  User    "1" --> "*" Conversation     : participates
+  User    "1" --> "*" Message          : sends
+  Conversation "1" --> "*" Message     : holds
+  User    "1" --> "*" Notification     : receives
 ```
 
-> *Figure 44 — Class diagram of Sprint 3.*
+> *Figure 44 — Class diagram of Sprint 3 (with role specialization of `User`).*
 
 ### 5. C4 Container view
 
