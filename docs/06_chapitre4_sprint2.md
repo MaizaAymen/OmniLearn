@@ -500,29 +500,75 @@ flowchart TD
 
 ### 4. Class Diagram
 
-This diagram shows the main data classes added in Sprint 2.
-A user has one roadmap and many problems, submissions and problem sets.
+This diagram shows the data classes **and the role-specific operations** added in Sprint 2.
+`User` is specialised into two roles — `Student` and `SuperAdmin` — each exposing the methods
+they actually use this sprint. The `plan` attribute (`free` / `pro` / `institution`) drives
+the catalogue filtering done by `FreeTier` / `ProTier` toggles on `Problem`.
 
 ```mermaid
 classDiagram
+  direction LR
+
+  %% ── Base actor ────────────────────────────────
   class User {
+    <<abstract>>
     +UUID id
+    +string email
+    +enum role (student | super_admin)
+    +enum plan (free | pro | institution)
+    +UUID institutionId
+    +Date createdAt
+    +authenticate() Token
+  }
+
+  %% ── Student role (Sprint 2 operations) ───────
+  class Student {
+    <<role>>
     +string careerGoal
     +string[] interests
     +string[] languages
+    +string[] weaknesses
     +int roadmapProgress
+    +submitOnboarding(profile) void
+    +generateRoadmap() SavedRoadmap
+    +viewRoadmapGraph() Graph
+    +updateNodeStatus(nodeId, status) void
+    +trackProgress() int
+    +earnCertificate() PDF
+    +browseProblems() Problem[]
+    +openProblem(id) Problem
+    +runCode(src, lang) RunResult
+    +submitSolution(src, lang) CodeSubmission
+    +viewCodingDashboard() Stats
   }
 
+  %% ── Super Admin role (Sprint 2 operations) ───
+  class SuperAdmin {
+    <<role>>
+    +listProblems(filter) Problem[]
+    +createProblem(data) Problem
+    +aiGenerateProblem(topic) Problem
+    +updateProblem(id, data) Problem
+    +deleteProblem(id) void
+    +toggleFreeTier(id, value) Problem
+    +toggleProTier(id, value) Problem
+    +importProblems(file) int
+    +exportProblems() JSON
+    +publishProblem(id, status) Problem
+  }
+
+  %% ── Domain entities ──────────────────────────
   class Problem {
     +UUID id
     +string title
     +text statement
-    +enum difficulty (easy|medium|hard)
+    +enum difficulty (easy | medium | hard)
     +string[] tags
     +string language
     +text expectedOutput
     +bool isFreeTier
     +bool isProTier
+    +enum status (draft | review | published | archived)
     +UUID institutionId
     +UUID createdBy
   }
@@ -533,17 +579,32 @@ classDiagram
     +UUID problemId
     +text sourceCode
     +string language
-    +enum verdict (pending|accepted|wrong_answer|runtime_error)
+    +enum verdict (pending | accepted | wrong_answer | runtime_error)
     +int runtimeMs
+    +text stdout
+    +text stderr
     +Date createdAt
   }
 
   class SavedRoadmap {
     +UUID id
     +UUID userId
+    +string title
     +JSON graphJson
-    +int  progress
+    +int progress
     +bool isActive
+    +Date completedAt
+  }
+
+  class RoadmapNode {
+    +UUID id
+    +UUID roadmapId
+    +string topic
+    +int level
+    +enum status (pending | in_progress | completed)
+    +JSON resources
+    +JSON quiz
+    +int quizScore
   }
 
   class StudentProblemSet {
@@ -553,14 +614,33 @@ classDiagram
     +string generatedFromGoal
   }
 
-  User "1" --> "*" Problem : createdBy
-  User "1" --> "*" CodeSubmission : submits
-  Problem "1" --> "*" CodeSubmission : receives
-  User "1" --> "*" SavedRoadmap : owns
-  User "1" --> "*" StudentProblemSet : owns
+  class Certificate {
+    +UUID id
+    +UUID userId
+    +UUID roadmapId
+    +string studentName
+    +string roadmapTitle
+    +Date issuedAt
+    +string pdfUrl
+  }
+
+  %% ── Inheritance (roles) ──────────────────────
+  User <|-- Student
+  User <|-- SuperAdmin
+
+  %% ── Associations (Sprint 2 behaviour) ────────
+  Student      "1" --> "0..*" SavedRoadmap       : owns
+  SavedRoadmap "1" --> "1..*" RoadmapNode        : contains
+  Student      "1" --> "0..1" Certificate        : earns
+  SavedRoadmap "1" --> "0..1" Certificate        : produces
+  Student      "1" --> "0..*" CodeSubmission     : submits
+  Student      "1" --> "0..*" StudentProblemSet  : owns
+  Problem      "1" --> "0..*" CodeSubmission     : receives
+  SuperAdmin   "1" --> "0..*" Problem            : manages / createdBy
+  StudentProblemSet "*" --> "*" Problem          : references
 ```
 
-> *Figure 28 — Class diagram of Sprint 2.*
+> *Figure 28 — Class diagram of Sprint 2 (roles + behaviour).*
 
 ### 5. C4 Container view
 
