@@ -228,19 +228,14 @@ flowchart LR
 
 #### Teacher side
 
-This diagram covers the full teacher surface of Sprint 3: classroom CRUD
-(create / rename / archive / delete, with an auto-generated invite code bound
-to Grade / Speciality / Level), roster management (invite by selection,
-remove a student), the catalog hierarchy (Course → Module → Lesson with
-optional PDF upload), the per-classroom problem bank (manual creation, AI
-generation, fork from the global bank, deletion), the assignment workflow
-(draft → attach problems from up to three banks → configure due date / max
-attempts / language lock / AI lock → publish — which automatically notifies
-the enrolled students — then track per-student completion, inspect a
-student's latest submissions per problem, and read aggregate statistics),
-and the announcements feed (post / edit / delete). Messaging and
-notifications are inherited from `Authenticated User` exactly as for the
-student.
+This diagram covers the teacher surface of Sprint 3 — classroom CRUD with an
+auto-generated invite code bound to Grade / Speciality / Level, student
+roster (invite + remove), the Course → Module → Lesson catalog with PDF
+upload, the per-classroom problem bank, the assignment workflow
+(draft → publish → notify → track) and the announcements feed. Messaging and
+notifications are inherited from `Authenticated User` exactly as on the
+student side. To keep the diagram compact, the relations are restricted to
+direct associations and `«include»` only.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -266,8 +261,7 @@ flowchart LR
       CreateClass(["Create classroom"]):::uc
       GenCode(["Generate unique<br/>invite code"]):::uc
       BindCurriculum(["Bind Grade /<br/>Speciality / Level"]):::uc
-      RenameClass(["Rename / archive<br/>classroom"]):::uc
-      DeleteClass(["Delete classroom"]):::uc
+      ManageClass(["Rename / archive /<br/>delete classroom"]):::uc
       ListMyCls(["View my<br/>classrooms"]):::uc
       OpenCls(["Open classroom<br/>workspace"]):::uc
     end
@@ -275,62 +269,45 @@ flowchart LR
     %% ── Roster management ───────────────────────────────────────
     subgraph TRos["Student roster"]
       direction TB
-      ListStud(["List enrolled<br/>students"]):::uc
+      ManageRoster(["Manage student roster<br/>(list / remove)"]):::uc
       InviteSelected(["Invite students<br/>(picker)"]):::uc
       NotifyInvited(["Notify invited<br/>students"]):::uc
-      RemoveStud(["Remove a student<br/>from class"]):::uc
     end
 
     %% ── Catalog (courses / modules / lessons) ──────────────────
     subgraph TCat["Course catalog"]
       direction TB
-      CRUDCourse(["Manage courses<br/>(CRUD)"]):::uc
-      CRUDModule(["Manage modules<br/>(CRUD)"]):::uc
-      CRUDLesson(["Manage lessons<br/>(CRUD)"]):::uc
-      UploadPdf(["Upload lesson<br/>PDF"]):::uc
+      ManageCatalog(["Manage course catalog"]):::uc
+      CRUDModule(["Manage modules"]):::uc
+      CRUDLesson(["Manage lessons"]):::uc
+      UploadPdf(["Upload lesson PDF"]):::uc
     end
 
     %% ── Class problem bank ─────────────────────────────────────
-    subgraph TBank["Classroom problem bank"]
-      direction TB
-      ViewBank(["View class<br/>problem bank"]):::uc
-      AddBank(["Add problem<br/>manually"]):::uc
-      AIBank(["Generate problem<br/>with AI"]):::uc
-      ForkBank(["Fork from<br/>global bank"]):::uc
-      DelBank(["Delete problem<br/>from bank"]):::uc
-    end
+    ManageBank(["Manage classroom<br/>problem bank<br/>(manual / AI / fork / delete)"]):::uc
 
     %% ── Assignments ────────────────────────────────────────────
     subgraph TAss["Assignment workflow"]
       direction TB
       CreateAss(["Create assignment<br/>(draft)"]):::uc
-      PickProblems(["Pick problems<br/>(global+inst+class)"]):::uc
-      SetDueMax(["Set due date<br/>& max attempts"]):::uc
-      LockLang(["Lock language"]):::uc
-      LockMentor(["Lock AI Mentor"]):::uc
-      LockCorrect(["Lock AI<br/>correction"]):::uc
-      EditAss(["Edit assignment"]):::uc
+      PickProblems(["Pick problems<br/>(global + inst + class)"]):::uc
+      ConfigAss(["Set due date,<br/>max attempts &<br/>AI / language locks"]):::uc
+      ManageAss(["Edit / delete<br/>assignment"]):::uc
       PublishAss(["Publish /<br/>unpublish"]):::uc
       NotifyAss(["Notify enrolled<br/>students"]):::uc
-      DeleteAss(["Delete assignment"]):::uc
-      ViewRoster(["View per-student<br/>completion roster"]):::uc
+      ViewRoster(["View completion<br/>roster"]):::uc
       ViewSubs(["View a student's<br/>submissions"]):::uc
       ViewStats(["View assignment<br/>statistics"]):::uc
     end
 
     %% ── Announcements ──────────────────────────────────────────
-    subgraph TAnn["Announcements"]
-      direction TB
-      PostAnn(["Post announcement<br/>to class"]):::uc
-      EditAnn(["Edit announcement"]):::uc
-      DeleteAnn(["Delete announcement"]):::uc
-    end
+    ManageAnn(["Manage class<br/>announcements<br/>(post / edit / delete)"]):::uc
 
     %% ── Messaging / notifications (inherited) ─────────────────
     subgraph TMsg["Messaging & notifications<br/>(inherited from Authenticated User)"]
       direction TB
       TConv(["Use conversations<br/>(private + groups)"]):::uc
-      TGroupAdmin(["Administer owned<br/>groups (rename / ban /<br/>invite / delete)"]):::uc
+      TGroupAdmin(["Administer owned groups<br/>(rename / ban /<br/>invite / delete)"]):::uc
       TNot(["Use notifications<br/>panel"]):::uc
       TRecvMsg(["Receive real-time<br/>message"]):::uc
       TRecvNot(["Receive real-time<br/>notification"]):::uc
@@ -340,20 +317,19 @@ flowchart LR
 
   %% ── Teacher direct associations ────────────────────────────
   Teacher --- CreateClass
+  Teacher --- ManageClass
   Teacher --- ListMyCls
   Teacher --- OpenCls
-  Teacher --- ListStud
+  Teacher --- ManageRoster
   Teacher --- InviteSelected
-  Teacher --- RemoveStud
-  Teacher --- CRUDCourse
-  Teacher --- ViewBank
+  Teacher --- ManageCatalog
+  Teacher --- ManageBank
   Teacher --- CreateAss
-  Teacher --- EditAss
+  Teacher --- ManageAss
   Teacher --- PublishAss
-  Teacher --- DeleteAss
   Teacher --- ViewRoster
   Teacher --- ViewStats
-  Teacher --- PostAnn
+  Teacher --- ManageAnn
 
   %% ── AuthUser-inherited associations ────────────────────────
   AuthUser --- TConv
@@ -368,40 +344,17 @@ flowchart LR
   NotifyInvited --- Student2
   NotifyAss     --- Student2
 
-  %% ── Classroom relations ───────────────────────────────────
-  CreateClass -. "«include»" .-> GenCode
-  CreateClass -. "«include»" .-> BindCurriculum
-  RenameClass -. "«extend»"  .-> OpenCls
-  DeleteClass -. "«extend»"  .-> OpenCls
-
-  %% ── Roster relations ──────────────────────────────────────
+  %% ── «include» relations ────────────────────────────────────
+  CreateClass    -. "«include»" .-> GenCode
+  CreateClass    -. "«include»" .-> BindCurriculum
   InviteSelected -. "«include»" .-> NotifyInvited
-  RemoveStud     -. "«extend»"  .-> ListStud
-
-  %% ── Catalog nesting ───────────────────────────────────────
-  CRUDCourse -. "«include»" .-> CRUDModule
-  CRUDModule -. "«include»" .-> CRUDLesson
-  UploadPdf  -. "«extend»"  .-> CRUDLesson
-
-  %% ── Problem-bank relations ───────────────────────────────
-  AddBank  -. "«extend»" .-> ViewBank
-  AIBank   -. "«extend»" .-> ViewBank
-  ForkBank -. "«extend»" .-> ViewBank
-  DelBank  -. "«extend»" .-> ViewBank
-
-  %% ── Assignment relations ─────────────────────────────────
-  CreateAss   -. "«include»" .-> PickProblems
-  CreateAss   -. "«include»" .-> SetDueMax
-  LockLang    -. "«extend»"  .-> CreateAss
-  LockMentor  -. "«extend»"  .-> CreateAss
-  LockCorrect -. "«extend»"  .-> CreateAss
-  PublishAss  -. "«include»" .-> NotifyAss
-  ViewSubs    -. "«extend»"  .-> ViewRoster
-  PickProblems -. "«extend»" .-> ViewBank
-
-  %% ── Announcement relations ──────────────────────────────
-  EditAnn   -. "«extend»" .-> PostAnn
-  DeleteAnn -. "«extend»" .-> PostAnn
+  ManageCatalog  -. "«include»" .-> CRUDModule
+  CRUDModule     -. "«include»" .-> CRUDLesson
+  CRUDLesson     -. "«include»" .-> UploadPdf
+  CreateAss      -. "«include»" .-> PickProblems
+  CreateAss      -. "«include»" .-> ConfigAss
+  PublishAss     -. "«include»" .-> NotifyAss
+  ViewRoster     -. "«include»" .-> ViewSubs
 ```
 
 > *Figure 39 — Use-case diagram of Sprint 3 — Teacher side.*
