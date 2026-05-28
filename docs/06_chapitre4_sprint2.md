@@ -236,39 +236,67 @@ flowchart LR
 
 #### Super admin side
 
-This diagram shows what the super admin can do.
-They create, edit and delete problems, switch Free/Pro tiers, and import or export the catalogue.
+This diagram shows the super admin's Sprint 2 scope: the problem catalogue. The admin lists problems
+(filtered by lifecycle status), creates them manually **or** asks the LLM to draft them, edits and
+deletes them, drives the publish lifecycle (`draft → review → published → archived`), and toggles
+each problem's Free-tier / Pro-tier visibility. Solid blue = `«include»`, dashed pink = `«extend»`.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
   classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef ext   fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#78350f
   classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef inc   fill:#dbeafe,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a
+  classDef ex    fill:#fce7f3,stroke:#be185d,stroke-width:1.5px,color:#831843
   classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
   Admin((Super Admin)):::actor
+  Groq(("Groq LLM")):::ext
 
-  subgraph S["OmniLearn — Sprint 2 (Catalogue management)"]
+  subgraph S["OmniLearn — Sprint 2 · Catalogue management"]
     direction TB
-    Create(["Create problem"]):::uc
-    Read(["List / read problems"]):::uc
+
+    Browse(["List problems"]):::uc
+    Filter(["Filter by status<br/>(all · draft · review · published · archived)"]):::ex
+    Dup(["Check duplicate title"]):::ex
+
+    Create(["Create problem manually"]):::uc
+    AIGen(["AI-generate problem(s)<br/>from a topic"]):::uc
+    LLM(["Call Groq LLM<br/>(schema-constrained JSON)"]):::inc
+
     Update(["Update problem"]):::uc
     Delete(["Delete problem"]):::uc
-    Free(["Toggle isFreeTier"]):::uc
-    Pro(["Toggle isProTier"]):::uc
-    Imp(["Import problems (JSON)"]):::uc
-    Exp(["Export problems (JSON)"]):::uc
+
+    Pub(["Change publish status"]):::uc
+    Notify(["Notify all users on publish"]):::inc
+
+    Free(["Toggle Free-tier"]):::uc
+    Pro(["Toggle Pro-tier"]):::uc
   end
   class S sys
 
+  %% ── Actor associations ─────────────────────
+  Admin --- Browse
   Admin --- Create
-  Admin --- Read
+  Admin --- AIGen
   Admin --- Update
   Admin --- Delete
+  Admin --- Pub
   Admin --- Free
   Admin --- Pro
-  Admin --- Imp
-  Admin --- Exp
+
+  %% ── «include» ──────────────────────────────
+  AIGen -- "«include»" --> LLM
+  Pub   -- "«include»" --> Notify
+
+  %% ── «extend» ───────────────────────────────
+  Browse -. "«extend»" .-> Filter
+  Create -. "«extend»" .-> Dup
+  AIGen  -. "«extend»" .-> Dup
+
+  %% ── External actor ────────────────────────
+  LLM    -. uses .-> Groq
 ```
 
 > *Figure 23 — Use-case diagram of Sprint 2 — Super Admin side.*
