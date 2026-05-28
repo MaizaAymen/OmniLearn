@@ -396,20 +396,85 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Toggle problem as Free-tier"
 
-This diagram shows how the admin marks a problem as Free-tier.
-The admin flips the switch and the problem instantly appears or disappears for Free users.
+This swimlane diagram shows the full flow when the super admin flips the **Free-tier** switch on a problem.
+The admin acts from the `FreeTierTab`, the platform validates the request and pushes the change, and the
+database persists the new `isFreeTier` value so the Free users' catalogue updates instantly.
 
 ```mermaid
-flowchart TD
-  A([Start]) --> B[Open FreeTierTab,<br/>pick problem, toggle]
-  B --> C[PATCH /api/admin/problems/:id<br/>isFreeTier=true/false]
-  C --> D{Admin?}
-  D -- No --> E[403 Forbidden] --> Z([End])
-  D -- Yes --> F[UPDATE problems<br/>SET isFreeTier]
-  F --> G[Free users' catalogue<br/>shows/hides the problem] --> Z
+%%{init: {"theme":"neutral", "flowchart": {"htmlLabels": true}} }%%
+flowchart TB
+  Start([●]):::startNode
+
+  subgraph LANES[" "]
+    direction LR
+
+    subgraph ADMIN["Administrateur"]
+      direction TB
+      A1["S'authentifier"]:::adminNode
+      A2["Ouvrir l'onglet<br/>Free-tier"]:::adminNode
+      A3["Choisir un problème<br/>dans la liste"]:::adminNode
+      A4["Basculer le switch<br/>Free-tier (on / off)"]:::adminNode
+      A5["Confirmer<br/>le changement"]:::adminNode
+    end
+
+    subgraph PLAT["Plateforme"]
+      direction TB
+      P1["Afficher le dashboard<br/>d'administrateur"]:::platNode
+      P2["Récupérer la liste<br/>des problèmes"]:::platNode
+      P3["Afficher la liste<br/>des problèmes"]:::platNode
+      P4["Envoyer PATCH<br/>/api/admin/problems/:id<br/>{ isFreeTier }"]:::platNode
+      P5{"Vérifier le rôle<br/>(super admin ?)"}:::decisionNode
+      P6["Retourner 403<br/>Forbidden"]:::errorNode
+      P7["Mettre à jour le cache<br/>du catalogue Free"]:::platNode
+      P8["Afficher message<br/>de succès"]:::platNode
+    end
+
+    subgraph DB["Base de données"]
+      direction TB
+      D1["Préparer la liste<br/>des problèmes"]:::dbNode
+      D2["UPDATE problems<br/>SET isFreeTier = :value<br/>WHERE id = :id"]:::dbNode
+      D3["Retourner le problème<br/>mis à jour"]:::dbNode
+    end
+  end
+
+  End([◉]):::endNode
+
+  %% ── Flow across lanes ─────────────────────────
+  Start --> A1
+  A1 --> P1
+  P1 --> A2
+  A2 --> P2
+  P2 --> D1
+  D1 --> P3
+  P3 --> A3
+  A3 --> A4
+  A4 --> A5
+  A5 --> P4
+  P4 --> P5
+  P5 -- "Non" --> P6
+  P6 --> End
+  P5 -- "Oui" --> D2
+  D2 --> D3
+  D3 --> P7
+  P7 --> P8
+  P8 --> End
+
+  %% ── Styles ────────────────────────────────────
+  classDef adminNode    fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,color:#7c2d12
+  classDef platNode     fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef dbNode       fill:#ecfdf5,stroke:#047857,stroke-width:1.5px,color:#064e3b
+  classDef decisionNode fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+  classDef errorNode    fill:#fee2e2,stroke:#b91c1c,stroke-width:1.5px,color:#7f1d1d
+  classDef startNode    fill:#111827,stroke:#111827,color:#fff
+  classDef endNode      fill:#fff,stroke:#111827,stroke-width:3px,color:#111827
+
+  style LANES fill:#ffffff,stroke:#94a3b8,stroke-width:1px
+  style ADMIN fill:#fffaf4,stroke:#c2410c,stroke-width:1.5px
+  style PLAT  fill:#f5f7ff,stroke:#4338ca,stroke-width:1.5px
+  style DB    fill:#f3fbf6,stroke:#047857,stroke-width:1.5px
 ```
 
-> *Figure 26 — Activity diagram "Toggle problem as Free-tier".*
+> *Figure 26 — Activity diagram "Toggle problem as Free-tier" (swimlane).*
 
 #### 3.2. Activity diagram — "Generate certificate"
 
