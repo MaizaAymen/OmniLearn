@@ -105,89 +105,262 @@ They manage institutions, users, plans, the problem catalogue, and view global s
 
 #### Institution Admin side
 
+This diagram covers everything an Institution Admin actually does in Sprint 4 —
+from buying the plan and onboarding the school (`planRoutes.js`
+`/upgrade/institution`, `/institutions/self-create`), to running the day-to-day
+command center exposed by `InstitutionTab.jsx` (Overview, Classrooms,
+Teachers, Students, Invites, Announcements, Analytics, Curriculum, Problem
+Bank, Settings). Every endpoint in `planRoutes.js` and
+`institutionCurriculumRoutes.js` is mapped to a use case so the surface matches
+the real implementation. To keep the diagram compact, relations are limited to
+direct associations and `«include»` only — no `«extend»`.
+
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
-  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
-  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
-  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+  classDef actor    fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef sysactor fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#083344
+  classDef uc       fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys      fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
-  IA((Institution Admin)):::actor
+  IA((Institution<br/>Admin)):::actor
+  Member((Member<br/>Teacher / Student)):::actor
+  Stripe((Stripe)):::sysactor
+  Groq((Groq LLM)):::sysactor
 
-  subgraph S["OmniLearn — Sprint 4 (Institution Admin scope)"]
+  subgraph T["OmniLearn — Sprint 4 — Institution Admin scope"]
     direction TB
-    Onb(["Onboard institution"]):::uc
-    Inv(["Generate invite links"]):::uc
-    Rev(["Revoke invite link"]):::uc
-    Dir(["Browse member directory"]):::uc
-    Role(["Change member role"]):::uc
-    Cur(["Manage Grades / Specialities / Levels"]):::uc
-    Pay(["Pay Institution plan (Stripe)"]):::uc
+
+    %% ── Institution lifecycle ──────────────────────────────────
+    subgraph TInst["Institution lifecycle"]
+      direction TB
+      PayPlan(["Pay Institution plan"]):::uc
+      Onb(["Onboard institution<br/>(name / logo / type /<br/>contact / seat limit)"]):::uc
+      EditProf(["Edit institution profile"]):::uc
+    end
+
+    %% ── Members ────────────────────────────────────────────────
+    subgraph TMem["Member directory"]
+      direction TB
+      Dir(["Browse members<br/>(teachers / students)"]):::uc
+      Rem(["Remove a member<br/>(downgrade to Free)"]):::uc
+    end
+
+    %% ── Invitations ────────────────────────────────────────────
+    subgraph TInv["Invitations"]
+      direction TB
+      Search(["Search invitable users"]):::uc
+      InvEmail(["Invite user by email"]):::uc
+      Links(["Generate / list / revoke<br/>invite links"]):::uc
+      NotifyOne(["Notify invited user"]):::uc
+    end
+
+    %% ── Curriculum ─────────────────────────────────────────────
+    subgraph TCur["Curriculum"]
+      direction TB
+      Cur(["Manage Grades /<br/>Specialities / Levels"]):::uc
+      Seed(["Seed default curriculum"]):::uc
+    end
+
+    %% ── Classrooms audit ───────────────────────────────────────
+    subgraph TCls["Classrooms (read-only audit)"]
+      direction TB
+      AuditList(["List & filter classrooms"]):::uc
+      Roster(["View classroom roster"]):::uc
+      ArchCls(["Archive / reactivate<br/>classroom"]):::uc
+    end
+
+    %% ── Announcements ──────────────────────────────────────────
+    subgraph TAnn["Institution announcements"]
+      direction TB
+      PostAnn(["Post announcement<br/>(targeted: all /<br/>teachers / students)"]):::uc
+      PinAnn(["Pin / delete<br/>announcement"]):::uc
+      NotifyAll(["Notify members"]):::uc
+    end
+
+    %% ── Problem bank ───────────────────────────────────────────
+    Bank(["Manage institution<br/>problem bank<br/>(manual / AI / fork / delete)"]):::uc
+
+    %% ── Insights ──────────────────────────────────────────────
+    subgraph TStat["Insights"]
+      direction TB
+      Overview(["View overview & seat usage"]):::uc
+      Analytics(["View analytics<br/>(completion rate /<br/>heatmap / teacher activity)"]):::uc
+    end
   end
-  class S sys
+  class T sys
 
+  %% ── IA direct associations ─────────────────────────
+  IA --- PayPlan
   IA --- Onb
-  IA --- Inv
+  IA --- EditProf
   IA --- Dir
+  IA --- Rem
+  IA --- InvEmail
+  IA --- Links
   IA --- Cur
-  IA --- Pay
-  Inv -. "«extend»" .-> Rev
-  Dir -. "«extend»" .-> Role
-  Onb -. "«include»" .-> Pay
-```
+  IA --- Seed
+  IA --- AuditList
+  IA --- Roster
+  IA --- ArchCls
+  IA --- PostAnn
+  IA --- PinAnn
+  IA --- Bank
+  IA --- Overview
+  IA --- Analytics
 
-This diagram shows everything the institution admin can do.
-They onboard the institution, invite teachers and students, and manage its curriculum.
+  %% ── Secondary system actors ────────────────────────
+  Stripe --- PayPlan
+  Groq   --- Bank
+  Member --- NotifyOne
+  Member --- NotifyAll
+
+  %% ── «include» relations ────────────────────────────
+  InvEmail -. "«include»" .-> Search
+  InvEmail -. "«include»" .-> NotifyOne
+  PostAnn  -. "«include»" .-> NotifyAll
+```
 
 > *Figure 54 — Use-case diagram of Sprint 4 — Institution Admin side.*
 
-#### Student side — AI features
+#### Student side
+
+This diagram covers the full student surface of Sprint 4 — the six-tab PDF
+assistant (`PdfAssistant.jsx` / `ClassroomPdf.jsx`: Chat, Notes, Bookmarks,
+Search, Quiz, History), the personal workspace with AI on saved code
+(`workspaceRoutes.js`), the AI tutor (`AIMentor.jsx` Socratic SSE stream and
+`/correct-code` for Pro), the messenger AI shortcuts (`/ai`,
+`/stackoverflow`, `/video`), the personalised roadmap with node quizzes and
+the completion certificate (`RoadmapService.js`, `Certificate.jsx`), the plan
+and institution lifecycle (`planRoutes.js` upgrade, join-by-link,
+accept-by-notification) and the notifications panel with the real-time push.
+Teachers inherit the same AI surface — only the `Student` actor is drawn to
+keep the diagram compact.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
-  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
-  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
-  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+  classDef actor    fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef sysactor fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#083344
+  classDef uc       fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys      fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
-  Stu((Student / Teacher)):::actor
-  AI((LLM provider\nGroq)):::actor
+  Student((Student)):::actor
+  Stripe((Stripe)):::sysactor
+  Groq((Groq LLM)):::sysactor
+  Hub((Realtime Hub<br/>Socket.IO)):::sysactor
 
-  subgraph Sys["OmniLearn — Sprint 4 (Student AI scope)"]
+  subgraph S["OmniLearn — Sprint 4 — Student scope"]
     direction TB
-    Up(["Upload PDF"]):::uc
-    Ask(["Chat with PDF (RAG)"]):::uc
-    Exp(["Explain a passage"]):::uc
-    Sum(["Summarize PDF"]):::uc
-    Quiz(["Generate quiz"]):::uc
-    Search(["Smart-search highlights"]):::uc
-    Mentor(["Ask AI Mentor (SSE stream)"]):::uc
-    Correct(["AI-correct my code (Pro only)"]):::uc
-    Slash(["Slash command (/ai /stackoverflow /video)"]):::uc
-    WS(["Workspace: analyze / summarize / quiz code"]):::uc
-  end
-  class Sys sys
 
-  Stu --- Up
-  Stu --- Ask
-  Stu --- Exp
-  Stu --- Sum
-  Stu --- Quiz
-  Stu --- Search
-  Stu --- Mentor
-  Stu --- Correct
-  Stu --- Slash
-  Stu --- WS
-  Up -. "«include»" .-> Ask
-  Ask -. "«include»" .-> AI
-  Mentor -. "«include»" .-> AI
-  Correct -. "«include»" .-> AI
+    %% ── PDF Assistant (RAG) ────────────────────────────────────
+    subgraph SPdf["PDF Assistant (RAG)"]
+      direction TB
+      UpPdf(["Upload personal PDF"]):::uc
+      ChatPdf(["Chat with PDF"]):::uc
+      ExpSum(["Explain / Summarize<br/>a passage"]):::uc
+      QuizPdf(["Generate quiz<br/>(10 / 20 MCQs)"]):::uc
+      SearchPdf(["Smart search"]):::uc
+      NotesBmk(["Manage notes &<br/>bookmarks"]):::uc
+      HistPdf(["View study history"]):::uc
+      ClsPdf(["Open classroom PDF"]):::uc
+    end
+
+    %% ── Workspace ──────────────────────────────────────────────
+    subgraph SWs["Personal workspace"]
+      direction TB
+      WsFiles(["Manage workspace<br/>files"]):::uc
+      WsAI(["Analyze / Summarize /<br/>Quiz saved code"]):::uc
+    end
+
+    %% ── AI tutor + slash commands ──────────────────────────────
+    subgraph SAI["AI tutor & messenger shortcuts"]
+      direction TB
+      Mentor(["Ask AI Mentor<br/>(SSE streaming)"]):::uc
+      Correct(["AI code correction<br/>(Pro)"]):::uc
+      Slash(["Use /ai · /stackoverflow ·<br/>/video shortcut"]):::uc
+    end
+
+    %% ── Personalised roadmap ──────────────────────────────────
+    subgraph SRoad["Personalised roadmap"]
+      direction TB
+      Onb(["Complete onboarding<br/>profile"]):::uc
+      GenRoad(["Generate roadmap<br/>(15 nodes / 5 levels)"]):::uc
+      BrowseRoad(["Browse a node &<br/>take its quiz"]):::uc
+      Cert(["Download completion<br/>certificate"]):::uc
+    end
+
+    %% ── Plan & institution ────────────────────────────────────
+    subgraph SPlan["Plan & institution"]
+      direction TB
+      ViewPlan(["View plan & limits"]):::uc
+      UpgPlan(["Upgrade plan<br/>(Pro / Institution)"]):::uc
+      JoinInst(["Join institution<br/>via invite link"]):::uc
+      AcceptInv(["Accept institution<br/>invite from notification"]):::uc
+    end
+
+    %% ── Notifications ─────────────────────────────────────────
+    subgraph SNot["Notifications"]
+      direction TB
+      ViewNot(["View notifications<br/>panel"]):::uc
+      ReadNot(["Mark notification<br/>as read"]):::uc
+      RecvPush(["Receive real-time<br/>push"]):::uc
+    end
+  end
+  class S sys
+
+  %% ── Student direct associations ─────────────────────
+  Student --- UpPdf
+  Student --- ChatPdf
+  Student --- ExpSum
+  Student --- QuizPdf
+  Student --- SearchPdf
+  Student --- NotesBmk
+  Student --- HistPdf
+  Student --- ClsPdf
+
+  Student --- WsFiles
+  Student --- WsAI
+
+  Student --- Mentor
+  Student --- Correct
+  Student --- Slash
+
+  Student --- Onb
+  Student --- GenRoad
+  Student --- BrowseRoad
+  Student --- Cert
+
+  Student --- ViewPlan
+  Student --- UpgPlan
+  Student --- JoinInst
+  Student --- AcceptInv
+
+  Student --- ViewNot
+  Student --- ReadNot
+
+  %% ── Secondary system actors ─────────────────────────
+  Groq   --- ChatPdf
+  Groq   --- ExpSum
+  Groq   --- QuizPdf
+  Groq   --- SearchPdf
+  Groq   --- WsAI
+  Groq   --- Mentor
+  Groq   --- Correct
+  Groq   --- Slash
+  Groq   --- GenRoad
+
+  Stripe --- UpgPlan
+  Hub    --- RecvPush
+
+  %% ── «include» relations ─────────────────────────────
+  Onb       -. "«include»" .-> GenRoad
+  QuizPdf   -. "«include»" .-> HistPdf
+  ExpSum    -. "«include»" .-> HistPdf
+  WsAI      -. "«include»" .-> HistPdf
 ```
 
-This diagram shows all the AI features a student can use.
-They can chat with a PDF, ask the AI Mentor, get code corrected, and run slash commands.
-
-> *Figure 55 — Use-case diagram of Sprint 4 — Student (AI features).*
+> *Figure 55 — Use-case diagram of Sprint 4 — Student side.*
 
 ### 2. Sequence Diagrams
 
