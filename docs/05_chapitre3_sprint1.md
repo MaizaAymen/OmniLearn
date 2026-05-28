@@ -542,23 +542,89 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Update profile"
 
-The user edits their avatar, bio and social links and submits; the server validates, saves the changes and signals `Guard` to re-check that the profile is complete.
+This swimlane diagram shows the full flow when the user updates their profile.
+The user edits avatar, bio and social links from the profile page; the platform validates the inputs,
+uploads the avatar to Cloudinary, persists the changes, and signals `Guard` to re-check that the
+profile is complete so the user can be redirected to the main app.
 
 ```mermaid
-flowchart TD
-  A([Start]) --> B[Open profile page]
-  B --> C{Change avatar?}
-  C -- Yes --> D[Upload new avatar]
-  C -- No --> E[Edit bio and social links]
-  D --> E
-  E --> F[Click Save]
-  F --> G{Inputs valid?}
-  G -- No --> H[Show errors] --> E
-  G -- Yes --> I[Save changes]
-  I --> J([End])
+%%{init: {"theme":"neutral", "flowchart": {"htmlLabels": true}} }%%
+flowchart TB
+  Start([●]):::startNode
+
+  subgraph LANES[" "]
+    direction LR
+
+    subgraph USER["Utilisateur"]
+      direction TB
+      U1["S'authentifier"]:::userNode
+      U2["Ouvrir la page<br/>de profil"]:::userNode
+      U3["Modifier avatar,<br/>bio, liens sociaux"]:::userNode
+      U4["Cliquer<br/>« Enregistrer »"]:::userNode
+      U5["Corriger les erreurs<br/>de saisie"]:::userNode
+    end
+
+    subgraph PLAT["Plateforme"]
+      direction TB
+      P1["Afficher la page<br/>de profil"]:::platNode
+      P2["Récupérer les<br/>données du profil"]:::platNode
+      P3["Envoyer PATCH<br/>/api/users/me<br/>{ avatar, bio, links }"]:::platNode
+      P4{"Valider les entrées<br/>(taille, format, URL) ?"}:::decisionNode
+      P5["Afficher les<br/>messages d'erreur"]:::errorNode
+      P6{"Nouvel avatar<br/>fourni ?"}:::decisionNode
+      P7["Uploader l'avatar<br/>vers Cloudinary"]:::platNode
+      P8["Émettre l'événement<br/>profile-updated → Guard"]:::platNode
+      P9["Afficher message<br/>de succès"]:::platNode
+    end
+
+    subgraph DB["Base de données"]
+      direction TB
+      D1["Préparer le profil<br/>de l'utilisateur"]:::dbNode
+      D2["UPDATE users<br/>SET avatar, bio, links<br/>WHERE id = :userId"]:::dbNode
+      D3["Retourner le profil<br/>mis à jour"]:::dbNode
+    end
+  end
+
+  End([◉]):::endNode
+
+  %% ── Flow across lanes ─────────────────────────
+  Start --> U1
+  U1 --> P1
+  P1 --> P2
+  P2 --> D1
+  D1 --> U2
+  U2 --> U3
+  U3 --> U4
+  U4 --> P3
+  P3 --> P4
+  P4 -- "Non" --> P5
+  P5 --> U5
+  U5 --> U3
+  P4 -- "Oui" --> P6
+  P6 -- "Oui" --> P7
+  P7 --> D2
+  P6 -- "Non" --> D2
+  D2 --> D3
+  D3 --> P8
+  P8 --> P9
+  P9 --> End
+
+  %% ── Styles ────────────────────────────────────
+  classDef userNode     fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,color:#7c2d12
+  classDef platNode     fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef dbNode       fill:#ecfdf5,stroke:#047857,stroke-width:1.5px,color:#064e3b
+  classDef decisionNode fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+  classDef errorNode    fill:#fee2e2,stroke:#b91c1c,stroke-width:1.5px,color:#7f1d1d
+  classDef startNode    fill:#111827,stroke:#111827,color:#fff
+  classDef endNode      fill:#fff,stroke:#111827,stroke-width:3px,color:#111827
+
+  style LANES fill:#ffffff,stroke:#94a3b8,stroke-width:1px
+  style USER  fill:#fffaf4,stroke:#c2410c,stroke-width:1.5px
+  style PLAT  fill:#f5f7ff,stroke:#4338ca,stroke-width:1.5px
+  style DB    fill:#f3fbf6,stroke:#047857,stroke-width:1.5px
 ```
 
-> *Figure 11 — Activity diagram "Update profile".*
+> *Figure 11 — Activity diagram "Update profile" (swimlane).*
 
 #### 3.2. Activity diagram — "Reset password"
 
