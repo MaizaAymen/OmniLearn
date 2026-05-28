@@ -555,33 +555,33 @@ flowchart TB
   subgraph LANES[" "]
     direction LR
 
-    subgraph USER["Utilisateur"]
+    subgraph USER["User"]
       direction TB
-      U1["S'authentifier"]:::userNode
-      U2["Ouvrir la page<br/>de profil"]:::userNode
-      U3["Modifier avatar,<br/>bio, liens sociaux"]:::userNode
-      U4["Cliquer<br/>« Enregistrer »"]:::userNode
-      U5["Corriger les erreurs<br/>de saisie"]:::userNode
+      U1["Authenticate"]:::userNode
+      U2["Open profile<br/>page"]:::userNode
+      U3["Edit avatar,<br/>bio, social links"]:::userNode
+      U4["Click<br/>&quot;Save&quot;"]:::userNode
+      U5["Fix the<br/>input errors"]:::userNode
     end
 
-    subgraph PLAT["Plateforme"]
+    subgraph PLAT["Platform"]
       direction TB
-      P1["Afficher la page<br/>de profil"]:::platNode
-      P2["Récupérer les<br/>données du profil"]:::platNode
-      P3["Envoyer PATCH<br/>/api/users/me<br/>{ avatar, bio, links }"]:::platNode
-      P4{"Valider les entrées<br/>(taille, format, URL) ?"}:::decisionNode
-      P5["Afficher les<br/>messages d'erreur"]:::errorNode
-      P6{"Nouvel avatar<br/>fourni ?"}:::decisionNode
-      P7["Uploader l'avatar<br/>vers Cloudinary"]:::platNode
-      P8["Émettre l'événement<br/>profile-updated → Guard"]:::platNode
-      P9["Afficher message<br/>de succès"]:::platNode
+      P1["Display profile<br/>page"]:::platNode
+      P2["Fetch the<br/>profile data"]:::platNode
+      P3["Send PATCH<br/>/api/users/me<br/>{ avatar, bio, links }"]:::platNode
+      P4{"Validate inputs<br/>(size, format, URL) ?"}:::decisionNode
+      P5["Show validation<br/>error messages"]:::errorNode
+      P6{"New avatar<br/>provided ?"}:::decisionNode
+      P7["Upload the avatar<br/>to Cloudinary"]:::platNode
+      P8["Emit event<br/>profile-updated → Guard"]:::platNode
+      P9["Show success<br/>message"]:::platNode
     end
 
-    subgraph DB["Base de données"]
+    subgraph DB["Database"]
       direction TB
-      D1["Préparer le profil<br/>de l'utilisateur"]:::dbNode
+      D1["Prepare the<br/>user profile"]:::dbNode
       D2["UPDATE users<br/>SET avatar, bio, links<br/>WHERE id = :userId"]:::dbNode
-      D3["Retourner le profil<br/>mis à jour"]:::dbNode
+      D3["Return the<br/>updated profile"]:::dbNode
     end
   end
 
@@ -597,13 +597,13 @@ flowchart TB
   U3 --> U4
   U4 --> P3
   P3 --> P4
-  P4 -- "Non" --> P5
+  P4 -- "No" --> P5
   P5 --> U5
   U5 --> U3
-  P4 -- "Oui" --> P6
-  P6 -- "Oui" --> P7
+  P4 -- "Yes" --> P6
+  P6 -- "Yes" --> P7
   P7 --> D2
-  P6 -- "Non" --> D2
+  P6 -- "No" --> D2
   D2 --> D3
   D3 --> P8
   P8 --> P9
