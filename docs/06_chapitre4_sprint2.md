@@ -54,49 +54,182 @@ This sprint builds the **core learning loop** of OmniLearn so users can actually
 
 #### Student side
 
-This diagram shows what a student can do in Sprint 2.
-The student fills the onboarding, views the roadmap, solves problems, runs/submits code and checks the dashboard.
+This diagram shows everything a student can do in Sprint 2, grouped in seven cohesive blocks:
+(A) onboarding and profile, (B) AI roadmap generation with per-plan quota, (C) personal roadmap management,
+(D) following the roadmap (node details, quizzes, progress, certificate), (E) browsing the problem catalogue
+with plan-aware filtering, (F) solving a problem in the editor with AI mentor and auto-correction, and
+(G) the coding dashboard. Secondary actors (Groq LLM, Stack Overflow, YouTube, Judge0 sandbox) are shown
+on the right; `«include»` is solid blue, `«extend»` is dashed pink.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
   classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef ext   fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#78350f
   classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef inc   fill:#dbeafe,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a
+  classDef ex    fill:#fce7f3,stroke:#be185d,stroke-width:1.5px,color:#831843
+  classDef gate  fill:#fee2e2,stroke:#b91c1c,stroke-width:1.5px,color:#7f1d1d
   classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
+  %% ── Primary & secondary actors ──────────────────────────────
   Student((Student)):::actor
-  Groq((LLM provider\nGroq)):::actor
+  Groq(("Groq LLM")):::ext
+  SO(("Stack Overflow API")):::ext
+  YT(("YouTube API")):::ext
+  J0(("Judge0 sandbox")):::ext
 
-  subgraph S["OmniLearn — Sprint 2 (Student scope)"]
+  subgraph S["OmniLearn — Sprint 2 · Student scope"]
     direction TB
-    Onb(["Onboarding (goal / interests / languages)"]):::uc
-    Gen(["Generate personalized roadmap"]):::uc
-    View(["View roadmap graph"]):::uc
-    Node(["Open node detail"]):::uc
-    Prog(["Track progress"]):::uc
-    Cert(["Download PDF certificate"]):::uc
-    Browse(["Browse problem catalogue"]):::uc
-    Filter(["Filter / search"]):::uc
-    Open(["Open a problem"]):::uc
-    Run(["Run code"]):::uc
-    Submit(["Submit code"]):::uc
-    Dash(["View coding dashboard"]):::uc
+
+    %% ── (A) Onboarding & profile ──────────────────────────────
+    subgraph A["A · Onboarding & profile"]
+      direction TB
+      Onb(["Fill onboarding<br/>(goal · interests · languages · weaknesses)"]):::uc
+      Prof(["Edit learning profile"]):::uc
+    end
+
+    %% ── (B) AI roadmap generation ─────────────────────────────
+    subgraph B["B · Generate personalized roadmap"]
+      direction TB
+      Gen(["Generate roadmap"]):::uc
+      Build(["Build 5-level / 15-node pyramid prompt"]):::inc
+      Norm(["Normalize + validate JSON"]):::inc
+      Enrich(["Enrich nodes with resources<br/>(SO · YouTube · Docs · Quiz)"]):::inc
+      Quota{{"Enforce per-plan quota<br/>Free=2 · Pro=20 · Inst=∞"}}:::gate
+    end
+
+    %% ── (C) Manage my roadmaps ────────────────────────────────
+    subgraph C["C · My roadmaps"]
+      direction TB
+      ListR(["List my roadmaps"]):::uc
+      Switch(["Switch active roadmap"]):::ex
+      Rename(["Rename roadmap"]):::ex
+      DelR(["Delete roadmap"]):::ex
+    end
+
+    %% ── (D) Follow the roadmap ────────────────────────────────
+    subgraph D["D · Follow roadmap"]
+      direction TB
+      ViewG(["View roadmap graph<br/>(React Flow pyramid)"]):::uc
+      OpenN(["Open node detail panel"]):::uc
+      Docs(["Read Docs tab"]):::ex
+      YTtab(["Watch YouTube tab"]):::ex
+      SOtab(["Read Stack Overflow tab"]):::ex
+      Quiz(["Take node quiz (5 MCQ)"]):::ex
+      Status(["Update node status<br/>(pending · in-progress · completed)"]):::uc
+      Prog(["Track overall progress %"]):::uc
+      Cert(["Earn & download PDF certificate"]):::ex
+      Elig{{"Eligibility check<br/>(100 % completed · quizzed · avg ≥ 80)"}}:::gate
+    end
+
+    %% ── (E) Problem catalogue ─────────────────────────────────
+    subgraph E["E · Problem catalogue"]
+      direction TB
+      Browse(["Browse problem catalogue"]):::uc
+      Filter(["Filter by difficulty / status"]):::ex
+      Search(["Search by title / tag"]):::ex
+      Open(["Open a problem"]):::uc
+      Tier{{"Plan filter<br/>Free → free-tier only · Pro → full"}}:::gate
+    end
+
+    %% ── (F) Solve a problem ───────────────────────────────────
+    subgraph F["F · Solve & code"]
+      direction TB
+      Read(["Read statement (Description tab)"]):::uc
+      Hints(["Read hints (Hints tab)"]):::ex
+      Paint(["Sketch on tldraw canvas (Paint tab)"]):::ex
+      RoadT(["View solution roadmap (Roadmap tab)"]):::ex
+      Lang(["Pick language"]):::uc
+      LGate{{"Free plan locked to JavaScript"}}:::gate
+      Write(["Write code in CodeMirror editor"]):::uc
+      Reset(["Reset to starter code"]):::ex
+      Run(["Run code"]):::uc
+      Out(["View stdout / stderr / runtime"]):::inc
+      Submit(["Submit solution"]):::uc
+      Verdict(["Compare output → verdict<br/>(accepted · wrong · runtime error)"]):::inc
+      Save(["Persist CodeSubmission + StudentProblemSet"]):::inc
+      Mentor(["Ask AI Mentor (hint without solution)"]):::ex
+      Fix(["AI auto-correct code (retry ≤ 2× until match)"]):::ex
+    end
+
+    %% ── (G) Coding dashboard ──────────────────────────────────
+    subgraph G["G · Coding dashboard"]
+      direction TB
+      Dash(["Open coding dashboard"]):::uc
+      Subs(["List my latest 50 submissions"]):::uc
+      Cal(["View year activity calendar"]):::uc
+      Stats(["View language & difficulty breakdown"]):::uc
+      Streak(["View current & longest streak"]):::uc
+    end
   end
   class S sys
 
+  %% ── Actor associations ────────────────────────────────────
   Student --- Onb
-  Student --- View
-  Student --- Node
+  Student --- Prof
+  Student --- Gen
+  Student --- ListR
+  Student --- ViewG
+  Student --- OpenN
+  Student --- Status
   Student --- Prog
   Student --- Browse
   Student --- Open
+  Student --- Read
+  Student --- Lang
+  Student --- Write
+  Student --- Run
+  Student --- Submit
   Student --- Dash
-  Onb -. "«include»" .-> Gen
-  Gen -. "«include»" .-> Groq
+  Student --- Subs
+  Student --- Cal
+  Student --- Stats
+  Student --- Streak
+
+  %% ── «include» (solid arrows) ──────────────────────────────
+  Gen    -- "«include»" --> Build
+  Gen    -- "«include»" --> Norm
+  Gen    -- "«include»" --> Enrich
+  Run    -- "«include»" --> Out
+  Submit -- "«include»" --> Run
+  Submit -- "«include»" --> Verdict
+  Submit -- "«include»" --> Save
+  Cert   -- "«include»" --> Elig
+
+  %% ── «extend» (dashed arrows) ──────────────────────────────
+  Onb    -. "«extend»" .-> Prof
+  Gen    -. "«extend»" .-> Quota
+  ListR  -. "«extend»" .-> Switch
+  ListR  -. "«extend»" .-> Rename
+  ListR  -. "«extend»" .-> DelR
+  OpenN  -. "«extend»" .-> Docs
+  OpenN  -. "«extend»" .-> YTtab
+  OpenN  -. "«extend»" .-> SOtab
+  OpenN  -. "«extend»" .-> Quiz
+  Quiz   -. "auto-sets" .-> Status
+  Prog   -. "«extend»" .-> Cert
   Browse -. "«extend»" .-> Filter
-  Open -. "«include»" .-> Run
-  Open -. "«include»" .-> Submit
-  Prog -. "«extend»"  .-> Cert
+  Browse -. "«extend»" .-> Search
+  Browse -. "«extend»" .-> Tier
+  Open   -. "«extend»" .-> Read
+  Read   -. "«extend»" .-> Hints
+  Read   -. "«extend»" .-> Paint
+  Read   -. "«extend»" .-> RoadT
+  Lang   -. "«extend»" .-> LGate
+  Write  -. "«extend»" .-> Reset
+  Write  -. "«extend»" .-> Mentor
+  Write  -. "«extend»" .-> Fix
+
+  %% ── Calls to external actors ──────────────────────────────
+  Build  -. uses .-> Groq
+  Enrich -. uses .-> Groq
+  Enrich -. uses .-> SO
+  Enrich -. uses .-> YT
+  Quiz   -. uses .-> Groq
+  Mentor -. uses .-> Groq
+  Fix    -. uses .-> Groq
+  Run    -. uses .-> J0
 ```
 
 > *Figure 22 — Use-case diagram of Sprint 2 — Student side.*
