@@ -225,17 +225,16 @@ flowchart LR
 
 #### Student side
 
-This diagram covers the full student surface of Sprint 4 — the six-tab PDF
-assistant (`PdfAssistant.jsx` / `ClassroomPdf.jsx`: Chat, Notes, Bookmarks,
-Search, Quiz, History), the personal workspace with AI on saved code
-(`workspaceRoutes.js`), the AI tutor (`AIMentor.jsx` Socratic SSE stream and
-`/correct-code` for Pro), the messenger AI shortcuts (`/ai`,
-`/stackoverflow`, `/video`), the personalised roadmap with node quizzes and
-the completion certificate (`RoadmapService.js`, `Certificate.jsx`), the plan
-and institution lifecycle (`planRoutes.js` upgrade, join-by-link,
-accept-by-notification) and the notifications panel with the real-time push.
-Teachers inherit the same AI surface — only the `Student` actor is drawn to
-keep the diagram compact.
+The diagram is organised around the seven Sprint 4 student features — PDF
+assistant, PDF library, personal workspace, AI tutor, personalised roadmap,
+plan & institution lifecycle, and notifications. Each rectangle holds **one
+main entity** the student directly triggers, plus the natural set of
+optional behaviors it carries — drawn as `«extend»` arrows (extension →
+base, per UML 2.5). The number of extends varies per entity: some entities
+have only two optional sub-flows, others have three. The secondary actors
+`Groq LLM`, `Stripe` and the `Realtime Hub` (Socket.IO) attach to the
+specific use case they collaborate with. Teachers share the same AI
+surface — only the `Student` actor is drawn to keep the diagram compact.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
@@ -253,47 +252,52 @@ flowchart LR
   subgraph S["OmniLearn — Sprint 4 — Student scope"]
     direction TB
 
-    %% ── PDF Assistant (RAG) ────────────────────────────────────
-    subgraph SPdf["PDF Assistant (RAG)"]
+    %% ── PDF assistant ─────────────────────────────────────────
+    subgraph SPdf["PDF assistant"]
       direction TB
-      UpPdf(["Upload personal PDF"]):::uc
       ChatPdf(["Chat with PDF"]):::uc
-      ExpSum(["Explain / Summarize<br/>a passage"]):::uc
       QuizPdf(["Generate quiz<br/>(10 / 20 MCQs)"]):::uc
       SearchPdf(["Smart search"]):::uc
-      NotesBmk(["Manage notes &<br/>bookmarks"]):::uc
-      HistPdf(["View study history"]):::uc
-      ClsPdf(["Open classroom PDF"]):::uc
+      ExpSum(["Explain / Summarize<br/>a passage"]):::uc
     end
 
-    %% ── Workspace ──────────────────────────────────────────────
+    %% ── PDF library ───────────────────────────────────────────
+    subgraph SLib["PDF library"]
+      direction TB
+      UpPdf(["Upload personal PDF"]):::uc
+      ClsPdf(["Open classroom PDF"]):::uc
+      NotesBmk(["Manage notes &<br/>bookmarks"]):::uc
+    end
+
+    %% ── Personal workspace ───────────────────────────────────
     subgraph SWs["Personal workspace"]
       direction TB
+      WsAI(["Use AI on saved code<br/>(analyze / summarize / quiz)"]):::uc
       WsFiles(["Manage workspace<br/>files"]):::uc
-      WsAI(["Analyze / Summarize /<br/>Quiz saved code"]):::uc
+      HistPdf(["View study history"]):::uc
     end
 
-    %% ── AI tutor + slash commands ──────────────────────────────
-    subgraph SAI["AI tutor & messenger shortcuts"]
+    %% ── AI tutor ──────────────────────────────────────────────
+    subgraph SAI["AI tutor"]
       direction TB
       Mentor(["Ask AI Mentor<br/>(SSE streaming)"]):::uc
       Correct(["AI code correction<br/>(Pro)"]):::uc
-      Slash(["Use /ai · /stackoverflow ·<br/>/video shortcut"]):::uc
+      Slash(["Use messenger slash<br/>commands"]):::uc
     end
 
-    %% ── Personalised roadmap ──────────────────────────────────
+    %% ── Personalised roadmap ─────────────────────────────────
     subgraph SRoad["Personalised roadmap"]
       direction TB
-      Onb(["Complete onboarding<br/>profile"]):::uc
+      UseRoad(["Use personalised<br/>roadmap"]):::uc
       GenRoad(["Generate roadmap<br/>(15 nodes / 5 levels)"]):::uc
-      BrowseRoad(["Browse a node &<br/>take its quiz"]):::uc
+      NodeQuiz(["Take node quiz"]):::uc
       Cert(["Download completion<br/>certificate"]):::uc
     end
 
     %% ── Plan & institution ────────────────────────────────────
     subgraph SPlan["Plan & institution"]
       direction TB
-      ViewPlan(["View plan & limits"]):::uc
+      Plan(["Manage my plan"]):::uc
       UpgPlan(["Upgrade plan<br/>(Pro / Institution)"]):::uc
       JoinInst(["Join institution<br/>via invite link"]):::uc
       AcceptInv(["Accept institution<br/>invite from notification"]):::uc
@@ -303,61 +307,53 @@ flowchart LR
     subgraph SNot["Notifications"]
       direction TB
       ViewNot(["View notifications<br/>panel"]):::uc
-      ReadNot(["Mark notification<br/>as read"]):::uc
       RecvPush(["Receive real-time<br/>push"]):::uc
+      ReadNot(["Mark notification<br/>as read"]):::uc
     end
   end
   class S sys
 
-  %% ── Student direct associations ─────────────────────
-  Student --- UpPdf
+  %% ── Student associates with main entities only ──────
   Student --- ChatPdf
-  Student --- ExpSum
-  Student --- QuizPdf
-  Student --- SearchPdf
-  Student --- NotesBmk
-  Student --- HistPdf
-  Student --- ClsPdf
-
-  Student --- WsFiles
+  Student --- UpPdf
   Student --- WsAI
-
   Student --- Mentor
-  Student --- Correct
-  Student --- Slash
-
-  Student --- Onb
-  Student --- GenRoad
-  Student --- BrowseRoad
-  Student --- Cert
-
-  Student --- ViewPlan
-  Student --- UpgPlan
-  Student --- JoinInst
-  Student --- AcceptInv
-
+  Student --- UseRoad
+  Student --- Plan
   Student --- ViewNot
-  Student --- ReadNot
 
   %% ── Secondary system actors ─────────────────────────
   Groq   --- ChatPdf
-  Groq   --- ExpSum
-  Groq   --- QuizPdf
-  Groq   --- SearchPdf
   Groq   --- WsAI
   Groq   --- Mentor
-  Groq   --- Correct
-  Groq   --- Slash
   Groq   --- GenRoad
-
   Stripe --- UpgPlan
   Hub    --- RecvPush
 
-  %% ── «include» relations ─────────────────────────────
-  Onb       -. "«include»" .-> GenRoad
-  QuizPdf   -. "«include»" .-> HistPdf
-  ExpSum    -. "«include»" .-> HistPdf
-  WsAI      -. "«include»" .-> HistPdf
+  %% ── «extend» relations (extension → base) ───────────
+  QuizPdf   -. "«extend»" .-> ChatPdf
+  SearchPdf -. "«extend»" .-> ChatPdf
+  ExpSum    -. "«extend»" .-> ChatPdf
+
+  ClsPdf    -. "«extend»" .-> UpPdf
+  NotesBmk  -. "«extend»" .-> UpPdf
+
+  WsFiles   -. "«extend»" .-> WsAI
+  HistPdf   -. "«extend»" .-> WsAI
+
+  Correct   -. "«extend»" .-> Mentor
+  Slash     -. "«extend»" .-> Mentor
+
+  GenRoad   -. "«extend»" .-> UseRoad
+  NodeQuiz  -. "«extend»" .-> UseRoad
+  Cert      -. "«extend»" .-> UseRoad
+
+  UpgPlan   -. "«extend»" .-> Plan
+  JoinInst  -. "«extend»" .-> Plan
+  AcceptInv -. "«extend»" .-> Plan
+
+  RecvPush  -. "«extend»" .-> ViewNot
+  ReadNot   -. "«extend»" .-> ViewNot
 ```
 
 > *Figure 55 — Use-case diagram of Sprint 4 — Student side.*
