@@ -258,11 +258,9 @@ flowchart LR
     %% ── Classroom management ────────────────────────────────────
     subgraph TCls["Classroom management"]
       direction TB
-      CreateClass(["Create classroom"]):::uc
+      ManageClass(["Manage my classrooms<br/>(create / rename /<br/>archive / delete / list)"]):::uc
       GenCode(["Generate unique<br/>invite code"]):::uc
       BindCurriculum(["Bind Grade /<br/>Speciality / Level"]):::uc
-      ManageClass(["Rename / archive /<br/>delete classroom"]):::uc
-      ListMyCls(["View my<br/>classrooms"]):::uc
       OpenCls(["Open classroom<br/>workspace"]):::uc
     end
 
@@ -316,9 +314,7 @@ flowchart LR
   class T sys
 
   %% ── Teacher direct associations ────────────────────────────
-  Teacher --- CreateClass
   Teacher --- ManageClass
-  Teacher --- ListMyCls
   Teacher --- OpenCls
   Teacher --- ManageRoster
   Teacher --- InviteSelected
@@ -345,8 +341,8 @@ flowchart LR
   NotifyAss     --- Student2
 
   %% ── «include» relations ────────────────────────────────────
-  CreateClass    -. "«include»" .-> GenCode
-  CreateClass    -. "«include»" .-> BindCurriculum
+  ManageClass    -. "«include»" .-> GenCode
+  ManageClass    -. "«include»" .-> BindCurriculum
   InviteSelected -. "«include»" .-> NotifyInvited
   ManageCatalog  -. "«include»" .-> CRUDModule
   CRUDModule     -. "«include»" .-> CRUDLesson
