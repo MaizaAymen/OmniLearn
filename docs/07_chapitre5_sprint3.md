@@ -444,21 +444,93 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Create an assignment"
 
-This diagram shows the steps the teacher follows to create an assignment.
-The teacher fills the form, picks problems, the server checks the rights, saves the assignment, and notifies the students.
+This swimlane diagram shows the full flow when a teacher creates and publishes an assignment.
+The teacher fills the form and picks problems from the catalogue; the platform validates the
+inputs, checks that the teacher owns the classroom, persists the assignment, and broadcasts
+a real-time notification to every enrolled student.
 
 ```mermaid
-flowchart TD
-  A([Start]) --> B[Fill assignment form]
-  B --> C[Pick problems]
-  C --> D{Teacher of the class?}
-  D -- No --> E[Refused] --> Z([End])
-  D -- Yes --> F[Save assignment]
-  F --> G[Notify students]
-  G --> Z
+%%{init: {"theme":"neutral", "flowchart": {"htmlLabels": true}} }%%
+flowchart TB
+  Start([●]):::startNode
+
+  subgraph LANES[" "]
+    direction LR
+
+    subgraph TEACHER["Teacher"]
+      direction TB
+      T1["Authenticate"]:::userNode
+      T2["Open the<br/>classroom workspace"]:::userNode
+      T3["Fill the<br/>assignment form<br/>(title, due date,<br/>max attempts)"]:::userNode
+      T4["Pick problems<br/>(global + institution<br/>+ class bank)"]:::userNode
+      T5["Click<br/>&quot;Publish&quot;"]:::userNode
+      T6["Fix the<br/>form errors"]:::userNode
+    end
+
+    subgraph PLAT["Platform"]
+      direction TB
+      P1["Display the<br/>classroom workspace"]:::platNode
+      P2["Send POST<br/>/api/assignments<br/>{ classId, problems,<br/>dueDate, attempts }"]:::platNode
+      P3{"Validate inputs<br/>(title, due date,<br/>≥ 1 problem) ?"}:::decisionNode
+      P4["Show validation<br/>error messages"]:::errorNode
+      P5{"Teacher owns<br/>this classroom ?"}:::decisionNode
+      P6["Return<br/>403 Forbidden"]:::errorNode
+      P7["Broadcast event<br/>assignment-published<br/>via Socket.IO Hub"]:::platNode
+      P8["Send push notifications<br/>to enrolled students"]:::platNode
+      P9["Show success<br/>message"]:::platNode
+    end
+
+    subgraph DB["Database"]
+      direction TB
+      D1["Fetch classroom<br/>+ teacher membership"]:::dbNode
+      D2["INSERT assignments<br/>(classId, problems,<br/>dueDate, status=published)"]:::dbNode
+      D3["INSERT notifications<br/>(one per enrolled<br/>student)"]:::dbNode
+      D4["Return the<br/>created assignment"]:::dbNode
+    end
+  end
+
+  End([◉]):::endNode
+
+  %% ── Flow across lanes ─────────────────────────
+  Start --> T1
+  T1 --> P1
+  P1 --> T2
+  T2 --> T3
+  T3 --> T4
+  T4 --> T5
+  T5 --> P2
+  P2 --> P3
+  P3 -- "No" --> P4
+  P4 --> T6
+  T6 --> T3
+  P3 -- "Yes" --> D1
+  D1 --> P5
+  P5 -- "No" --> P6
+  P6 --> End
+  P5 -- "Yes" --> D2
+  D2 --> D3
+  D3 --> D4
+  D4 --> P7
+  P7 --> P8
+  P8 --> P9
+  P9 --> End
+
+  %% ── Styles ────────────────────────────────────
+  classDef userNode     fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,color:#7c2d12
+  classDef platNode     fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef dbNode       fill:#ecfdf5,stroke:#047857,stroke-width:1.5px,color:#064e3b
+  classDef decisionNode fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+  classDef errorNode    fill:#fee2e2,stroke:#b91c1c,stroke-width:1.5px,color:#7f1d1d
+  classDef startNode    fill:#111827,stroke:#111827,color:#fff
+  classDef endNode      fill:#fff,stroke:#111827,stroke-width:3px,color:#111827
+
+  style LANES   fill:#ffffff,stroke:#94a3b8,stroke-width:1px
+  style TEACHER fill:#fffaf4,stroke:#c2410c,stroke-width:1.5px
+  style PLAT    fill:#f5f7ff,stroke:#4338ca,stroke-width:1.5px
+  style DB      fill:#f3fbf6,stroke:#047857,stroke-width:1.5px
 ```
 
-> *Figure 43 — Activity diagram "Create an assignment".*
+> *Figure 43 — Activity diagram "Create an assignment" (swimlane).*
 
 ### 4. Class Diagram
 
