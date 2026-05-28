@@ -54,96 +54,367 @@ Sprint 3 of OmniLearn focuses on the **collaboration layer**. Where Sprint 2 tur
 
 ### 1. Use-Case Diagrams
 
+The use-case diagrams below were re-derived directly from the Sprint 3 routes
+(`adminRoutes.js`, `UserRoutes.js`, `assignmentRoutes.js`, `messageRoutes.js`,
+`conversationRoutes.js`, `notificationRoutes.js`) and the Sprint 3 React pages
+(`JoinClassroom.jsx`, `MyClassrooms.jsx`, `ClassroomView.jsx`,
+`ClassAssignmentsPage.jsx`, `ClassroomProblemsTab.jsx`, `Messages.jsx`).
+Every API endpoint and every UI action has been mapped to a use case so the
+diagrams reflect the real surface of the increment — not a simplified subset.
+
+The arrows follow the UML 2.5 convention:
+
+- **«include»** — *base* → *included* (the base always triggers the included behavior).
+- **«extend»** — *extension* → *base* (the extension is optional and attaches at an extension point).
+- **Generalization** — *child actor* ▷ *parent actor* (the child inherits the parent's use cases).
+
+The two diagrams share an `Authenticated User` actor: messaging and
+notifications belong to every signed-in user, so both `Student` and `Teacher`
+inherit them through generalization. The `Realtime Hub` (Socket.IO) is a
+secondary system actor because it pushes events to the user without the user
+requesting them.
+
 #### Student side
 
-This diagram shows what a student can do in Sprint 3.
-They can join a class, read its content, send messages, and get notifications.
+This diagram covers everything a student can do in Sprint 3 — joining a class
+(by code or by accepting an invitation notification), browsing the classroom
+content (courses → modules → lessons with PDF, announcements, classmates),
+working on assignments (open → solve attached problems → submit, with optional
+AI Mentor / AI correction when the teacher has not locked them), messaging
+(private chats with the free-tier contact cap, group conversations with
+invites, attachments and the `/stackoverflow` slash command), and the
+notifications panel with real-time push.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
-  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
-  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
-  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+  classDef actor    fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef sysactor fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#083344
+  classDef uc       fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys      fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
+  AuthUser((Authenticated<br/>User)):::actor
   Student((Student)):::actor
+  Hub((Realtime Hub<br/>Socket.IO)):::sysactor
 
-  subgraph S["OmniLearn — Sprint 3 (Student scope)"]
+  Student -- "generalization" --> AuthUser
+
+  subgraph S["OmniLearn — Sprint 3 — Student scope"]
     direction TB
-    Join(["Join classroom (with code)"]):::uc
-    ListMine(["View my classrooms"]):::uc
-    ViewClass(["Open classroom view"]):::uc
-    ReadAnn(["Read announcements"]):::uc
-    ViewLesson(["View modules / lessons"]):::uc
-    ViewAss(["View assignments"]):::uc
-    Submit(["Submit assignment"]):::uc
-    Conv(["Open conversations"]):::uc
-    Send(["Send message"]):::uc
-    Recv(["Receive real-time message"]):::uc
-    Notif(["See notifications"]):::uc
+
+    %% ── Enrollment ───────────────────────────────────────────────
+    subgraph SEnr["Classroom enrollment"]
+      direction TB
+      JoinCode(["Join classroom<br/>(by code)"]):::uc
+      RecvInvite(["Receive classroom<br/>invitation"]):::uc
+      AcceptInvite(["Accept invitation"]):::uc
+      DeclineInvite(["Decline invitation"]):::uc
+      PlanGate(["Check Institution<br/>plan gate"]):::uc
+    end
+
+    %% ── Classroom consumption ────────────────────────────────────
+    subgraph SCls["Classroom consumption"]
+      direction TB
+      ListMine(["View my<br/>classrooms"]):::uc
+      OpenClass(["Open a classroom"]):::uc
+      ViewMembers(["View teacher<br/>& classmates"]):::uc
+      ReadAnn(["Read class<br/>announcements"]):::uc
+      BrowseCourses(["Browse courses<br/>& modules"]):::uc
+      OpenLesson(["Open a lesson"]):::uc
+      ViewLessonPdf(["View lesson PDF"]):::uc
+      ViewClassBank(["View classroom<br/>problem bank"]):::uc
+    end
+
+    %% ── Assignments ──────────────────────────────────────────────
+    subgraph SAss["Assignments"]
+      direction TB
+      ListAss(["See assignments<br/>(progress + due)"]):::uc
+      OpenAss(["Open an<br/>assignment"]):::uc
+      SolveProblem(["Solve an<br/>attached problem"]):::uc
+      SubmitCode(["Submit code"]):::uc
+      UseMentor(["Use AI Mentor"]):::uc
+      UseCorrect(["Use AI code<br/>correction"]):::uc
+    end
+
+    %% ── Messaging ────────────────────────────────────────────────
+    subgraph SMsg["Real-time messaging"]
+      direction TB
+      ListConv(["View conversation<br/>list"]):::uc
+      SearchUsers(["Search users"]):::uc
+      StartPrivate(["Start private chat"]):::uc
+      FreeContactCap(["Free-tier contact<br/>limit warning"]):::uc
+      OpenConv(["Open a<br/>conversation"]):::uc
+      ReadHistory(["Read message<br/>history"]):::uc
+      SendMsg(["Send a message"]):::uc
+      Attach(["Upload attachment<br/>(image / file)"]):::uc
+      SlashSO(["/stackoverflow<br/>slash command"]):::uc
+      RecvMsg(["Receive real-time<br/>message"]):::uc
+      CreateGroup(["Create group<br/>conversation"]):::uc
+      InviteMember(["Invite members<br/>to group"]):::uc
+      FreeGroupCap(["Free-tier group<br/>limit warning"]):::uc
+      AcceptGroup(["Accept group<br/>invite"]):::uc
+      RejectGroup(["Reject group<br/>invite"]):::uc
+      LeaveGroup(["Leave a group"]):::uc
+      ConvPhoto(["Change conversation<br/>photo"]):::uc
+    end
+
+    %% ── Notifications ────────────────────────────────────────────
+    subgraph SNot["Notifications"]
+      direction TB
+      ListNot(["View notifications<br/>panel"]):::uc
+      ReadNot(["Mark notification<br/>as read"]):::uc
+      RecvNot(["Receive real-time<br/>notification"]):::uc
+    end
   end
   class S sys
 
-  Student --- Join
+  %% ── Direct associations (student) ──────────────────────────────
+  Student --- JoinCode
+  Student --- RecvInvite
   Student --- ListMine
-  Student --- ViewClass
-  Student --- Conv
-  Student --- Notif
-  ViewClass -. "«include»" .-> ReadAnn
-  ViewClass -. "«include»" .-> ViewLesson
-  ViewClass -. "«include»" .-> ViewAss
-  ViewAss   -. "«extend»"  .-> Submit
-  Conv      -. "«include»" .-> Send
-  Conv      -. "«include»" .-> Recv
-  Send      -. "«extend»"  .-> Notif
+  Student --- OpenClass
+
+  %% ── Direct associations (any authenticated user) ───────────────
+  AuthUser --- ListConv
+  AuthUser --- SearchUsers
+  AuthUser --- StartPrivate
+  AuthUser --- OpenConv
+  AuthUser --- CreateGroup
+  AuthUser --- LeaveGroup
+  AuthUser --- ConvPhoto
+  AuthUser --- ListNot
+  AuthUser --- ReadNot
+
+  %% ── System actor pushes (initiated by the hub) ─────────────────
+  Hub --- RecvMsg
+  Hub --- RecvNot
+
+  %% ── Enrollment relations ───────────────────────────────────────
+  JoinCode      -. "«include»" .-> PlanGate
+  RecvInvite    -. "«include»" .-> ListNot
+  AcceptInvite  -. "«extend»"  .-> RecvInvite
+  DeclineInvite -. "«extend»"  .-> RecvInvite
+
+  %% ── Classroom relations ───────────────────────────────────────
+  OpenClass     -. "«include»" .-> ViewMembers
+  OpenClass     -. "«include»" .-> ReadAnn
+  OpenClass     -. "«include»" .-> BrowseCourses
+  OpenClass     -. "«include»" .-> ListAss
+  OpenClass     -. "«include»" .-> ViewClassBank
+  BrowseCourses -. "«include»" .-> OpenLesson
+  ViewLessonPdf -. "«extend»"  .-> OpenLesson
+
+  %% ── Assignments relations ────────────────────────────────────
+  ListAss     -. "«extend»"  .-> OpenAss
+  OpenAss     -. "«include»" .-> SolveProblem
+  SolveProblem -. "«include»".-> SubmitCode
+  UseMentor   -. "«extend»"  .-> SolveProblem
+  UseCorrect  -. "«extend»"  .-> SolveProblem
+
+  %% ── Messaging relations ──────────────────────────────────────
+  StartPrivate   -. "«include»" .-> SearchUsers
+  FreeContactCap -. "«extend»"  .-> StartPrivate
+  OpenConv       -. "«include»" .-> ReadHistory
+  OpenConv       -. "«include»" .-> SendMsg
+  Attach         -. "«extend»"  .-> SendMsg
+  SlashSO        -. "«extend»"  .-> SendMsg
+  CreateGroup    -. "«include»" .-> InviteMember
+  FreeGroupCap   -. "«extend»"  .-> CreateGroup
+  AcceptGroup    -. "«extend»"  .-> RecvInvite
+  RejectGroup    -. "«extend»"  .-> RecvInvite
 ```
 
 > *Figure 38 — Use-case diagram of Sprint 3 — Student side.*
 
 #### Teacher side
 
-This diagram shows what a teacher can do in Sprint 3.
-They can create classes, add courses and assignments, post announcements, and reply to messages.
+This diagram covers the full teacher surface of Sprint 3: classroom CRUD
+(create / rename / archive / delete, with an auto-generated invite code bound
+to Grade / Speciality / Level), roster management (invite by selection,
+remove a student), the catalog hierarchy (Course → Module → Lesson with
+optional PDF upload), the per-classroom problem bank (manual creation, AI
+generation, fork from the global bank, deletion), the assignment workflow
+(draft → attach problems from up to three banks → configure due date / max
+attempts / language lock / AI lock → publish — which automatically notifies
+the enrolled students — then track per-student completion, inspect a
+student's latest submissions per problem, and read aggregate statistics),
+and the announcements feed (post / edit / delete). Messaging and
+notifications are inherited from `Authenticated User` exactly as for the
+student.
 
 ```mermaid
 %%{init: {"theme":"neutral"} }%%
 flowchart LR
-  classDef actor fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
-  classDef uc    fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
-  classDef sys   fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
+  classDef actor    fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12
+  classDef sysactor fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#083344
+  classDef uc       fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef sys      fill:#f8fafc,stroke:#475569,stroke-width:1.5px,stroke-dasharray:6 4,color:#0f172a
 
+  AuthUser((Authenticated<br/>User)):::actor
   Teacher((Teacher)):::actor
+  Student2((Student)):::actor
+  Hub((Realtime Hub<br/>Socket.IO)):::sysactor
 
-  subgraph S["OmniLearn — Sprint 3 (Teacher scope)"]
+  Teacher -- "generalization" --> AuthUser
+
+  subgraph T["OmniLearn — Sprint 3 — Teacher scope"]
     direction TB
-    CreateClass(["Create class"]):::uc
-    Code(["Generate class code"]):::uc
-    Members(["List enrolled students"]):::uc
-    CRUDCourse(["Manage courses"]):::uc
-    CRUDModule(["Manage modules"]):::uc
-    CRUDLesson(["Manage lessons"]):::uc
-    CreateAss(["Create assignment"]):::uc
-    AttachP(["Attach problems to assignment"]):::uc
-    Grade(["Grade submissions"]):::uc
-    PostAnn(["Post announcement"]):::uc
-    Reply(["Reply in conversations"]):::uc
-  end
-  class S sys
 
+    %% ── Classroom management ────────────────────────────────────
+    subgraph TCls["Classroom management"]
+      direction TB
+      CreateClass(["Create classroom"]):::uc
+      GenCode(["Generate unique<br/>invite code"]):::uc
+      BindCurriculum(["Bind Grade /<br/>Speciality / Level"]):::uc
+      RenameClass(["Rename / archive<br/>classroom"]):::uc
+      DeleteClass(["Delete classroom"]):::uc
+      ListMyCls(["View my<br/>classrooms"]):::uc
+      OpenCls(["Open classroom<br/>workspace"]):::uc
+    end
+
+    %% ── Roster management ───────────────────────────────────────
+    subgraph TRos["Student roster"]
+      direction TB
+      ListStud(["List enrolled<br/>students"]):::uc
+      InviteSelected(["Invite students<br/>(picker)"]):::uc
+      NotifyInvited(["Notify invited<br/>students"]):::uc
+      RemoveStud(["Remove a student<br/>from class"]):::uc
+    end
+
+    %% ── Catalog (courses / modules / lessons) ──────────────────
+    subgraph TCat["Course catalog"]
+      direction TB
+      CRUDCourse(["Manage courses<br/>(CRUD)"]):::uc
+      CRUDModule(["Manage modules<br/>(CRUD)"]):::uc
+      CRUDLesson(["Manage lessons<br/>(CRUD)"]):::uc
+      UploadPdf(["Upload lesson<br/>PDF"]):::uc
+    end
+
+    %% ── Class problem bank ─────────────────────────────────────
+    subgraph TBank["Classroom problem bank"]
+      direction TB
+      ViewBank(["View class<br/>problem bank"]):::uc
+      AddBank(["Add problem<br/>manually"]):::uc
+      AIBank(["Generate problem<br/>with AI"]):::uc
+      ForkBank(["Fork from<br/>global bank"]):::uc
+      DelBank(["Delete problem<br/>from bank"]):::uc
+    end
+
+    %% ── Assignments ────────────────────────────────────────────
+    subgraph TAss["Assignment workflow"]
+      direction TB
+      CreateAss(["Create assignment<br/>(draft)"]):::uc
+      PickProblems(["Pick problems<br/>(global+inst+class)"]):::uc
+      SetDueMax(["Set due date<br/>& max attempts"]):::uc
+      LockLang(["Lock language"]):::uc
+      LockMentor(["Lock AI Mentor"]):::uc
+      LockCorrect(["Lock AI<br/>correction"]):::uc
+      EditAss(["Edit assignment"]):::uc
+      PublishAss(["Publish /<br/>unpublish"]):::uc
+      NotifyAss(["Notify enrolled<br/>students"]):::uc
+      DeleteAss(["Delete assignment"]):::uc
+      ViewRoster(["View per-student<br/>completion roster"]):::uc
+      ViewSubs(["View a student's<br/>submissions"]):::uc
+      ViewStats(["View assignment<br/>statistics"]):::uc
+    end
+
+    %% ── Announcements ──────────────────────────────────────────
+    subgraph TAnn["Announcements"]
+      direction TB
+      PostAnn(["Post announcement<br/>to class"]):::uc
+      EditAnn(["Edit announcement"]):::uc
+      DeleteAnn(["Delete announcement"]):::uc
+    end
+
+    %% ── Messaging / notifications (inherited) ─────────────────
+    subgraph TMsg["Messaging & notifications<br/>(inherited from Authenticated User)"]
+      direction TB
+      TConv(["Use conversations<br/>(private + groups)"]):::uc
+      TGroupAdmin(["Administer owned<br/>groups (rename / ban /<br/>invite / delete)"]):::uc
+      TNot(["Use notifications<br/>panel"]):::uc
+      TRecvMsg(["Receive real-time<br/>message"]):::uc
+      TRecvNot(["Receive real-time<br/>notification"]):::uc
+    end
+  end
+  class T sys
+
+  %% ── Teacher direct associations ────────────────────────────
   Teacher --- CreateClass
-  Teacher --- Members
+  Teacher --- ListMyCls
+  Teacher --- OpenCls
+  Teacher --- ListStud
+  Teacher --- InviteSelected
+  Teacher --- RemoveStud
   Teacher --- CRUDCourse
+  Teacher --- ViewBank
   Teacher --- CreateAss
-  Teacher --- Grade
+  Teacher --- EditAss
+  Teacher --- PublishAss
+  Teacher --- DeleteAss
+  Teacher --- ViewRoster
+  Teacher --- ViewStats
   Teacher --- PostAnn
-  Teacher --- Reply
-  CreateClass -. "«include»" .-> Code
-  CRUDCourse  -. "«include»" .-> CRUDModule
-  CRUDModule  -. "«include»" .-> CRUDLesson
-  CreateAss   -. "«include»" .-> AttachP
+
+  %% ── AuthUser-inherited associations ────────────────────────
+  AuthUser --- TConv
+  AuthUser --- TGroupAdmin
+  AuthUser --- TNot
+
+  %% ── Realtime push (system actor) ───────────────────────────
+  Hub --- TRecvMsg
+  Hub --- TRecvNot
+
+  %% ── Cross-actor: students receive teacher-emitted events ───
+  NotifyInvited --- Student2
+  NotifyAss     --- Student2
+
+  %% ── Classroom relations ───────────────────────────────────
+  CreateClass -. "«include»" .-> GenCode
+  CreateClass -. "«include»" .-> BindCurriculum
+  RenameClass -. "«extend»"  .-> OpenCls
+  DeleteClass -. "«extend»"  .-> OpenCls
+
+  %% ── Roster relations ──────────────────────────────────────
+  InviteSelected -. "«include»" .-> NotifyInvited
+  RemoveStud     -. "«extend»"  .-> ListStud
+
+  %% ── Catalog nesting ───────────────────────────────────────
+  CRUDCourse -. "«include»" .-> CRUDModule
+  CRUDModule -. "«include»" .-> CRUDLesson
+  UploadPdf  -. "«extend»"  .-> CRUDLesson
+
+  %% ── Problem-bank relations ───────────────────────────────
+  AddBank  -. "«extend»" .-> ViewBank
+  AIBank   -. "«extend»" .-> ViewBank
+  ForkBank -. "«extend»" .-> ViewBank
+  DelBank  -. "«extend»" .-> ViewBank
+
+  %% ── Assignment relations ─────────────────────────────────
+  CreateAss   -. "«include»" .-> PickProblems
+  CreateAss   -. "«include»" .-> SetDueMax
+  LockLang    -. "«extend»"  .-> CreateAss
+  LockMentor  -. "«extend»"  .-> CreateAss
+  LockCorrect -. "«extend»"  .-> CreateAss
+  PublishAss  -. "«include»" .-> NotifyAss
+  ViewSubs    -. "«extend»"  .-> ViewRoster
+  PickProblems -. "«extend»" .-> ViewBank
+
+  %% ── Announcement relations ──────────────────────────────
+  EditAnn   -. "«extend»" .-> PostAnn
+  DeleteAnn -. "«extend»" .-> PostAnn
 ```
 
 > *Figure 39 — Use-case diagram of Sprint 3 — Teacher side.*
+
+#### What changed vs. the previous version
+
+The earlier diagrams listed about a third of the real Sprint-3 surface and mis-used the `«include»` / `«extend»` notation (for example "Send extends See notifications", which inverts cause and effect). The revised diagrams:
+
+- map **every** Sprint-3 endpoint and UI action one-to-one to a use case (classroom CRUD with rename / archive / delete; notification-based invitations with accept / decline; lesson PDF viewer; classroom problem bank with manual + AI + fork + delete; full assignment workflow including draft / publish / unpublish / edit / delete / roster / per-student submissions / aggregate stats; AI Mentor and AI correction locks; group conversations with invites, attachments, slash commands, photo, ban and leave; mark-as-read; real-time receive paths);
+- introduce a generalized `Authenticated User` actor so messaging and notifications appear once and are inherited by both Student and Teacher;
+- introduce a `Realtime Hub` (Socket.IO) system actor for events that are pushed to the user rather than requested;
+- enforce UML 2.5 directions — `«include»` from *base* to *included*, `«extend»` from *extension* to *base*;
+- replace the misleading `Send «extend» Notif` shortcut with a `Publish «include» Notify enrolled students` flow on the teacher side and a `Receive notification` use case driven by the `Realtime Hub` on the student side, which matches the actual `emitNotification(...)` calls in `messageHub.js`.
 
 ### 2. Sequence Diagrams
 
