@@ -253,6 +253,7 @@ flowchart LR
 
   Admin((Super Admin)):::actor
   Groq(("Groq LLM")):::ext
+  YT(("YouTube API")):::ext
 
   subgraph S["OmniLearn — Sprint 2 · Catalogue management"]
     direction TB
@@ -264,6 +265,7 @@ flowchart LR
     Create(["Create problem manually"]):::uc
     AIGen(["AI-generate problem(s)<br/>from a topic"]):::uc
     LLM(["Call Groq LLM<br/>(schema-constrained JSON)"]):::inc
+    Vids(["Enrich roadmap nodes with videos<br/>(3 per node)"]):::inc
 
     Update(["Update problem"]):::uc
     Delete(["Delete problem"]):::uc
@@ -288,6 +290,7 @@ flowchart LR
 
   %% ── «include» ──────────────────────────────
   AIGen -- "«include»" --> LLM
+  AIGen -- "«include»" --> Vids
   Pub   -- "«include»" --> Notify
 
   %% ── «extend» ───────────────────────────────
@@ -295,8 +298,9 @@ flowchart LR
   Create -. "«extend»" .-> Dup
   AIGen  -. "«extend»" .-> Dup
 
-  %% ── External actor ────────────────────────
+  %% ── External actors ───────────────────────
   LLM    -. uses .-> Groq
+  Vids   -. uses .-> YT
 ```
 
 > *Figure 23 — Use-case diagram of Sprint 2 — Super Admin side.*
