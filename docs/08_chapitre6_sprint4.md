@@ -501,23 +501,97 @@ sequenceDiagram
 
 ### 3. Activity Diagrams
 
-#### 3.1. User Account Suspension Process
+#### 3.1. Activity diagram — "Ban a user"
 
-The super admin picks a user and clicks Ban, then confirms in a modal.
-The user is marked inactive and signed out automatically on their next request.
+This swimlane diagram shows the full flow when the super admin bans a user account.
+The admin picks a user from the moderation table and confirms the action; the platform
+verifies the caller is a super admin, marks the account as inactive, revokes the active
+session, and the next request from that user is rejected and forces a sign-out.
 
 ```mermaid
-flowchart TD
-  A([Start]) --> B[Admin picks a user]
-  B --> C[Click &quot;Ban&quot;]
-  C --> D{Confirm?}
-  D -- No --> Z([End])
-  D -- Yes --> E[Mark user as inactive]
-  E --> F[User is signed out on next action]
-  F --> Z
+%%{init: {"theme":"neutral", "flowchart": {"htmlLabels": true}} }%%
+flowchart TB
+  Start([●]):::startNode
+
+  subgraph LANES[" "]
+    direction LR
+
+    subgraph ADMIN["Super Admin"]
+      direction TB
+      A1["Authenticate"]:::userNode
+      A2["Open the<br/>users moderation<br/>table"]:::userNode
+      A3["Pick the user<br/>to ban"]:::userNode
+      A4["Click<br/>&quot;Ban&quot;"]:::userNode
+      A5["Confirm in<br/>the modal"]:::userNode
+      A6["Cancel the<br/>action"]:::userNode
+    end
+
+    subgraph PLAT["Platform"]
+      direction TB
+      P1["Display the<br/>admin dashboard"]:::platNode
+      P2["Fetch the<br/>users list"]:::platNode
+      P3["Display the<br/>users table"]:::platNode
+      P4["Show the<br/>confirmation modal"]:::platNode
+      P5["Send PATCH<br/>/api/admin/users/:id<br/>{ isActive: false }"]:::platNode
+      P6{"Caller is<br/>super admin ?"}:::decisionNode
+      P7["Return<br/>403 Forbidden"]:::errorNode
+      P8["Revoke active<br/>session (JWT denylist)"]:::platNode
+      P9["Show success<br/>message"]:::platNode
+      P10["Reject next<br/>request → force<br/>sign-out"]:::platNode
+    end
+
+    subgraph DB["Database"]
+      direction TB
+      D1["Prepare the<br/>users list"]:::dbNode
+      D2["UPDATE users<br/>SET isActive = false,<br/>bannedAt = NOW()<br/>WHERE id = :userId"]:::dbNode
+      D3["INSERT audit_log<br/>(action=ban,<br/>by=adminId, target=userId)"]:::dbNode
+      D4["Return the<br/>updated user"]:::dbNode
+    end
+  end
+
+  End([◉]):::endNode
+
+  %% ── Flow across lanes ─────────────────────────
+  Start --> A1
+  A1 --> P1
+  P1 --> P2
+  P2 --> D1
+  D1 --> P3
+  P3 --> A2
+  A2 --> A3
+  A3 --> A4
+  A4 --> P4
+  P4 --> A5
+  P4 --> A6
+  A6 --> End
+  A5 --> P5
+  P5 --> P6
+  P6 -- "No" --> P7
+  P7 --> End
+  P6 -- "Yes" --> D2
+  D2 --> D3
+  D3 --> D4
+  D4 --> P8
+  P8 --> P9
+  P9 --> P10
+  P10 --> End
+
+  %% ── Styles ────────────────────────────────────
+  classDef userNode     fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,color:#7c2d12
+  classDef platNode     fill:#eef2ff,stroke:#4338ca,stroke-width:1.5px,color:#1e1b4b
+  classDef dbNode       fill:#ecfdf5,stroke:#047857,stroke-width:1.5px,color:#064e3b
+  classDef decisionNode fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+  classDef errorNode    fill:#fee2e2,stroke:#b91c1c,stroke-width:1.5px,color:#7f1d1d
+  classDef startNode    fill:#111827,stroke:#111827,color:#fff
+  classDef endNode      fill:#fff,stroke:#111827,stroke-width:3px,color:#111827
+
+  style LANES fill:#ffffff,stroke:#94a3b8,stroke-width:1px
+  style ADMIN fill:#fffaf4,stroke:#c2410c,stroke-width:1.5px
+  style PLAT  fill:#f5f7ff,stroke:#4338ca,stroke-width:1.5px
+  style DB    fill:#f3fbf6,stroke:#047857,stroke-width:1.5px
 ```
 
-> *Figure 58. Activity diagram of the user account suspension process.*
+> *Figure 58. Activity diagram "Ban a user" (swimlane).*
 
 #### 3.2. New Institution Onboarding Workflow
 
