@@ -582,8 +582,12 @@ flowchart TD
 
 ### 4. Class Diagram
 
-This diagram shows the new entities added in Sprint 4 and how they connect to the User.
-The main new ones are Institution, InviteLink, PdfDocument, and the per-institution curriculum classes.
+This diagram shows the new entities added in Sprint 4 and how they connect to the `User`.
+The `User` entity is specialized by **role** — `Admin` (super-admin), `InstitutionAdmin`, `Teacher`, `Student` — because every Sprint 4
+association is role-driven: only an `InstitutionAdmin` *issues* invite links and *manages* per-institution curriculum, only an
+`Admin` *manages* the global curriculum templates and *bans* users, only a `Pro` / `Institution` user *owns* a `PdfDocument`,
+while every authenticated `User` *receives* notifications regardless of role. The plan dimension (`Free` / `Pro` / `Institution`)
+is exposed as a separate `Plan` enum since Sprint 4 introduces the `requirePro` gate on the AI plane.
 
 Sprint 4 adds:
 
@@ -594,19 +598,75 @@ Sprint 4 adds:
 
 ```mermaid
 classDiagram
+  %% ── Actor hierarchy (role + plan discriminators) ─────────
+  class User {
+    <<abstract>>
+    +UUID id
+    +string email
+    +string fullName
+    +Role role
+    +Plan plan
+    +UUID institutionId
+    +bool isActive
+  }
+  class Role {
+    <<enumeration>>
+    admin
+    institution_admin
+    teacher
+    student
+  }
+  class Plan {
+    <<enumeration>>
+    free
+    pro
+    institution
+  }
+  class Admin {
+    +manageInstitutions()
+    +manageGlobalCurriculum()
+    +banUser(id)
+    +viewGlobalStats()
+  }
+  class InstitutionAdmin {
+    +onboardInstitution()
+    +issueInviteLink(role)
+    +manageInstitutionCurriculum()
+    +postInstitutionAnnouncement()
+  }
+  class Teacher {
+    +createClassroom()
+    +uploadLessonPdf()
+  }
+  class Student {
+    +joinInstitution(token)
+    +uploadPersonalPdf()
+    +chatWithPdf()
+    +useAiMentor()
+    +upgradeToPro()
+  }
+
+  User <|-- Admin            : role = admin
+  User <|-- InstitutionAdmin : role = institution_admin
+  User <|-- Teacher          : role = teacher
+  User <|-- Student          : role = student
+  User ..> Role              : typed by
+  User ..> Plan              : typed by
+
+  %% ── Domain entities ──────────────────────────────────────
   class Institution {
     +UUID id
     +string name
     +string slug
     +string logoUrl
-    +enum plan
+    +Plan plan
     +Date createdAt
   }
   class InviteLink {
     +UUID id
     +UUID institutionId
     +string token
-    +enum role  (teacher|student|institution_admin)
+    +Role role
     +Date expiresAt
     +int  maxUses
     +int  usedCount
@@ -624,12 +684,6 @@ classDiagram
   class Level {
     +UUID id
     +string name
-    +UUID institutionId
-  }
-  class User {
-    +UUID id
-    +enum role
-    +enum plan
     +UUID institutionId
   }
   class StripeCheckout {
@@ -651,17 +705,32 @@ classDiagram
     +JSON payload
   }
 
-  Institution "1" --> "*" InviteLink : issues
-  Institution "1" --> "*" Grade
-  Institution "1" --> "*" Speciality
-  Institution "1" --> "*" Level
-  Institution "1" --> "*" User       : members
-  User        "1" --> "*" PdfDocument : owns
-  User        "1" --> "*" Notification : receives
-  User        "1" --> "*" StripeCheckout : initiates
+  %% ── Role-specific associations ──────────────────────────
+  InstitutionAdmin "1" --> "1" Institution     : administers
+  InstitutionAdmin "1" --> "*" InviteLink      : issues
+  InstitutionAdmin "1" --> "*" Grade           : manages (scoped)
+  InstitutionAdmin "1" --> "*" Speciality      : manages (scoped)
+  InstitutionAdmin "1" --> "*" Level           : manages (scoped)
+  Admin            "1" --> "*" Grade           : manages (global)
+  Admin            "1" --> "*" Speciality      : manages (global)
+  Admin            "1" --> "*" Level           : manages (global)
+  Admin            "1" --> "*" Institution     : oversees
+  Admin            "1" --> "*" User            : bans / unbans
+
+  %% ── Structural associations ─────────────────────────────
+  Institution "1" --> "*" InviteLink   : owns
+  Institution "1" --> "*" Grade        : owns
+  Institution "1" --> "*" Speciality   : owns
+  Institution "1" --> "*" Level        : owns
+  Institution "1" --> "*" User         : members
+
+  %% ── Cross-role associations (any authenticated user) ───
+  User "1" --> "*" PdfDocument    : owns        (Pro / Institution)
+  User "1" --> "*" Notification   : receives
+  User "1" --> "*" StripeCheckout : initiates
 ```
 
-> *Figure 60 — Class diagram of Sprint 4.*
+> *Figure 60 — Class diagram of Sprint 4 (with role + plan specialization of `User`).*
 
 ### 5. C4 Component view
 
