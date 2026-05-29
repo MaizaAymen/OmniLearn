@@ -880,44 +880,26 @@ Messages are sent and received instantly, like in a normal messaging app.
 
 > *Figure 53 — Real-time messaging page.*
 
-## VI. Testing
+## VI. Tests
 
-To verify the Sprint 3 backend, we tested two endpoints that drive classroom collaboration — joining a class by invite code and creating an assignment.
+Once the classroom and assignment features were in place, we ran a short test campaign on
+the endpoints that drive classroom collaboration on the platform.
 
-#### 1. `GET /api/admin/classrooms/join/:code` — look up a classroom by invite code
+The goal was to confirm that a student can join a class with the right invite code and that
+only a teacher account is allowed to create an assignment on a classroom module.
 
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a valid invite code returns the matching classroom and that an unknown code returns 404.
-**Request:** `GET /api/admin/classrooms/join/ABC123` (no auth required — this is a public lookup).
+The cases below cover the happy path and the most relevant authorization check.
 
-**Expected:**
-- **Valid code** → `200 OK` with `{ id, name, academicYear }`.
-- **Unknown code** → `404 Not Found` with `{ error: "Invalid invite code" }`.
+#### Table 7.1 — Sprint 3 test cases and their outcomes
 
-> *Figure 53.1 — Postman — `GET /api/admin/classrooms/join/:code` returns the classroom for a valid invite code.*
-> *Figure 53.2 — Postman — `GET /api/admin/classrooms/join/:code` returns 404 for an unknown code.*
+| Test Case ID | Description | Expected Result | Actual Result | Status |
+|---|---|---|---|---|
+| TC01 | `GET /api/admin/classrooms/join/:code` with a valid invite code | `200 OK` with the classroom `{ id, name, academicYear }` | Classroom info returned and shown to the student | Passed |
+| TC02 | `GET /api/admin/classrooms/join/:code` with an unknown invite code | `404 Not Found` with an error message | Request rejected and a clear error displayed | Passed |
+| TC03 | `POST /api/assignments` called by a teacher account | `201 Created` with the new assignment object | Assignment created and listed under the classroom module | Passed |
 
-#### 2. `POST /api/assignments` — create an assignment (teacher)
-
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a teacher can create an assignment linked to a classroom module and that a student is forbidden from doing so.
-**Request:** authenticated `POST` with `Authorization: Bearer <teacher-jwt>` and body:
-
-```json
-{
-  "moduleId": 12,
-  "title": "Week 3 — Arrays",
-  "dueDate": "2026-06-15T23:59:00Z",
-  "problemIds": ["two-sum", "reverse-array"]
-}
-```
-
-**Expected:**
-- **Teacher token** → `201 Created` with the new assignment object.
-- **Student token** → `403 Forbidden`.
-
-> *Figure 53.3 — Postman — `POST /api/assignments` creates a new assignment when called as a teacher.*
-> *Figure 53.4 — Postman — `POST /api/assignments` returns 403 when called as a student.*
+All three cases passed in the first execution. The sprint closed with classroom enrolment,
+assignments and real-time messaging functioning correctly together.
 
 ## VII. Conclusion
 

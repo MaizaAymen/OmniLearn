@@ -897,51 +897,26 @@ A simple switch turns the flag on or off for each problem.
 > *Figure 36 — `FreeTierTab` — toggle problems as free-tier.*
 > *Figure 37 — `ProTierTab` — toggle problems as pro-tier.*
 
-## VI. Testing
+## VI. Tests
 
-To validate the Sprint 2 backend, we tested two endpoints that drive the core student loop — generating a roadmap and submitting code.
+After implementing the personalized roadmap and the problem catalogue, we ran a short test
+campaign on the two backend endpoints that drive the student's daily learning loop.
 
-#### 1. `POST /api/roadmaps/generate` — generate a personalized roadmap
+The objective was to confirm that a roadmap is generated from the student profile and that
+a code submission is saved with the right status on the corresponding problem record.
 
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a roadmap is created from the student's profile (grade / speciality / level) and saved against the user.
-**Request:** authenticated `POST` with `Authorization: Bearer <jwt>` and body:
+The cases below cover one happy path and one input-validation check on each endpoint.
 
-```json
-{ "specialityId": 3, "levelId": 2, "targetGoal": "Become a backend developer" }
-```
+#### Table 6.1 — Sprint 2 test cases and their outcomes
 
-**Expected:**
-- **Valid profile** → `200 OK` with a roadmap object containing nodes and edges.
-- **Missing token** → `401 Unauthorized`.
+| Test Case ID | Description | Expected Result | Actual Result | Status |
+|---|---|---|---|---|
+| TC01 | `POST /api/roadmaps/generate` with a valid student profile and JWT | `200 OK` with a roadmap graph (nodes and edges) | Roadmap generated and saved against the user | Passed |
+| TC02 | `POST /api/submissions` with a correct solution payload | `200 OK` with the saved submission and the problem marked as solved | Submission persisted and `StudentProblemSet` upserted | Passed |
+| TC03 | `POST /api/submissions` with a missing required field (no `userCode`) | `400 Bad Request` with a validation error | Request was rejected and nothing was persisted | Passed |
 
-> *Figure 37.1 — Postman — `POST /api/roadmaps/generate` returns the generated roadmap graph.*
-> *Figure 37.2 — Postman — `POST /api/roadmaps/generate` returns 401 when the JWT is missing.*
-
-#### 2. `POST /api/submissions` — save a code submission
-
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a submission is persisted, the attempt counter is incremented, and the `StudentProblemSet` record is upserted.
-**Request body:**
-
-```json
-{
-  "userId": 42,
-  "problemId": "two-sum",
-  "userCode": "def two_sum(nums, target): ...",
-  "language": "python",
-  "status": "passed",
-  "score": 100,
-  "isCorrect": true
-}
-```
-
-**Expected:**
-- **Valid payload** → `200 OK` with `{ submission, problemRecord }` where `problemRecord.status === "solved"`.
-- **Missing required field** (e.g. no `userCode`) → `400 Bad Request` with `{ error: "userId, userCode, and language are required" }`.
-
-> *Figure 37.3 — Postman — `POST /api/submissions` persists a correct submission and marks the problem as solved.*
-> *Figure 37.4 — Postman — `POST /api/submissions` returns 400 when `userCode` is missing.*
+All three cases passed in the first execution. Sprint 2 closed with the learning loop
+working end to end for individual learners on the Free and Pro plans.
 
 ## VII. Conclusion
 

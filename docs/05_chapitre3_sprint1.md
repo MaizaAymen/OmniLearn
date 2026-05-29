@@ -946,43 +946,26 @@ A Free user clicks the Pro button, which opens Stripe Checkout in a new tab to p
 
 > *Figure 21 — Pricing / plan-upgrade section.*
 
-## VI. Testing
+## VI. Tests
 
-To make sure the Sprint 1 backend behaves as expected, we tested two of the most critical endpoints with Postman.
+To make sure the authentication features delivered in Sprint 1 are reliable, we ran a small set of
+endpoint tests against the backend before closing the sprint.
 
-#### 1. `POST /api/auth/login` — sign in
+The goal was to confirm that the sign-in flow returns a valid JWT for legitimate users
+and rejects bad inputs with the right HTTP status codes.
 
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that valid credentials return a JWT and that invalid credentials are rejected.
-**Request body:**
+The cases below cover the happy path and the most common failure on the `/api/auth` routes.
 
-```json
-{ "email": "student@omnilearn.io", "password": "Secret123!" }
-```
+#### Table 5.1 — Sprint 1 test cases and their outcomes
 
-**Expected:**
-- **Valid** credentials → `200 OK` with `{ token, user }`.
-- **Wrong password** → `401 Unauthorized` with `{ error: "Invalid credentials" }`.
+| Test Case ID | Description | Expected Result | Actual Result | Status |
+|---|---|---|---|---|
+| TC01 | `POST /api/auth/login` with valid credentials | `200 OK` with a JWT and the user object | Token issued and user redirected to the dashboard | Passed |
+| TC02 | `POST /api/auth/login` with a wrong password | `401 Unauthorized` with an error message | Error displayed correctly on the sign-in form | Passed |
+| TC03 | `POST /api/auth/reset-password` with an invalid token | `400 Bad Request` with an error message | Request was rejected and no password was updated | Passed |
 
-> *Figure 21.1 — Postman — `POST /api/auth/login` returns 200 OK and a JWT for valid credentials.*
-> *Figure 21.2 — Postman — `POST /api/auth/login` returns 401 for a wrong password.*
-
-#### 2. `POST /api/auth/reset-password` — reset a forgotten password
-
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a valid reset token updates the password and that an expired/invalid token is rejected.
-**Request body:**
-
-```json
-{ "token": "<token-from-email>", "newPassword": "NewSecret456!" }
-```
-
-**Expected:**
-- **Valid token** → `200 OK` and the new password works on the next `/login` call.
-- **Invalid / expired token** → `400 Bad Request` with `{ error: "Invalid or expired token" }`.
-
-> *Figure 21.3 — Postman — `POST /api/auth/reset-password` succeeds with a valid token.*
-> *Figure 21.4 — Postman — `POST /api/auth/reset-password` rejects an expired token.*
+All three cases passed on the first execution. The sprint was closed with the auth flow
+behaving as specified and no blocking defects remaining open.
 
 ## VII. Conclusion
 

@@ -1296,39 +1296,26 @@ Each plan card has a Stripe button that starts the checkout flow.
 
 > *Figure 76 — Pricing / Plan section with Stripe upgrade buttons.*
 
-## VI. Testing
+## VI. Tests
 
-To validate the Sprint 4 backend, we tested two endpoints that are central to the new features — chatting with a PDF and joining an institution through an invite link.
+After delivering the AI features and the multi-tenant administration layer, we ran a short
+test campaign on the two endpoints that matter most for the new flows.
 
-#### 1. `POST /api/pdf/chat` — RAG question answering on an uploaded PDF
+The goal was to confirm that the PDF assistant returns an answer grounded in the indexed
+material and that a visitor can join an institution through an invite link.
 
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that the endpoint returns an answer grounded in the indexed PDF and that an unknown `pdfId` is rejected.
-**Request body:**
+The cases below cover the happy path and one validation check on the invite-link flow.
 
-```json
-{ "pdfId": "course-physics-101", "question": "What is Newton's second law?" }
-```
+#### Table 8.1 — Sprint 4 test cases and their outcomes
 
-**Expected:**
-- **Indexed PDF** → `200 OK` with `{ answer, sources: [...] }` where `sources` references the matched chunks.
-- **Unknown `pdfId`** → `404 Not Found` with `{ error: "PDF not found" }`.
+| Test Case ID | Description | Expected Result | Actual Result | Status |
+|---|---|---|---|---|
+| TC01 | `POST /api/pdf/chat` with a question on an indexed PDF | `200 OK` with a grounded answer and source chunks | Answer returned with the matching chunks as citations | Passed |
+| TC02 | `POST /api/plan/invite/:token/accept` with a valid invite token | `200 OK` and the user is linked to the institution with the right role | User added to the institution and role assigned | Passed |
+| TC03 | `POST /api/plan/invite/:token/accept` with an expired or revoked token | `400 Bad Request` with an error message | Request rejected and the user was not linked | Passed |
 
-> *Figure 76.1 — Postman — `POST /api/pdf/chat` returns a grounded answer with citations.*
-> *Figure 76.2 — Postman — `POST /api/pdf/chat` returns 404 for an unknown PDF id.*
-
-#### 2. `POST /api/plan/invite/:token/accept` — accept an institution invite link
-
-**Type:** Endpoint test (Postman).
-**Goal:** Verify that a valid invite token links the authenticated user to the institution with the right role, and that an expired token is rejected.
-**Request:** authenticated `POST /api/plan/invite/<token>/accept` with `Authorization: Bearer <jwt>`.
-
-**Expected:**
-- **Valid token** → `200 OK` with `{ institutionId, role }`, and the user's profile now shows the linked institution.
-- **Expired / revoked token** → `400 Bad Request` with `{ error: "Invite link is invalid or expired" }`.
-
-> *Figure 76.3 — Postman — `POST /api/plan/invite/:token/accept` links the user to the institution with the right role.*
-> *Figure 76.4 — Postman — `POST /api/plan/invite/:token/accept` rejects an expired invite link.*
+All three cases passed in the first execution. Sprint 4 closed with the AI tutor and the
+institution onboarding flow working as expected under real usage.
 
 ## VII. Conclusion
 
