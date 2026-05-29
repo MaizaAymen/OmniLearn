@@ -503,10 +503,8 @@ sequenceDiagram
 
 #### 3.1. Activity diagram — "Ban a user"
 
-This swimlane diagram shows the full flow when the super admin bans a user account.
-The admin picks a user from the moderation table and confirms the action; the platform
-verifies the caller is a super admin, marks the account as inactive, revokes the active
-session, and the next request from that user is rejected and forces a sign-out.
+The super admin picks a user and clicks Ban; the platform marks the account
+inactive and the user is signed out on their next request.
 
 ```mermaid
 %%{init: {"theme":"neutral", "flowchart": {"htmlLabels": true}} }%%
@@ -518,63 +516,30 @@ flowchart TB
 
     subgraph ADMIN["Super Admin"]
       direction TB
-      A1["Authenticate"]:::userNode
-      A2["Open the<br/>users moderation<br/>table"]:::userNode
-      A3["Pick the user<br/>to ban"]:::userNode
-      A4["Click<br/>&quot;Ban&quot;"]:::userNode
-      A5["Confirm in<br/>the modal"]:::userNode
-      A6["Cancel the<br/>action"]:::userNode
+      A1["Pick a user"]:::userNode
+      A2["Click &quot;Ban&quot;<br/>and confirm"]:::userNode
     end
 
     subgraph PLAT["Platform"]
       direction TB
-      P1["Display the<br/>admin dashboard"]:::platNode
-      P2["Fetch the<br/>users list"]:::platNode
-      P3["Display the<br/>users table"]:::platNode
-      P4["Show the<br/>confirmation modal"]:::platNode
-      P5["Send PATCH<br/>/api/admin/users/:id<br/>{ isActive: false }"]:::platNode
-      P6{"Caller is<br/>super admin ?"}:::decisionNode
-      P7["Return<br/>403 Forbidden"]:::errorNode
-      P8["Revoke active<br/>session (JWT denylist)"]:::platNode
-      P9["Show success<br/>message"]:::platNode
-      P10["Reject next<br/>request → force<br/>sign-out"]:::platNode
+      P1["PATCH /api/admin/users/:id<br/>{ isActive: false }"]:::platNode
+      P2{"Super admin ?"}:::decisionNode
+      P3["403 Forbidden"]:::errorNode
+      P4["Sign out user<br/>on next request"]:::platNode
     end
 
     subgraph DB["Database"]
       direction TB
-      D1["Prepare the<br/>users list"]:::dbNode
-      D2["UPDATE users<br/>SET isActive = false,<br/>bannedAt = NOW()<br/>WHERE id = :userId"]:::dbNode
-      D3["INSERT audit_log<br/>(action=ban,<br/>by=adminId, target=userId)"]:::dbNode
-      D4["Return the<br/>updated user"]:::dbNode
+      D1["UPDATE users<br/>SET isActive = false"]:::dbNode
     end
   end
 
   End([◉]):::endNode
 
-  %% ── Flow across lanes ─────────────────────────
-  Start --> A1
-  A1 --> P1
-  P1 --> P2
-  P2 --> D1
-  D1 --> P3
-  P3 --> A2
-  A2 --> A3
-  A3 --> A4
-  A4 --> P4
-  P4 --> A5
-  P4 --> A6
-  A6 --> End
-  A5 --> P5
-  P5 --> P6
-  P6 -- "No" --> P7
-  P7 --> End
-  P6 -- "Yes" --> D2
-  D2 --> D3
-  D3 --> D4
-  D4 --> P8
-  P8 --> P9
-  P9 --> P10
-  P10 --> End
+  %% ── Flow ──────────────────────────────────────
+  Start --> A1 --> A2 --> P1 --> P2
+  P2 -- "No"  --> P3 --> End
+  P2 -- "Yes" --> D1 --> P4 --> End
 
   %% ── Styles ────────────────────────────────────
   classDef userNode     fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px,color:#7c2d12
