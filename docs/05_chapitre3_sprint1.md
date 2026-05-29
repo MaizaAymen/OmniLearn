@@ -946,7 +946,45 @@ A Free user clicks the Pro button, which opens Stripe Checkout in a new tab to p
 
 > *Figure 21 — Pricing / plan-upgrade section.*
 
-## VI. Conclusion
+## VI. Testing
+
+To make sure the Sprint 1 backend behaves as expected, we tested two of the most critical endpoints with Postman.
+
+#### 1. `POST /api/auth/login` — sign in
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that valid credentials return a JWT and that invalid credentials are rejected.
+**Request body:**
+
+```json
+{ "email": "student@omnilearn.io", "password": "Secret123!" }
+```
+
+**Expected:**
+- **Valid** credentials → `200 OK` with `{ token, user }`.
+- **Wrong password** → `401 Unauthorized` with `{ error: "Invalid credentials" }`.
+
+> *Figure 21.1 — Postman — `POST /api/auth/login` returns 200 OK and a JWT for valid credentials.*
+> *Figure 21.2 — Postman — `POST /api/auth/login` returns 401 for a wrong password.*
+
+#### 2. `POST /api/auth/reset-password` — reset a forgotten password
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a valid reset token updates the password and that an expired/invalid token is rejected.
+**Request body:**
+
+```json
+{ "token": "<token-from-email>", "newPassword": "NewSecret456!" }
+```
+
+**Expected:**
+- **Valid token** → `200 OK` and the new password works on the next `/login` call.
+- **Invalid / expired token** → `400 Bad Request` with `{ error: "Invalid or expired token" }`.
+
+> *Figure 21.3 — Postman — `POST /api/auth/reset-password` succeeds with a valid token.*
+> *Figure 21.4 — Postman — `POST /api/auth/reset-password` rejects an expired token.*
+
+## VII. Conclusion
 
 In this chapter we detailed the first sprint, which delivered the authentication, profile, password-reset, 2FA and initial plan-upgrade flows. The next chapter presents the work of Sprint 2 — roadmap personalization, problem catalogue and the code editor.
 

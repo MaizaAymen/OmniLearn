@@ -897,7 +897,53 @@ A simple switch turns the flag on or off for each problem.
 > *Figure 36 — `FreeTierTab` — toggle problems as free-tier.*
 > *Figure 37 — `ProTierTab` — toggle problems as pro-tier.*
 
-## VI. Conclusion
+## VI. Testing
+
+To validate the Sprint 2 backend, we tested two endpoints that drive the core student loop — generating a roadmap and submitting code.
+
+#### 1. `POST /api/roadmaps/generate` — generate a personalized roadmap
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a roadmap is created from the student's profile (grade / speciality / level) and saved against the user.
+**Request:** authenticated `POST` with `Authorization: Bearer <jwt>` and body:
+
+```json
+{ "specialityId": 3, "levelId": 2, "targetGoal": "Become a backend developer" }
+```
+
+**Expected:**
+- **Valid profile** → `200 OK` with a roadmap object containing nodes and edges.
+- **Missing token** → `401 Unauthorized`.
+
+> *Figure 37.1 — Postman — `POST /api/roadmaps/generate` returns the generated roadmap graph.*
+> *Figure 37.2 — Postman — `POST /api/roadmaps/generate` returns 401 when the JWT is missing.*
+
+#### 2. `POST /api/submissions` — save a code submission
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a submission is persisted, the attempt counter is incremented, and the `StudentProblemSet` record is upserted.
+**Request body:**
+
+```json
+{
+  "userId": 42,
+  "problemId": "two-sum",
+  "userCode": "def two_sum(nums, target): ...",
+  "language": "python",
+  "status": "passed",
+  "score": 100,
+  "isCorrect": true
+}
+```
+
+**Expected:**
+- **Valid payload** → `200 OK` with `{ submission, problemRecord }` where `problemRecord.status === "solved"`.
+- **Missing required field** (e.g. no `userCode`) → `400 Bad Request` with `{ error: "userId, userCode, and language are required" }`.
+
+> *Figure 37.3 — Postman — `POST /api/submissions` persists a correct submission and marks the problem as solved.*
+> *Figure 37.4 — Postman — `POST /api/submissions` returns 400 when `userCode` is missing.*
+
+## VII. Conclusion
 
 Sprint 2 delivered the personalized roadmap, the problem catalogue, the multi-language code editor, the coding dashboard and the super-admin catalogue management. With these features, the platform already provides a complete learning loop for individual learners on the Free and Pro plans. The next chapter — Sprint 3 — adds the multi-actor collaborative dimension: classrooms, assignments and real-time messaging.
 

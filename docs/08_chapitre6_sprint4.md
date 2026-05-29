@@ -1296,7 +1296,41 @@ Each plan card has a Stripe button that starts the checkout flow.
 
 > *Figure 76 — Pricing / Plan section with Stripe upgrade buttons.*
 
-## VI. Conclusion
+## VI. Testing
+
+To validate the Sprint 4 backend, we tested two endpoints that are central to the new features — chatting with a PDF and joining an institution through an invite link.
+
+#### 1. `POST /api/pdf/chat` — RAG question answering on an uploaded PDF
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that the endpoint returns an answer grounded in the indexed PDF and that an unknown `pdfId` is rejected.
+**Request body:**
+
+```json
+{ "pdfId": "course-physics-101", "question": "What is Newton's second law?" }
+```
+
+**Expected:**
+- **Indexed PDF** → `200 OK` with `{ answer, sources: [...] }` where `sources` references the matched chunks.
+- **Unknown `pdfId`** → `404 Not Found` with `{ error: "PDF not found" }`.
+
+> *Figure 76.1 — Postman — `POST /api/pdf/chat` returns a grounded answer with citations.*
+> *Figure 76.2 — Postman — `POST /api/pdf/chat` returns 404 for an unknown PDF id.*
+
+#### 2. `POST /api/plan/invite/:token/accept` — accept an institution invite link
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a valid invite token links the authenticated user to the institution with the right role, and that an expired token is rejected.
+**Request:** authenticated `POST /api/plan/invite/<token>/accept` with `Authorization: Bearer <jwt>`.
+
+**Expected:**
+- **Valid token** → `200 OK` with `{ institutionId, role }`, and the user's profile now shows the linked institution.
+- **Expired / revoked token** → `400 Bad Request` with `{ error: "Invite link is invalid or expired" }`.
+
+> *Figure 76.3 — Postman — `POST /api/plan/invite/:token/accept` links the user to the institution with the right role.*
+> *Figure 76.4 — Postman — `POST /api/plan/invite/:token/accept` rejects an expired invite link.*
+
+## VII. Conclusion
 
 In this last chapter we added several major features. The PDF assistant lets students ask questions grounded in their own course material; the AI Mentor follows them across the app and supports code correction without giving final solutions; learning tags provide faster access to references; institution onboarding and invite links enable schools to bring their entire community under one roof; and the super-admin and institution-admin consoles round off the multi-tenant administration of the platform.
 

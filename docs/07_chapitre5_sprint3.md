@@ -880,7 +880,46 @@ Messages are sent and received instantly, like in a normal messaging app.
 
 > *Figure 53 — Real-time messaging page.*
 
-## VI. Conclusion
+## VI. Testing
+
+To verify the Sprint 3 backend, we tested two endpoints that drive classroom collaboration — joining a class by invite code and creating an assignment.
+
+#### 1. `GET /api/admin/classrooms/join/:code` — look up a classroom by invite code
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a valid invite code returns the matching classroom and that an unknown code returns 404.
+**Request:** `GET /api/admin/classrooms/join/ABC123` (no auth required — this is a public lookup).
+
+**Expected:**
+- **Valid code** → `200 OK` with `{ id, name, academicYear }`.
+- **Unknown code** → `404 Not Found` with `{ error: "Invalid invite code" }`.
+
+> *Figure 53.1 — Postman — `GET /api/admin/classrooms/join/:code` returns the classroom for a valid invite code.*
+> *Figure 53.2 — Postman — `GET /api/admin/classrooms/join/:code` returns 404 for an unknown code.*
+
+#### 2. `POST /api/assignments` — create an assignment (teacher)
+
+**Type:** Endpoint test (Postman).
+**Goal:** Verify that a teacher can create an assignment linked to a classroom module and that a student is forbidden from doing so.
+**Request:** authenticated `POST` with `Authorization: Bearer <teacher-jwt>` and body:
+
+```json
+{
+  "moduleId": 12,
+  "title": "Week 3 — Arrays",
+  "dueDate": "2026-06-15T23:59:00Z",
+  "problemIds": ["two-sum", "reverse-array"]
+}
+```
+
+**Expected:**
+- **Teacher token** → `201 Created` with the new assignment object.
+- **Student token** → `403 Forbidden`.
+
+> *Figure 53.3 — Postman — `POST /api/assignments` creates a new assignment when called as a teacher.*
+> *Figure 53.4 — Postman — `POST /api/assignments` returns 403 when called as a student.*
+
+## VII. Conclusion
 
 Sprint 3 transformed OmniLearn into a real collaborative platform — classrooms, assignments, announcements, real-time messaging and notifications all came online. The next chapter — Sprint 4 — focuses on the AI-grounded PDF assistant and the full Institution / Super Admin management consoles.
 
