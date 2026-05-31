@@ -16,45 +16,45 @@ This final sprint completes OmniLearn by adding the **AI tutor** and the **multi
 |---|---|---|---|---|---|
 | **PDF Assistant — RAG** | | | | | |
 | 15 | Upload & ingest a PDF | US15.1 | As a student, I want to upload a course PDF. | 15.1 | Build `PdfAssistant.jsx` with drag-and-drop. |
-| | | | | 15.2 | `POST /api/pdf/upload` stores the file (Multer + Cloudinary). |
-| | | | | 15.3 | Server extracts text (`pdf-parse`) and splits into 800-word chunks (`chunkText()`). |
-| | | | | 15.4 | Embeddings (`sentence-transformers/all-MiniLM-L6-v2` via HuggingFace) indexed in Chroma DB — implemented inline in `Server/src/routes/pdfRoutes.js`. |
-| | | US15.2 | As a student, I want to chat with the AI grounded in that PDF. | 15.5 | `POST /api/pdf/chat` runs `similaritySearch(q, 3)` + Groq completion. Falls back to keyword scoring if Chroma is unreachable. |
-| | | | | 15.6 | Additional endpoints: `/explain`, `/summarize`, `/quiz` (10 / 20 MCQs), `/smart-search`, `/highlights`, `/bookmarks`. |
+| | | | | 15.2 | Implement `POST /api/pdf/upload` to store the file (Multer + Cloudinary). |
+| | | | | 15.3 | Extract text (`pdf-parse`) and split it into 800-word chunks (`chunkText()`). |
+| | | | | 15.4 | Index embeddings (`sentence-transformers/all-MiniLM-L6-v2` via HuggingFace) in Chroma DB — implemented inline in `Server/src/routes/pdfRoutes.js`. |
+| | | US15.2 | As a student, I want to chat with the AI grounded in that PDF. | 15.5 | Implement `POST /api/pdf/chat` running `similaritySearch(q, 3)` + Groq completion, falling back to keyword scoring if Chroma is unreachable. |
+| | | | | 15.6 | Add the supporting endpoints: `/explain`, `/summarize`, `/quiz` (10 / 20 MCQs), `/smart-search`, `/highlights`, `/bookmarks`. |
 | **AI Mentor** | | | | | |
 | — | Cross-feature AI tutor | — | As a student, I want an AI mentor that knows my roadmap and submissions. | M.1 | Build `AIMentor.jsx`. |
-| | | | | M.2 | `POST /api/ai/mentor` injects user context into the LLM prompt. |
+| | | | | M.2 | Implement `POST /api/ai/mentor` to inject user context into the LLM prompt. |
 | | | | | M.3 | Provide guidance without final answers + AI-assisted code correction. |
 | **Learning tags** | | | | | |
 | — | Curated learning tags | — | As a student, I want `/ai`, `/stack-overflow`, `/youtube` tags to learn faster. | T.1 | Add tag shortcuts and a filterable tag list. |
 | **Institution Onboarding** | | | | | |
 | 24 | Onboard an institution | US24.1 | As a new Institution buyer, I want to onboard my institution. | 24.1 | Build `OnboardInstitution.jsx`. |
-| | | | | 24.2 | `POST /api/plan/institution` creates `Institution` + assigns the user as `institution_admin`. |
+| | | | | 24.2 | Implement `POST /api/plan/institution` to create `Institution` and assign the user as `institution_admin`. |
 | | | | | 24.3 | Update `Guard` in `App.jsx` to redirect to onboarding if `plan==='institution' && !institutionId`. |
 | **Invite Links** | | | | | |
 | 25 | Generate invite links | US25.1 | As an institution admin, I want to generate invite links. | 25.1 | Implement `InviteLink` model with `role`, `expiresAt`, `maxUses`. |
-| | | | | 25.2 | `POST /api/plan/invite-links`. |
-| | | US25.2 | As an institution admin, I want to revoke a link. | 25.3 | `DELETE /api/plan/invite-links/:id`. |
+| | | | | 25.2 | Implement `POST /api/plan/invite-links`. |
+| | | US25.2 | As an institution admin, I want to revoke a link. | 25.3 | Implement `DELETE /api/plan/invite-links/:id`. |
 | 26 | Join via invite link | US26.1 | As a visitor, I want to join via the invite link. | 26.1 | Build `JoinInstitution.jsx` at `/join-institution/:token`. |
-| | | | | 26.2 | `POST /api/plan/join-institution` validates the token, links the user to the institution and sets the role. |
+| | | | | 26.2 | Implement `POST /api/plan/join-institution` to validate the token, link the user to the institution and set the role. |
 | **Institution Curriculum** | | | | | |
-| 27 | Per-institution curriculum | US27.1 | As an institution admin, I want to manage Grades / Specialities / Levels for my institution. | 27.1 | CRUD endpoints in `institutionCurriculumRoutes.js`. |
+| 27 | Per-institution curriculum | US27.1 | As an institution admin, I want to manage Grades / Specialities / Levels for my institution. | 27.1 | Implement CRUD endpoints in `institutionCurriculumRoutes.js`. |
 | | | | | 27.2 | Build `InstitutionTab.jsx` and its forms. |
 | **Institution Member Directory** | | | | | |
-| 35 | List members | US35.1 | As an institution admin, I want to see all members of my institution. | 35.1 | `GET /api/admin/institution/members` filters by `institutionId`. |
+| 35 | List members | US35.1 | As an institution admin, I want to see all members of my institution. | 35.1 | Implement `GET /api/admin/institution/members` to filter by `institutionId`. |
 | | | | | 35.2 | Display the directory in `InstitutionTab.jsx`. |
 | **Super Admin** | | | | | |
 | 28 | Super Admin sign-in | US28.1 | As a super admin, I want to access the super admin dashboard. | 28.1 | Add a guard for `role === "admin"` on `/education`. |
-| 29 | Manage institutions | US29.1 | As a super admin, I want to list / suspend institutions. | 29.1 | `GET /api/admin/institutions` and suspend / delete actions. |
-| 31 | Ban / unban users | US31.1 | As a super admin, I want to ban or unban users. | 31.1 | `PATCH /api/admin/users/:id { isActive }`. |
+| 29 | Manage institutions | US29.1 | As a super admin, I want to list / suspend institutions. | 29.1 | Implement `GET /api/admin/institutions` plus suspend / delete actions. |
+| 31 | Ban / unban users | US31.1 | As a super admin, I want to ban or unban users. | 31.1 | Implement `PATCH /api/admin/users/:id { isActive }`. |
 | 32 | Statistics | US32.1 | As a super admin, I want global statistics. | 32.1 | Build `UsersByPlanOverview.jsx` and `UsersByPlanTab.jsx` (charts with `@ant-design/plots`). |
 | **Plans (Stripe)** | | | | | |
-| 33 | Stripe checkout — Pro / Institution | US33.1 | As a Free user, I want to upgrade to Pro. | 33.1 | `POST /api/stripe/checkout-pro`. |
-| | | US33.2 | As an organization, I want to upgrade to Institution. | 33.2 | `POST /api/stripe/checkout-institution`. |
-| | | | | 33.3 | Stripe webhook updates `users.plan` and triggers institution onboarding. |
+| 33 | Stripe checkout — Pro / Institution | US33.1 | As a Free user, I want to upgrade to Pro. | 33.1 | Implement `POST /api/stripe/checkout-pro`. |
+| | | US33.2 | As an organization, I want to upgrade to Institution. | 33.2 | Implement `POST /api/stripe/checkout-institution`. |
+| | | | | 33.3 | Handle the Stripe webhook to update `users.plan` and trigger institution onboarding. |
 | **Notifications** | | | | | |
-| 22 | In-app notifications | US22.1 | As a user, I want notifications for messages, assignments and grades. | 22.1 | `Notification` model + `notificationRoutes.js`. |
-| | | | | 22.2 | Real-time push via Socket.IO. |
+| 22 | In-app notifications | US22.1 | As a user, I want notifications for messages, assignments and grades. | 22.1 | Implement the `Notification` model and `notificationRoutes.js`. |
+| | | | | 22.2 | Push notifications in real time via Socket.IO. |
 
 ## IV. Design
 
