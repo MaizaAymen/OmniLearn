@@ -34,26 +34,26 @@ The table below lists all user stories and tasks planned for Sprint 1, grouped b
 |   |   |   |   | 2.6 | Send a verification email (Nodemailer) with `emailVerificationToken`. |
 | 3 | Verify email | US3.1 | As a visitor, I want to verify my email. | 3.1 | Build the `VerifyEmail` page (`Client/src/Auth/VerifyEmail.jsx`). |
 |   |   |   |   | 3.2 | Implement `GET /api/auth/verify-email?token=...` and clear the expiry. |
-| 4 | Choose a plan | US4.1 | As a visitor, I want to choose between Free, Pro and Institution. | 4.1 | Plan selector on the sign-up form; default = `free`. |
-|   |   |   |   | 4.2 | Pro and Institution route to Stripe Checkout after signup. |
+| 4 | Choose a plan | US4.1 | As a visitor, I want to choose between Free, Pro and Institution. | 4.1 | Add a plan selector on the sign-up form; default = `free`. |
+|   |   |   |   | 4.2 | Route Pro and Institution sign-ups to Stripe Checkout after signup. |
 | **Student / Authenticated user** | | | | | |
-| 5 | Sign in | US5.1 | As a student, I want to sign in. | 5.1 | Sign-in tab in the `Auth` page. |
-|   |   |   |   | 5.2 | `POST /api/auth/login` returning a JWT and the user object. |
+| 5 | Sign in | US5.1 | As a student, I want to sign in. | 5.1 | Add a sign-in tab to the `Auth` page. |
+|   |   |   |   | 5.2 | Implement `POST /api/auth/login` returning a JWT and the user object. |
 |   |   |   |   | 5.3 | Store `token` and `user` in cookies via `js-cookie`. |
 | 6 | Profile management | US6.1 | As a student, I want to view my profile. | 6.1 | Build `Profile` page (`Client/src/components/Profile.jsx`). |
-|   |   |   |   | 6.2 | `GET /api/profile/:id` returns the current user. |
-|   |   | US6.2 | As a student, I want to update my profile. | 6.3 | Avatar upload (Cloudinary), bio, GitHub URL, LinkedIn URL. |
-|   |   |   |   | 6.4 | `PATCH /api/profile/:id` validates and updates the user. |
+|   |   |   |   | 6.2 | Implement `GET /api/profile/:id` to return the current user. |
+|   |   | US6.2 | As a student, I want to update my profile. | 6.3 | Support avatar upload (Cloudinary), bio, GitHub URL and LinkedIn URL. |
+|   |   |   |   | 6.4 | Implement `PATCH /api/profile/:id` to validate and update the user. |
 |   |   |   |   | 6.5 | Emit a `profile-updated` event so `Guard` re-checks profile completeness. |
 |   |   | US6.3 | As a student, I want to delete my account. | 6.6 | Add a destructive action in the profile page. |
-|   |   |   |   | 6.7 | `DELETE /api/profile/:id`. |
-| 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.1 | Forgot-password link in the sign-in tab. |
-|   |   |   |   | 7.2 | `POST /api/auth/forgot-password` generates `passwordResetToken`. |
+|   |   |   |   | 6.7 | Implement `DELETE /api/profile/:id`. |
+| 7 | Password reset | US7.1 | As a student, I want to reset my password. | 7.1 | Add a forgot-password link to the sign-in tab. |
+|   |   |   |   | 7.2 | Implement `POST /api/auth/forgot-password` to generate `passwordResetToken`. |
 |   |   |   |   | 7.3 | Send the reset email via Nodemailer. |
-|   |   |   |   | 7.4 | `POST /api/auth/reset-password` validates the token and rehashes. |
-| 8 | Two-factor authentication | US8.1 | As a student, I want to enable 2FA. | 8.1 | Toggle in the profile page. |
-|   |   |   |   | 8.2 | `POST /api/auth/2fa/setup` generates the Speakeasy secret + QR. |
-|   |   |   |   | 8.3 | `POST /api/auth/2fa/verify` confirms the TOTP and sets `is2FAEnabled`. |
+|   |   |   |   | 7.4 | Implement `POST /api/auth/reset-password` to validate the token and rehash. |
+| 8 | Two-factor authentication | US8.1 | As a student, I want to enable 2FA. | 8.1 | Add a 2FA toggle to the profile page. |
+|   |   |   |   | 8.2 | Implement `POST /api/auth/2fa/setup` to generate the Speakeasy secret + QR. |
+|   |   |   |   | 8.3 | Implement `POST /api/auth/2fa/verify` to confirm the TOTP and set `is2FAEnabled`. |
 | **Cross-cutting** | | | | | |
 | 33 (partial) | Stripe checkout — Pro upgrade | US33.1 | As a Free user, I want to upgrade to Pro. | 33.1 | Add `stripeRoutes.js` and a `/api/stripe/checkout-pro` endpoint. |
 |   |   |   |   | 33.2 | Build the `PlanSection` component (`Client/src/components/PlanSection.jsx`). |
