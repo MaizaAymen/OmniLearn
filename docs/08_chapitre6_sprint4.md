@@ -481,19 +481,22 @@ sequenceDiagram
     participant App as OmniLearn
     participant DB as Database
 
-    Visitor->>App: Open the invite link
-    App->>DB: Check the link
+    Visitor->>+App: Open the invite link
+    App->>+DB: Check the link
 
     alt Link is invalid or expired
         DB-->>App: Not valid
         App-->>Visitor: Show "Link no longer valid"
     else Link is valid
-        DB-->>App: Institution and role
+        DB-->>-App: Institution and role
         App-->>Visitor: Show institution and role
+
+        Note over Visitor,DB: ref: Authenticate
+
         Visitor->>App: Sign up or sign in
-        App->>DB: Add visitor to the institution
-        DB-->>App: Done
-        App-->>Visitor: Open the dashboard
+        App->>+DB: Add visitor to the institution
+        DB-->>-App: Done
+        App-->>-Visitor: Open the dashboard
     end
 ```
 
