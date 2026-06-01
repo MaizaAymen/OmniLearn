@@ -478,25 +478,30 @@ After signing in, the backend links the user to the institution and sends them t
 ```mermaid
 sequenceDiagram
     actor Visitor
-    participant App as OmniLearn
+    participant FE as Frontend
+    participant API as Backend
     participant DB as Database
 
-    Visitor->>+App: Open the invite link
-    App->>+DB: Check the link
+    Note over Visitor,DB: ref: Authenticate
+
+    Visitor->>+FE: Open the invite link
+    FE->>+API: GET /invite/:token
+    API->>+DB: Check the link
+    DB-->>-API: Link status
 
     alt Link is invalid or expired
-        DB-->>App: Not valid
-        App-->>Visitor: Show "Link no longer valid"
+        API-->>FE: Not valid
+        FE-->>Visitor: Show "Link no longer valid"
     else Link is valid
-        DB-->>-App: Institution and role
-        App-->>Visitor: Show institution and role
+        API-->>-FE: Institution and role
+        FE-->>-Visitor: Show institution and role
 
-        Note over Visitor,DB: ref: Authenticate
-
-        Visitor->>App: Sign up or sign in
-        App->>+DB: Add visitor to the institution
-        DB-->>-App: Done
-        App-->>-Visitor: Open the dashboard
+        Visitor->>+FE: Sign up or sign in
+        FE->>+API: POST /invite/:token/join
+        API->>+DB: Add visitor to the institution
+        DB-->>-API: Done
+        API-->>-FE: Membership created
+        FE-->>-Visitor: Open the dashboard
     end
 ```
 
