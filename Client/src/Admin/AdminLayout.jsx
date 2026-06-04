@@ -27,7 +27,7 @@ const allSections = [
   // NOTE : "Free Tier", "Pro Tier" et "Users by Plan" sont maintenant
   // regroupés dans le dashboard /users pour rassembler tout ce qui touche
   // aux utilisateurs et aux plans en un seul endroit.
-  { key: "institution",  label: "My Institution", icon: <BankOutlined />, roles: ["admin", "institution_admin"] },
+  { key: "institution",  label: "My Institution", icon: <BankOutlined />, roles: ["institution_admin"] },
 ];
 
 const getRole = () => {
