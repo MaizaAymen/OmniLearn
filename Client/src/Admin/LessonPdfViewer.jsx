@@ -21,7 +21,7 @@ import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 
 export default function LessonPdfViewer({ lessons = [], onDelete, onEdit }) {
   const navigate = useNavigate();

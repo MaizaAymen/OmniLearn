@@ -50,9 +50,9 @@ const { Sider, Content } = Layout;
 const { Text } = Typography;
 const { TextArea } = Input;
 
-const API_URL = "http://localhost:5000/api/pdf";
-const WORKSPACE_API = "http://localhost:5000/api/workspace";
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+const API_URL = `${SERVER_URL}/api/pdf`;
+const WORKSPACE_API = `${SERVER_URL}/api/workspace`;
 
 // Axios instance that auto-attaches the auth token for every request to /api/pdf.
 // The PDF routes are gated behind authenticate + requirePro on the server.

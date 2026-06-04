@@ -4,8 +4,9 @@ import { CameraOutlined, DeleteOutlined } from "@ant-design/icons";
 import ImgCrop from "antd-img-crop";
 import Cookies from "js-cookie";
 import { selfCreateInstitution } from "../Admin/planApi";
+import { SERVER_URL } from "../config";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${SERVER_URL}/api`;
 
 const OnboardInstitution = () => {
   const [loading, setLoading] = useState(false);

@@ -1,7 +1,8 @@
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 
 // Toutes les requêtes liées aux plans et aux institutions.
-const BASE = "http://localhost:5000/api";
+const BASE = `${SERVER_URL}/api`;
 
 const headers = () => {
   const token = Cookies.get("token");

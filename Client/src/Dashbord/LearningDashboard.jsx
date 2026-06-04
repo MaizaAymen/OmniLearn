@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { SERVER_URL } from "../config";
 import axios from "axios";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
@@ -39,7 +40,7 @@ import {
 
 const { Title, Text } = Typography;
 
-const WORKSPACE_API = "http://localhost:5000/api/workspace";
+const WORKSPACE_API = `${SERVER_URL}/api/workspace`;
 
 const api = axios.create();
 api.interceptors.request.use((config) => {

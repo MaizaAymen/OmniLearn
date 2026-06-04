@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { SERVER_URL } from "../config";
 import {
   Button, Card, Drawer, Empty, Form, Input, InputNumber, List, Modal,
   Popconfirm, Progress, Row, Col, Segmented, Select, Space, Statistic, Table, Tabs, Tag, Typography, message,
@@ -771,7 +772,7 @@ const SettingsPanel = ({ institutionId }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Same base URL the admin Problem Bank uses
-const AI_API = "http://localhost:5000/api/ai/ai";
+const AI_API = `${SERVER_URL}/api/ai/ai`;
 // Difficulty options reused everywhere in this panel
 const DIFFS = ["Easy", "Medium", "Hard"];
 const DIFF_COLOR = { Easy: "green", Medium: "orange", Hard: "red" };

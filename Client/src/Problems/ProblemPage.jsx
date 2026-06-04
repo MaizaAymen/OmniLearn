@@ -10,6 +10,7 @@ import { executeCode } from "../Codeeditor/Api";
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 import {
   PlayIcon,
   SendIcon,
@@ -126,7 +127,7 @@ function ProblemPage() {
     const fetchProblemById = async () => {
       setIsProblemLoading(true);
       try {
-        const response = await fetch("http://localhost:5000/api/ai/ai/getproblembyid", {
+        const response = await fetch(`${SERVER_URL}/api/ai/ai/getproblembyid`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: targetProblemId }),
@@ -222,7 +223,7 @@ function ProblemPage() {
       const storedUser = (() => { try { return JSON.parse(Cookies.get("user") || "{}"); } catch { return {}; } })();
       const authToken = Cookies.get("token");
       if (storedUser?.id && authToken) {
-        fetch("http://localhost:5000/api/submissions", {
+        fetch(`${SERVER_URL}/api/submissions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -265,7 +266,7 @@ function ProblemPage() {
         : "General coding problem";
 
       const requestCorrection = async (currentCode, actualOutput) => {
-        const response = await fetch("http://localhost:5000/api/ai/ai/correct-code", {
+        const response = await fetch(`${SERVER_URL}/api/ai/ai/correct-code`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: currentCode, language: selectedLanguage, problemContext, actualOutput }),

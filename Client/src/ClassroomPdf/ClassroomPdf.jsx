@@ -22,8 +22,8 @@ const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
-const API = "http://localhost:5000/api/workspace";
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+const API = `${SERVER_URL}/api/workspace`;
 
 // Prefix relative /uploads paths with the backend origin so the PDF viewer
 // (and any plain fetch) hits Express instead of Vite's dev server.

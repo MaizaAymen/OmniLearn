@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { SERVER_URL } from "../config";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
@@ -136,10 +137,9 @@ const blackWhiteTheme = {
 const STATUS_COLOR = { published: "green", draft: "orange", review: "blue", archived: "default" };
 const DIFF_COLOR   = { Easy: "green", Medium: "orange", Hard: "red" };
 const STATUS_FILL  = { published: "#52c41a", draft: "#faad14", review: "#1677ff", archived: "#9CA3AF" };
-const DIFF_FILL    = { Easy: "#52c41a", Medium: "#faad14", Hard: "#ff4d4f" };
 const CAT_PALETTE  = ["#1677ff", "#52c41a", "#faad14", "#722ed1", "#eb2f96", "#13c2c2", "#fa541c"];
 function ProblemBankSection() {
-  const AI_API = "http://localhost:5000/api/ai/ai";
+  const AI_API = `${SERVER_URL}/api/ai/ai`;
   const [problems, setProblems]     = useState([]);
   const [allProblems, setAllProblems] = useState([]); // unfiltered — used for charts
   const [loading, setLoading]       = useState(true);
@@ -288,10 +288,22 @@ function ProblemBankSection() {
     return Object.entries(counts).map(([name, value]) => ({ name, value, fill: STATUS_FILL[name] || "#9CA3AF" }));
   }, [allProblems]);
 
-  const difficultyChartData = useMemo(() => {
-    const counts = { Easy: 0, Medium: 0, Hard: 0 };
-    for (const p of allProblems) counts[p.difficulty] = (counts[p.difficulty] || 0) + 1;
-    return Object.entries(counts).map(([name, value]) => ({ name, value, fill: DIFF_FILL[name] }));
+  // Problems created over time — split by difficulty per creation date.
+  const creationChartData = useMemo(() => {
+    const byDay = {};
+    for (const p of allProblems) {
+      if (!p.createdAt) continue;
+      const day = new Date(p.createdAt).toISOString().slice(0, 10); // YYYY-MM-DD
+      if (!byDay[day]) byDay[day] = { Easy: 0, Medium: 0, Hard: 0 };
+      const diff = p.difficulty || "Easy";
+      byDay[day][diff] = (byDay[day][diff] || 0) + 1;
+    }
+    return Object.entries(byDay)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, counts]) => ({
+        name: new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        ...counts,
+      }));
   }, [allProblems]);
 
   const categoryChartData = useMemo(() => {
@@ -320,9 +332,32 @@ function ProblemBankSection() {
 
   return (
     <Card style={{ borderRadius: 10 }}>
-      {/* ── Row 1: status · difficulty · scope ── */}
+      {/* ── Row 0: big "problems created over time" area chart ── */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={8}>
+        <Col xs={24}>
+          <Card title="Problems created over time" size="small">
+            <ResponsiveContainer width="100%" height={380}>
+              <AreaChart
+                data={creationChartData}
+                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="Easy"   stackId="1" stroke="#52c41a" fill="#52c41a" fillOpacity={0.4} />
+                <Area type="monotone" dataKey="Medium" stackId="1" stroke="#faad14" fill="#faad14" fillOpacity={0.4} />
+                <Area type="monotone" dataKey="Hard"   stackId="1" stroke="#ff4d4f" fill="#ff4d4f" fillOpacity={0.4} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ── Row 1: status · scope ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={12}>
           <Card title="By status" size="small">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -344,29 +379,7 @@ function ProblemBankSection() {
           </Card>
         </Col>
 
-        <Col xs={24} md={8}>
-          <Card title="By difficulty" size="small">
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={difficultyChartData}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={80}
-                  label={(e) => `${e.name}: ${e.value}`}
-                >
-                  {difficultyChartData.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
+        <Col xs={24} md={12}>
           <Card title="By scope" size="small">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>

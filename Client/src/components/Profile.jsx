@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SERVER_URL } from "../config";
 import {
   Avatar,
   Button,
@@ -58,7 +59,7 @@ import { api as msgApi, getSocket } from "../Messaging/api";
 
 const { Title, Text } = Typography;
 const { Sider, Content } = Layout;
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${SERVER_URL}/api`;
 
 const roleColor = { admin: "red", teacher: "blue", student: "green" };
 
@@ -204,6 +205,9 @@ export default function Profile() {
   const [isDirty, setIsDirty] = useState(false);
   const [dangerLoading, setDangerLoading] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
+  const ROLE_MENU = {
+
+};
   // ── 2FA state ─────────────────────────────────────────────────────────────
   // Controls whether the "scan QR code" setup modal is visible
   const [twoFASetupModal, setTwoFASetupModal] = useState(false);

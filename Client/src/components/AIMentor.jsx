@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { XIcon, SendIcon, BotIcon, Loader2Icon, SparklesIcon, RotateCcwIcon } from "lucide-react";
+import { SERVER_URL } from "../config";
 
-const MENTOR_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api") + "/ai/ai/mentor";
+const MENTOR_URL = `${SERVER_URL}/api/ai/ai/mentor`;
 
 const QUICK_ACTIONS = [
   { label: "Explain this", icon: "💡", prompt: "Explain what this code does step by step." },

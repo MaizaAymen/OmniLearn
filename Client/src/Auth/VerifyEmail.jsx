@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button, Result, Spin } from "antd";
+import { SERVER_URL } from "../config";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${SERVER_URL}/api`;
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();

@@ -1,10 +1,11 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 import { io } from "socket.io-client";
+import { SERVER_URL } from "../config";
 
-const API_BASE = "http://localhost:5000/api";
-const SOCKET_URL = "http://localhost:5000";
-const FILE_BASE = "http://localhost:5000";
+const API_BASE = `${SERVER_URL}/api`;
+const SOCKET_URL = SERVER_URL;
+const FILE_BASE = SERVER_URL;
 
 const authHeaders = () => ({
   Authorization: `Bearer ${Cookies.get("token")}`,

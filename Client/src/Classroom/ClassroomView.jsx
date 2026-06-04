@@ -75,10 +75,10 @@ import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 
 const { Title, Text } = Typography;
-const API = "http://localhost:5000/api";
+const API = `${SERVER_URL}/api`;
 const ADMIN = `${API}/admin`;
 const STUDENT = `${API}/student`;
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 
 const getUser = () => {
   try {

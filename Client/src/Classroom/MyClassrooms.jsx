@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SERVER_URL } from "../config";
 import { useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
 import {
@@ -46,7 +47,7 @@ import {
 } from "../Admin/api";
 
 const { Title, Text } = Typography;
-const API = "http://localhost:5000/api";
+const API = `${SERVER_URL}/api`;
 
 const getUser = () => {
   try {

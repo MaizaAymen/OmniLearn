@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Button, Empty, Popconfirm, Space, Table, Tag, message } from "antd";
 import { DeleteOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 
-const API = "http://localhost:5000/api/ai/ai";
+const API = `${SERVER_URL}/api/ai/ai`;
 const DIFF_COLOR = { Easy: "green", Medium: "orange", Hard: "red" };
 
 const authHeaders = (json = false) => {

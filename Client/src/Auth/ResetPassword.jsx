@@ -4,9 +4,10 @@ import { LockOutlined, CheckCircleFilled, CloseCircleFilled } from "@ant-design/
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
 import "./Auth.css";
+import { SERVER_URL } from "../config";
 
 const { Title, Text } = Typography;
-const API_URL = "http://localhost:5000/api/auth";
+const API_URL = `${SERVER_URL}/api/auth`;
 
 const PASSWORD_RULES = [
   { id: "length", label: "At least 8 characters", test: (p) => p.length >= 8 },

@@ -5,8 +5,9 @@ import toast from "react-hot-toast";
 import { CheckCircle2Icon, ChevronRightIcon, Code2Icon, GitForkIcon, LockIcon, PlusIcon, SearchIcon, SparklesIcon, BookOpenIcon } from "lucide-react";
 import { getDifficultyBadgeClass } from "./utils";
 import Navbar from "../components/Navbar";
+import { SERVER_URL } from "../config";
 
-const API = "http://localhost:5000/api/ai/ai";
+const API = `${SERVER_URL}/api/ai/ai`;
 const DIFF_FILTERS = ["All", "Easy", "Medium", "Hard"];
 const STATUS_FILTERS = ["all", "published", "draft", "review", "archived"];
 
@@ -71,7 +72,7 @@ function ProblemsPage() {
     if (!user?.id) return;
     const token = Cookies.get("token");
     if (!token) return;
-    fetch(`http://localhost:5000/api/submissions/${user.id}`, {
+    fetch(`${SERVER_URL}/api/submissions/${user.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
@@ -90,7 +91,7 @@ function ProblemsPage() {
     if (!isTeacher) return;
     const token = Cookies.get("token");
     if (!token) return;
-    fetch("http://localhost:5000/api/admin/classrooms", {
+    fetch(`${SERVER_URL}/api/admin/classrooms`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : []))

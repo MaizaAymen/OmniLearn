@@ -19,10 +19,11 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./Auth.css";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 
 const { Title, Text, Link } = Typography;
 
-const API_URL = "http://localhost:5000/api/auth";
+const API_URL = `${SERVER_URL}/api/auth`;
 
 export const refreshToken = async () => {
   const stored = Cookies.get("refreshToken");

@@ -7,10 +7,11 @@ import {
   CheckCircleIcon, EyeIcon, GitForkIcon, MapIcon, PencilIcon, PlusIcon,
   SparklesIcon, TrashIcon, XIcon,
 } from "lucide-react";
+import { SERVER_URL } from "../config";
 
-const API = "http://localhost:5000/api/ai/ai";
-const AI_ROOT = "http://localhost:5000/api/ai";
-const ADMIN_API = "http://localhost:5000/api/admin";
+const API = `${SERVER_URL}/api/ai/ai`;
+const AI_ROOT = `${SERVER_URL}/api/ai`;
+const ADMIN_API = `${SERVER_URL}/api/admin`;
 const DIFFS = ["Easy", "Medium", "Hard"];
 
 function getUser() {

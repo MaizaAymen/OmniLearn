@@ -7,8 +7,9 @@ import {
   PlusOutlined, DeleteOutlined, BarChartOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { SERVER_URL } from "../config";
 
-const API = "http://localhost:5000/api";
+const API = `${SERVER_URL}/api`;
 
 const diffColor = (d) =>
   d === "Easy" ? "green" : d === "Medium" ? "gold" : "red";

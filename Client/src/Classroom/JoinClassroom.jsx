@@ -3,10 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
 import { Card, Typography, Button, Spin, Result, Space, Tag } from "antd";
 import { TeamOutlined } from "@ant-design/icons";
+import { SERVER_URL } from "../config";
 
 const { Title, Text } = Typography;
-const API = "http://localhost:5000/api";
-const ADMIN_API = "http://localhost:5000/api/admin";
+const API = `${SERVER_URL}/api`;
+const ADMIN_API = `${SERVER_URL}/api/admin`;
 
 const getUser = () => {
   try {

@@ -8,6 +8,8 @@ import { Route, Routes, Navigate } from "react-router-dom";
 import Cookies from "js-cookie";
 import User from "./Dashbord/User";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "./theme";
+import { SERVER_URL } from "./config";
 import PdfAssistant from "./components/PdfAssistant";
 import Sidebar from "./Navbars/Sidebar";
 import { useLocation } from "react-router-dom";
@@ -107,7 +109,7 @@ function App() {
     let cancelled = false;
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/profile/${storedUser.id}`, {
+        const res = await fetch(`${SERVER_URL}/api/profile/${storedUser.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Failed to load profile");
@@ -158,6 +160,7 @@ function App() {
   );
 
   return (
+    <ThemeProvider>
     <TooltipProvider>
       {isAuthPage || isVerifyPage || isHomePage ? (
         <Routes>
@@ -172,6 +175,7 @@ function App() {
       )}
       <Toaster toastOptions={{ duration: 3000 }} />
     </TooltipProvider>
+    </ThemeProvider>
   );
 }
 

@@ -1,7 +1,8 @@
 import axios from "axios";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 
-const BASE = "http://localhost:5000/api/roadmap";
+const BASE = `${SERVER_URL}/api/roadmap`;
 
 const auth = () => ({
   headers: { Authorization: `Bearer ${Cookies.get("token")}` },

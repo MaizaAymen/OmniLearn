@@ -13,6 +13,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { api as msgApi, getSocket } from '../Messaging/api';
+import { SERVER_URL } from '../config';
 import {
   Avatar,
   Badge,
@@ -30,6 +31,7 @@ import {
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
+import { ThemeToggle } from '../theme';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -173,7 +175,7 @@ const Sidebar = ({ children, profileStatus }) => {
   useEffect(() => {
     if (storedUser?.id) {
       const token = Cookies.get('token');
-      fetch(`http://localhost:5000/api/profile/${storedUser.id}`, {
+      fetch(`${SERVER_URL}/api/profile/${storedUser.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => r.ok ? r.json() : null)
@@ -311,7 +313,7 @@ const Sidebar = ({ children, profileStatus }) => {
       });
 
   const {
-    token: { colorBgContainer, borderRadiusLG },
+    token: { colorBgContainer, borderRadiusLG, colorBorderSecondary, colorText },
   } = theme.useToken();
 
   const items = useMemo(
@@ -450,11 +452,11 @@ const Sidebar = ({ children, profileStatus }) => {
         <Header
           style={{
             padding: isMobile ? '0 12px 0 0' : '0 24px 0 0',
-            background: '#ffffff',
+            background: colorBgContainer,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: `1px solid ${colorBorderSecondary}`,
             boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             position: 'sticky',
             top: 0,
@@ -475,6 +477,12 @@ const Sidebar = ({ children, profileStatus }) => {
           />
 
           <Space size={isMobile ? 6 : 12} align="center">
+            <Tooltip title="Toggle theme" placement="bottom">
+              <span style={{ color: colorText, display: 'inline-flex' }}>
+                <ThemeToggle />
+              </span>
+            </Tooltip>
+
             {role && !isMobile && (
               <Tag
                 color={ROLE_COLOR[role] ?? 'default'}

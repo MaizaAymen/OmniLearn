@@ -1,7 +1,8 @@
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 
-const API_BASE = "http://localhost:5000/api/admin";
-const PUBLIC_API_BASE = "http://localhost:5000/api";
+const API_BASE = `${SERVER_URL}/api/admin`;
+const PUBLIC_API_BASE = `${SERVER_URL}/api`;
 
 const getAuthHeaders = (includeContentType = true) => {
   const token = Cookies.get("token");

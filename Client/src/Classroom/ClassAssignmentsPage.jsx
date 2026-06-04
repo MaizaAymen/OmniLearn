@@ -7,8 +7,9 @@ import {
   ChevronLeftIcon, ChevronRightIcon, XIcon,
   PencilIcon, SendIcon, SearchIcon, UsersIcon, ClockIcon,
 } from "lucide-react";
+import { SERVER_URL } from "../config";
 
-const API = "http://localhost:5000/api";
+const API = `${SERVER_URL}/api`;
 const ADMIN = `${API}/admin`;
 
 const authHeaders = () => {

@@ -11,9 +11,10 @@ import {
 import dayjs from "dayjs";
 import Cookies from "js-cookie";
 import { fetchUsersOverview } from "../Admin/planApi";
+import { SERVER_URL } from "../config";
 
 // Endpoint partagé pour update un user (déjà existant côté backend).
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${SERVER_URL}/api`;
 const updateUser = async (id, payload) => {
   const token = Cookies.get("token");
   const res = await fetch(`${API_BASE}/users/${id}`, {

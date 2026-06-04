@@ -4,9 +4,10 @@ import { MailOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./Auth.css";
+import { SERVER_URL } from "../config";
 
 const { Title, Text } = Typography;
-const API_URL = "http://localhost:5000/api/auth";
+const API_URL = `${SERVER_URL}/api/auth`;
 
 const OmniLearnLogo = ({ size = 44 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 64 64" fill="none">
