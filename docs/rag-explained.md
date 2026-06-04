@@ -306,6 +306,124 @@ flowchart TD
 
 ---
 
+## 8b. 🎯 BIG step-by-step C4 diagram (the full RAG journey)
+
+This is the **complete picture** — from the moment a user picks a PDF, through every
+function that runs, all the way to the AI answer. Read it top to bottom.
+
+> Each box shows **what happens** and **which function/line does it**.
+> Solid arrows `──▶` = the main flow. The diagram is split into the **two phases** of RAG.
+
+### 🟦 PHASE A — INDEXING (happens once, when the PDF is uploaded)
+
+```mermaid
+flowchart TD
+    U([👤 USER<br/>picks a PDF in the browser]) --> UP
+
+    subgraph SERVER["🖥️ SERVER — pdfRoutes.js"]
+      UP["① POST /upload<br/>(line 185)<br/>receives the file via multer"]
+      G1{"② Logged in + Pro?<br/>authenticate + requirePro<br/>(line 13-14)"}
+      V["③ Is it a real PDF?<br/>check %PDF header<br/>(line 198-203)"]
+      EX["④ Extract text<br/>pdfParse(buffer)<br/>(line 212)"]
+      CH["⑤ Split into chunks<br/>chunkText(text, 800)<br/>(line 220 → 712)"]
+      DOC["⑥ Wrap each chunk<br/>new Document(...)<br/>(line 224-232)"]
+      EMB["⑦ Turn chunks into vectors<br/>HuggingFace embeddings<br/>(line 29-32)"]
+      STORE["⑧ Save vectors<br/>Chroma.fromDocuments(...)<br/>(line 242)"]
+      IDX["⑨ Record the PDF<br/>writeIndex(...) → index.json<br/>(line 269-278)"]
+      CACHE["⑩ Keep in memory<br/>pdfCache.set(...)<br/>(line 257)"]
+    end
+
+    DB[("🗄️ Chroma Vector DB")]
+    DISK[("📁 uploads/ + index.json")]
+
+    UP --> G1
+    G1 -- "❌ no" --> STOP([403 / 401 blocked])
+    G1 -- "✅ yes" --> V
+    V -- "❌ not a PDF" --> ERR([400 error + delete file])
+    V -- "✅ ok" --> EX
+    EX --> CH --> DOC --> EMB --> STORE
+    STORE --> DB
+    EMB -. "uses" .-> EMB
+    STORE --> IDX --> DISK
+    IDX --> CACHE
+    CACHE --> DONE([✅ Returns pdfId<br/>PDF is now searchable])
+```
+
+### 🟩 PHASE B — ASKING (happens every time the user asks something)
+
+```mermaid
+flowchart TD
+    U([👤 USER<br/>types: &quot;What is photosynthesis?&quot;]) --> Q
+
+    subgraph SERVER["🖥️ SERVER — pdfRoutes.js"]
+      Q["① POST /chat<br/>(line 341)<br/>gets pdfId + question"]
+      LOAD["② Load the PDF<br/>loadPdfData(pdfId)<br/>(line 350 → 61)"]
+      MEM{"③ Already in cache?<br/>pdfCache.get(id)<br/>(line 62)"}
+      READ["④ Read from disk +<br/>re-chunk + reconnect Chroma<br/>(line 65-101)"]
+      DEC{"⑤ Vector DB available?<br/>(line 357)"}
+      VEC["⑥a RETRIEVAL (smart)<br/>similaritySearch(question, 3)<br/>finds 3 closest chunks<br/>(line 358)"]
+      KEY["⑥b RETRIEVAL (backup)<br/>count matching words<br/>top 3 chunks<br/>(line 361-367)"]
+      CTX["⑦ Build context<br/>join the 3 chunks<br/>(line 359 / 367)"]
+      AI["⑧ GENERATION<br/>Groq Llama 3.3<br/>context + question<br/>(line 371-385)"]
+    end
+
+    DB[("🗄️ Chroma Vector DB")]
+    GROQ[["🤖 Groq AI"]]
+
+    Q --> LOAD --> MEM
+    MEM -- "✅ yes (fast)" --> DEC
+    MEM -- "❌ no" --> READ --> DEC
+    DEC -- "✅ yes" --> VEC
+    DEC -- "❌ no" --> KEY
+    VEC -. "searches" .-> DB
+    VEC --> CTX
+    KEY --> CTX
+    CTX --> AI
+    AI -. "calls" .-> GROQ
+    AI --> ANS([💬 Answer sent back<br/>to the user])
+```
+
+### 🧠 The two phases together (why this is "RAG")
+
+```
+   PHASE A (once)                         PHASE B (every question)
+   ─────────────                          ────────────────────────
+   PDF ─▶ text ─▶ chunks ─▶ vectors       question ─▶ find best chunks
+                              │                            │
+                              ▼                            ▼
+                       🗄️ stored in Chroma  ───────▶  📤 RETRIEVAL
+                                                          │
+                                                          ▼
+                                              chunks + question ─▶ 🤖 AI
+                                                          │
+                                                          ▼
+                                                   📥 GENERATION ─▶ answer
+```
+
+> **The key idea:** Phase A *prepares* the knowledge. Phase B *retrieves* a tiny relevant
+> slice and lets the AI *generate* an answer from it. That combination = **R**etrieval **A**ugmented **G**eneration.
+
+### 📋 Same journey as a numbered checklist
+
+| # | Who / What | Action | Function & line |
+|---|------------|--------|-----------------|
+| 1 | 👤 User | Uploads a PDF | `POST /upload` (185) |
+| 2 | 🛡️ Guard | Checks login + Pro plan | `authenticate`, `requirePro` (13-14) |
+| 3 | 📄 Server | Confirms it's a real PDF | header check (198) |
+| 4 | 🔍 pdf-parse | Pulls the text out | `pdfParse` (212) |
+| 5 | ✂️ Splitter | Cuts text into 800-word chunks | `chunkText` (712) |
+| 6 | 🔢 HuggingFace | Turns chunks into vectors | `embeddings` (29) |
+| 7 | 🗄️ Chroma | Stores the vectors | `Chroma.fromDocuments` (242) |
+| 8 | 💾 Index | Remembers the PDF | `writeIndex` (57) |
+| — | — | *...later the user asks a question...* | — |
+| 9 | 👤 User | Asks a question | `POST /chat` (341) |
+| 10 | 📂 Loader | Loads the PDF (cache or disk) | `loadPdfData` (61) |
+| 11 | 🎯 Retrieval | Finds the 3 best chunks | `similaritySearch` (358) |
+| 12 | 🤖 Groq AI | Writes the answer from those chunks | `groq.chat...` (371) |
+| 13 | 💬 User | Reads the grounded answer | response (387) |
+
+---
+
 ## 9. One-line summary of the whole file
 
 > **Upload a PDF → its text is chopped into chunks → each chunk becomes a vector stored in Chroma.
