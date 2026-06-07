@@ -6,6 +6,7 @@ import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 import axios from "axios";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 import {
   Layout,
   Upload,
@@ -50,7 +51,6 @@ const { Sider, Content } = Layout;
 const { Text } = Typography;
 const { TextArea } = Input;
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 const API_URL = `${SERVER_URL}/api/pdf`;
 const WORKSPACE_API = `${SERVER_URL}/api/workspace`;
 

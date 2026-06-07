@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Cookies from "js-cookie";
+import { SERVER_URL } from "../config";
 import {
   Layout, Menu, Button, Upload, Typography, Spin, Empty, Space,
   message, Input, Tag, Modal, Popconfirm,
@@ -22,7 +23,6 @@ const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 const API = `${SERVER_URL}/api/workspace`;
 
 // Prefix relative /uploads paths with the backend origin so the PDF viewer
