@@ -3,6 +3,9 @@ require('dotenv').config();
 
 // Auto-create local DB and schema if they don't exist
 async function ensureDatabase() {
+  // Never run on production — only local dev
+  if (process.env.DATABASE_URL) return;
+
   // Step 1: connect to default 'postgres' DB to create OmnilearnDB
   const temp = new Sequelize('postgres', 'postgres', 'aymen', {
     host: 'localhost', dialect: 'postgres', port: 5432, logging: false

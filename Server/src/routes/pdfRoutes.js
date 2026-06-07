@@ -71,12 +71,14 @@ const loadPdfData = async (pdfId) => {
   if (!fs.existsSync(filePath)) return null;
 
   const pdfBuffer = fs.readFileSync(filePath);
+  //extract text from pdf 
   let pdfData = { text: "", numpages: 0 };
   try {
     pdfData = await pdfParse(pdfBuffer);
   } catch (e) {
     console.warn(`pdf-parse failed for cached PDF ${pdfId}: ${e.message}`);
   }
+  //split text into chunks 
   const fullText = pdfData.text || "";
   const chunks = chunkText(fullText, 800);
 

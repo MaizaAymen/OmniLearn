@@ -69,7 +69,8 @@ app.get("/", (req, res) => {
 
 (async () => {
   try {
-    if (ensureDatabase) await ensureDatabase();
+    // Only run local DB bootstrapping when not using DATABASE_URL
+    if (!process.env.DATABASE_URL && ensureDatabase) await ensureDatabase();
     await sequelize.authenticate();
     console.log("Connected to PostgreSQL");
     // Ensure base lookup tables exist before applying FK alterations.
@@ -84,22 +85,25 @@ app.get("/", (req, res) => {
     await models.Institution.sync();
     await models.InviteLink.sync();
 
+    // Derive schema from Sequelize config (learn for local, public for production)
+    const dbSchema = sequelize.options.define?.schema || 'public';
+
     // ─── ENUM PATCH : ajouter "institution_admin" au type users.role ─────
     // PostgreSQL ne permet pas à Sequelize d'ALTER un ENUM utilisé par une
     // colonne. On le fait manuellement avec ALTER TYPE ... ADD VALUE.
     // IF NOT EXISTS évite l'erreur si la valeur est déjà là.
     await sequelize.query(
-      `ALTER TYPE "learn"."enum_users_role" ADD VALUE IF NOT EXISTS 'institution_admin';`
+      `ALTER TYPE "${dbSchema}"."enum_users_role" ADD VALUE IF NOT EXISTS 'institution_admin';`
     ).catch((e) => console.warn("[enum patch users.role]:", e.message));
 
     // Add 'class' scope so a teacher can fork/create problems privately into a classroom.
     await sequelize.query(
-      `ALTER TYPE "learn"."enum_Problems_scope" ADD VALUE IF NOT EXISTS 'class';`
+      `ALTER TYPE "${dbSchema}"."enum_Problems_scope" ADD VALUE IF NOT EXISTS 'class';`
     ).catch((e) => console.warn("[enum patch Problems.scope]:", e.message));
 
     await sequelize.sync({ alter: true });
-    await sequelize.query('ALTER TABLE learn.lessons ALTER COLUMN "moduleId" DROP NOT NULL;').catch(() => {});
-    await sequelize.query('ALTER TABLE learn.announcements ALTER COLUMN "classId" DROP NOT NULL;').catch(() => {});
+    await sequelize.query(`ALTER TABLE "${dbSchema}".lessons ALTER COLUMN "moduleId" DROP NOT NULL;`).catch(() => {});
+    await sequelize.query(`ALTER TABLE "${dbSchema}".announcements ALTER COLUMN "classId" DROP NOT NULL;`).catch(() => {});
 
     // ─── SEED FREE-TIER PROBLEMS ──────────────────────────────────────────
     // Au tout premier démarrage (ou tant qu'aucun problème n'est marqué free),
