@@ -25,6 +25,7 @@ import {
   Upload,
   Popconfirm,
   Checkbox,
+  theme,
 } from "antd";
 import {
   UserOutlined,
@@ -106,6 +107,7 @@ const getPdfUrl = (url) => {
 };
 
 export default function ClassroomView() {
+  const { token } = theme.useToken();
   const { classId } = useParams();
   const navigate = useNavigate();
   const user = getUser();
@@ -760,7 +762,7 @@ export default function ClassroomView() {
           style={{
             borderRadius: 12,
             border: "1px solid #eef0f3",
-            background: "#fff",
+            background: token.colorBgContainer,
             height: "calc(100vh - 260px)",
             minHeight: 600,
             display: "flex",
@@ -1088,7 +1090,7 @@ export default function ClassroomView() {
           style={{
             borderRadius: 12,
             border: "1px solid #eef0f3",
-            background: "#fff",
+            background: token.colorBgContainer,
             height: "calc(100vh - 260px)",
             minHeight: 600,
             overflow: "hidden",
@@ -1112,7 +1114,7 @@ export default function ClassroomView() {
                   width: 72,
                   height: 72,
                   borderRadius: 20,
-                  background: "#fff",
+                  background: token.colorBgContainer,
                   border: "1px solid #eef0f3",
                   display: "flex",
                   alignItems: "center",
@@ -1139,7 +1141,7 @@ export default function ClassroomView() {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  background: "#fff",
+                  background: token.colorBgContainer,
                   flexWrap: "wrap",
                   gap: 12,
                 }}
@@ -1250,7 +1252,7 @@ export default function ClassroomView() {
                     New Assignment
                   </Button>
                 )}
-                style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
+                style={{ borderRadius: 12, border: "1px solid #eef0f3", background: token.colorBgContainer }}
               >
                 {!list ? (
                   <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
@@ -1352,7 +1354,7 @@ export default function ClassroomView() {
                           key={a.id}
                           style={{ border: "1px solid #eef0f3", borderRadius: 10, background: "#fafbfc", overflow: "hidden" }}
                         >
-                          <div style={{ padding: "12px 14px", background: "#fff", borderBottom: "1px solid #eef0f3" }}>
+                          <div style={{ padding: "12px 14px", background: token.colorBgContainer, borderBottom: "1px solid #eef0f3" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
                               <Space size={8} align="center">
                                 {done
@@ -1424,7 +1426,7 @@ export default function ClassroomView() {
         {isTeacherOrAdmin && (
           <Card
             size="small"
-            style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
+            style={{ borderRadius: 12, border: "1px solid #eef0f3", background: token.colorBgContainer }}
           >
             <Input.TextArea
               placeholder="Share something with your class…"
@@ -1464,7 +1466,7 @@ export default function ClassroomView() {
               <Card
                 key={a.id}
                 size="small"
-                style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff" }}
+                style={{ borderRadius: 12, border: "1px solid #eef0f3", background: token.colorBgContainer }}
               >
                 <Space align="start" size={10} style={{ width: "100%" }}>
                   <Avatar
@@ -1558,7 +1560,7 @@ export default function ClassroomView() {
   const membersTab = (
     <Card
       size="small"
-      style={{ borderRadius: 12, border: "1px solid #eef0f3", background: "#fff", marginTop: 4 }}
+      style={{ borderRadius: 12, border: "1px solid #eef0f3", background: token.colorBgContainer, marginTop: 4 }}
     >
       <Space align="center" style={{ marginBottom: 12 }}>
         <TeamOutlined style={{ color: "#6b7280" }} />
@@ -1627,7 +1629,7 @@ export default function ClassroomView() {
           style={{
             borderRadius: 14,
             marginBottom: 16,
-            background: "#fff",
+            background: token.colorBgContainer,
             border: "1px solid #eef0f3",
             boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
           }}

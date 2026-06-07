@@ -16,6 +16,7 @@ import {
   Progress,
   Space,
   Button,
+  theme,
 } from "antd";
 import {
   TrophyOutlined,
@@ -60,6 +61,7 @@ const scoreColor = (pct) => (pct >= 70 ? "#52c41a" : pct >= 40 ? "#faad14" : "#f
 const scoreLabel = (pct) => (pct >= 70 ? "Strong" : pct >= 40 ? "Learning" : "Weak");
 
 export default function LearningDashboard({ embedded = false }) {
+  const { token } = theme.useToken();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
@@ -183,7 +185,7 @@ export default function LearningDashboard({ embedded = false }) {
       style={
         embedded
           ? { padding: 0, background: "transparent" }
-          : { padding: 24, background: "#f0f2f5", minHeight: "100vh" }
+          : { padding: 24, background: token.colorBgLayout, minHeight: "100vh" }
       }
     >
       {!embedded && (

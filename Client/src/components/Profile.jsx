@@ -12,6 +12,7 @@ import {
   Input,
   Layout,
   List,
+  theme,
   Menu,
   Modal,
   Progress,
@@ -32,6 +33,8 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   ExclamationCircleOutlined,
   GithubOutlined,
   LinkedinOutlined,
@@ -187,6 +190,8 @@ export default function Profile() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { token: themeToken } = theme.useToken();
   const [selectedKey, setSelectedKey] = useState(() => {
     // Au retour de Stripe, on ouvre directement l'onglet "plan".
     const p = new URLSearchParams(window.location.search);
@@ -884,7 +889,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", paddingTop: 80, background: "#f0f2f5", minHeight: "100vh" }}>
+      <div style={{ display: "flex", justifyContent: "center", paddingTop: 80, background: themeToken.colorBgLayout, minHeight: "100vh" }}>
         <Spin size="large" />
       </div>
     );
@@ -892,33 +897,42 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div style={{ textAlign: "center", paddingTop: 80, background: "#f0f2f5", minHeight: "100vh" }}>
+      <div style={{ textAlign: "center", paddingTop: 80, background: themeToken.colorBgLayout, minHeight: "100vh" }}>
         <Text type="secondary">No profile data found. Please log in.</Text>
       </div>
     );
   }
 
   return (
-    <div style={{ background: "#f0f2f5", minHeight: "100vh", padding: "clamp(12px, 3vw, 24px)" }}>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>
-          Settings
-        </Title>
-        <Text type="secondary">
-          Manage your account, preferences, and security options.
-        </Text>
+    <div style={{ background: themeToken.colorBgLayout, minHeight: "100vh", padding: "clamp(12px, 3vw, 24px)" }}>
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <Title level={3} style={{ margin: 0 }}>
+            Settings
+          </Title>
+          <Text type="secondary">
+            Manage your account, preferences, and security options.
+          </Text>
+        </div>
+        <Button
+          type="text"
+          icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          style={{ fontSize: 16, marginTop: 4 }}
+        />
       </div>
 
       <Layout style={{ background: "transparent" }} hasSider>
         <Sider
           width={240}
           collapsedWidth={64}
+          collapsed={sidebarCollapsed}
           theme="light"
           breakpoint="lg"
           style={{
-            background: "#fff",
+            background: themeToken.colorBgContainer,
             borderRadius: 10,
-            border: "1px solid #f0f0f0",
+            border: `1px solid ${themeToken.colorBorderSecondary}`,
             marginRight: 16,
             overflow: "hidden",
             flexShrink: 0,
@@ -936,7 +950,7 @@ export default function Profile() {
         <Content>
           <Card
             bordered={false}
-            style={{ borderRadius: 10, border: "1px solid #f0f0f0" }}
+            style={{ borderRadius: 10, border: `1px solid ${themeToken.colorBorderSecondary}` }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div>
@@ -1075,8 +1089,8 @@ export default function Profile() {
                           padding: "14px 16px",
                           borderRadius: 12,
                           marginBottom: 8,
-                          background: n.isRead ? "#FAFAF7" : "#EEF2FF",
-                          border: "1px solid #ECECE8",
+                          background: n.isRead ? themeToken.colorBgContainer : token.controlItemBgActive,
+                          border: `1px solid ${themeToken.colorBorderSecondary}`,
                           cursor: clickable ? "pointer" : "default",
                           transition: "background 0.15s",
                         }}
@@ -1133,7 +1147,7 @@ export default function Profile() {
                             <Avatar
                               size={42}
                               style={{
-                                background: isInvite ? "#EEF2FF" : "#4F46E5",
+                                background: isInvite ? token.controlItemBgActive : "#4F46E5",
                                 color: isInvite ? "#4F46E5" : "#fff",
                                 fontSize: 18,
                               }}
@@ -1143,7 +1157,7 @@ export default function Profile() {
                           }
                           title={
                             <Space size={8}>
-                              <Text strong={!n.isRead} style={{ color: "#1F2937" }}>
+                              <Text strong={!n.isRead} style={{ color: themeToken.colorText }}>
                                 {n.message}
                               </Text>
                               {!n.isRead && (
@@ -1300,7 +1314,7 @@ export default function Profile() {
                     borderRadius: 14,
                     background:
                       "linear-gradient(135deg, rgba(79,70,229,0.08) 0%, rgba(34,197,94,0.06) 100%)",
-                    border: "1px solid #ECECF6",
+                    border: `1px solid ${themeToken.colorBorderSecondary}`,
                   }}
                   bodyStyle={{ padding: 20 }}
                 >
@@ -1358,7 +1372,7 @@ export default function Profile() {
                   hoverable
                   style={{
                     borderRadius: 14,
-                    border: "1px solid #F0F0F0",
+                    border: `1px solid ${themeToken.colorBorderSecondary}`,
                     boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                   }}
                   bodyStyle={{ padding: 20 }}
@@ -1479,8 +1493,8 @@ export default function Profile() {
                       style={{
                         marginTop: 16,
                         padding: "10px 14px",
-                        background: "#f6ffed",
-                        border: "1px solid #b7eb8f",
+                        background: themeToken.colorSuccessBg,
+                        border: `1px solid ${themeToken.colorSuccessBorder}`,
                         borderRadius: 10,
                         display: "flex",
                         alignItems: "center",
@@ -1500,8 +1514,8 @@ export default function Profile() {
                   bordered={false}
                   style={{
                     borderRadius: 14,
-                    border: "1px dashed #E5E7EB",
-                    background: "#FAFAFB",
+                    border: `1px dashed ${themeToken.colorBorderSecondary}`,
+                    background: themeToken.colorBgElevated,
                   }}
                   bodyStyle={{ padding: 20 }}
                 >
@@ -1559,7 +1573,7 @@ export default function Profile() {
 
                   <Form form={passwordForm} layout="vertical" onFinish={handlePasswordChange}>
                     <Form.Item
-                      label={<Text strong style={{ color: "#595959" }}>Current password</Text>}
+                      label={<Text strong style={{ color: themeToken.colorTextSecondary }}>Current password</Text>}
                       name="currentPassword"
                       rules={[{ required: true, message: "Please enter your current password" }]}
                       style={{ marginBottom: 16 }}
@@ -1573,7 +1587,7 @@ export default function Profile() {
                     </Form.Item>
 
                     <Form.Item
-                      label={<Text strong style={{ color: "#595959" }}>New password</Text>}
+                      label={<Text strong style={{ color: themeToken.colorTextSecondary }}>New password</Text>}
                       name="newPassword"
                       rules={[
                         { required: true, message: "Please enter a new password" },
@@ -1595,7 +1609,7 @@ export default function Profile() {
                     </Form.Item>
 
                     <Form.Item
-                      label={<Text strong style={{ color: "#595959" }}>Confirm new password</Text>}
+                      label={<Text strong style={{ color: themeToken.colorTextSecondary }}>Confirm new password</Text>}
                       name="confirmPassword"
                       dependencies={["newPassword"]}
                       rules={[

@@ -26,6 +26,16 @@
 }
 
 :root {
+  --msg-bg: #FAFAF7;
+  --msg-surface: #FFFFFF;
+  --msg-border: #ECECE8;
+  --msg-border-soft: #F4F4F0;
+  --msg-text: #1F2937;
+  --msg-text-soft: #6B7280;
+  --msg-accent: #4F46E5;
+  --msg-accent-soft: #EEF2FF;
+  --msg-bubble-mine: #4F46E5;
+  --msg-bubble-theirs: #F3F4F6;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -61,6 +71,16 @@
 }
 
 .dark {
+  --msg-bg: #1a1a2e;
+  --msg-surface: #16213e;
+  --msg-border: #2a2a4a;
+  --msg-border-soft: #1e1e3a;
+  --msg-text: #e2e8f0;
+  --msg-text-soft: #94a3b8;
+  --msg-accent: #6366f1;
+  --msg-accent-soft: rgba(99, 102, 241, 0.15);
+  --msg-bubble-mine: #6366f1;
+  --msg-bubble-theirs: #1e293b;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

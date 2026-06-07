@@ -23,6 +23,7 @@ import {
   Form,
   Select,
   Switch,
+  theme,
 } from "antd";
 import {
   ReadOutlined,
@@ -82,6 +83,7 @@ const initials = (name) =>
     .join("");
 
 export default function MyClassrooms() {
+  const { token } = theme.useToken();
   const navigate = useNavigate();
   const user = getUser();
   const [classrooms, setClassrooms] = useState([]);
@@ -280,7 +282,7 @@ export default function MyClassrooms() {
                 onChange={(e) => setQuery(e.target.value)}
                 style={{
                   maxWidth: 320,
-                  background: "#fff",
+                  background: token.colorBgContainer,
                   border: "1px solid #e5e7eb",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                 }}
@@ -317,7 +319,7 @@ export default function MyClassrooms() {
             style={{
               borderRadius: 16,
               border: "1px solid #eef0f3",
-              background: "#fff",
+              background: token.colorBgContainer,
             }}
           >
             <Empty
@@ -366,7 +368,7 @@ export default function MyClassrooms() {
                     style={{
                       borderRadius: 16,
                       border: "1px solid #eef0f3",
-                      background: "#fff",
+                      background: token.colorBgContainer,
                       boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                       transition: "all 0.2s ease",
                       height: "100%",

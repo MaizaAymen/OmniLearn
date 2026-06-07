@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Button, Result, Spin } from "antd";
+import { Button, Result, Spin, theme } from "antd";
 import { SERVER_URL } from "../config";
 
 const API_BASE = `${SERVER_URL}/api`;
 
 export default function VerifyEmail() {
+  const { token: themeToken } = theme.useToken();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState("loading"); // "loading" | "success" | "error"
@@ -49,7 +50,7 @@ export default function VerifyEmail() {
 
   if (status === "success") {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f0f2f5" }}>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: themeToken.colorBgLayout }}>
         <Result
           status="success"
           title="Email Verified!"
@@ -65,7 +66,7 @@ export default function VerifyEmail() {
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f0f2f5" }}>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: themeToken.colorBgLayout }}>
       <Result
         status="error"
         title="Verification Failed"

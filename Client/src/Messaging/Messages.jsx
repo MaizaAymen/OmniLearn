@@ -40,16 +40,16 @@ import { api, getCurrentUser, getSocket } from "./api";
 const { Title, Text } = Typography;
 
 const PALETTE = {
-  bg:        "#FAFAF7",
-  surface:   "#FFFFFF",
-  border:    "#ECECE8",
-  borderSoft:"#F4F4F0",
-  text:      "#1F2937",
-  textSoft:  "#6B7280",
-  accent:    "#4F46E5",
-  accentSoft:"#EEF2FF",
-  bubbleMine:"#4F46E5",
-  bubbleTheirs: "#F3F4F6",
+  bg:        "var(--msg-bg)",
+  surface:   "var(--msg-surface)",
+  border:    "var(--msg-border)",
+  borderSoft:"var(--msg-border-soft)",
+  text:      "var(--msg-text)",
+  textSoft:  "var(--msg-text-soft)",
+  accent:    "var(--msg-accent)",
+  accentSoft:"var(--msg-accent-soft)",
+  bubbleMine:"var(--msg-bubble-mine)",
+  bubbleTheirs: "var(--msg-bubble-theirs)",
 };
 
 const initialsOf = (u) =>
@@ -1704,9 +1704,9 @@ const MembersModal = ({ open, onClose, conversation, usersById, meId, onBan }) =
                 alignItems: "center",
                 gap: 10,
                 padding: "8px 10px",
-                border: "1px solid #ECECE8",
+                border: `1px solid ${PALETTE.border}`,
                 borderRadius: 10,
-                background: "#FAFAF7",
+                background: PALETTE.bg,
               }}
             >
               <Avatar style={{ background: "#4F46E5", color: "#fff", fontWeight: 600 }}>

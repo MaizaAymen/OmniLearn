@@ -27,6 +27,7 @@ import {
   Radio,
   InputNumber,
   Badge,
+  theme,
 } from "antd";
 import {
   UploadOutlined,
@@ -75,6 +76,7 @@ api.interceptors.request.use((config) => {
 const plainAxios = axios.create();
 
 export default function PdfAssistant() {
+  const { token } = theme.useToken();
   const location = useLocation();
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfId, setPdfId] = useState(null);
@@ -676,7 +678,7 @@ export default function PdfAssistant() {
   }, [pdfId, codeMode, codeId]);
 
   return (
-    <Layout style={{ height: "100vh", background: "#f0f2f5" }}>
+    <Layout style={{ height: "100vh", background: token.colorBgLayout }}>
       {/* PDF Viewer */}
       <Content ref={pdfContainerRef} style={{ padding: 24, overflow: "hidden" }}>
         <Card
@@ -852,7 +854,7 @@ export default function PdfAssistant() {
       <Sider
         width={sidebarWidth}
         style={{
-          background: "#fff",
+          background: token.colorBgContainer,
           userSelect: isResizing ? "none" : "auto",
         }}
       >

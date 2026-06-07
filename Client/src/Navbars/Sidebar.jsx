@@ -313,7 +313,7 @@ const Sidebar = ({ children, profileStatus }) => {
       });
 
   const {
-    token: { colorBgContainer, borderRadiusLG, colorBorderSecondary, colorText },
+    token: { colorBgContainer, colorBgLayout, colorBgElevated, borderRadiusLG, colorBorderSecondary, colorText },
   } = theme.useToken();
 
   const items = useMemo(
@@ -472,7 +472,7 @@ const Sidebar = ({ children, profileStatus }) => {
               fontSize: '16px',
               width: isMobile ? 48 : 64,
               height: isMobile ? 56 : 64,
-              color: '#595959',
+              color: colorText,
             }}
           />
 
@@ -515,7 +515,7 @@ const Sidebar = ({ children, profileStatus }) => {
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#595959',
+                    color: colorText,
                   }}
                   icon={
                     <Badge
@@ -544,12 +544,12 @@ const Sidebar = ({ children, profileStatus }) => {
                   cursor: 'pointer',
                   padding: '4px 10px 4px 4px',
                   borderRadius: 999,
-                  border: '1px solid #f0f0f0',
-                  background: '#fafafa',
+                  border: `1px solid ${colorBorderSecondary}`,
+                  background: colorBgElevated,
                   transition: 'background 0.2s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '#fafafa')}
+                onMouseEnter={(e) => (e.currentTarget.style.background = colorBorderSecondary)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = colorBgElevated)}
               >
                 <Avatar
                   size={32}
@@ -575,7 +575,7 @@ const Sidebar = ({ children, profileStatus }) => {
                     <Text
                       strong
                       ellipsis
-                      style={{ fontSize: 13, color: '#262626' }}
+                      style={{ fontSize: 13, color: colorText }}
                     >
                       {fullName}
                     </Text>
@@ -596,7 +596,7 @@ const Sidebar = ({ children, profileStatus }) => {
             margin: isMobile ? '12px 8px' : '24px 16px',
             padding: isMobile ? 12 : 24,
             minHeight: 280,
-            background: colorBgContainer,
+            background: colorBgLayout,
             borderRadius: borderRadiusLG,
           }}
         >
