@@ -5,7 +5,6 @@ const fs = require("fs");
 const path = require("path");
 const pdfParse = require("pdf-parse");
 const Groq = require("groq-sdk");
-
 // ─── PLAN GATE ───────────────────────────────────────────────────────────────
 // L'analyse de PDF est une fonctionnalité Pro/Institution.
 // On applique un seul middleware partagé sur toutes les routes du fichier.
@@ -13,28 +12,90 @@ const { authenticate, requirePro } = require("../middleware/Authmiddleware");
 router.use(authenticate);   // ÉTAPE 1 : il faut être connecté
 router.use(requirePro);     // ÉTAPE 2 : il faut être Pro ou Institution
 
-// ─── LangChain + Chroma Imports for Semantic Search (RAG) ─────────────
-// HuggingFaceInferenceEmbeddings: Creates vector embeddings using HuggingFace API
-const { HuggingFaceInferenceEmbeddings } = require("@langchain/community/embeddings/hf");
-// Chroma: Vector database for storing and searching embeddings
-const { Chroma } = require("@langchain/community/vectorstores/chroma");
-// Document: LangChain document wrapper for storing text with metadata
-const { Document } = require("@langchain/core/documents");
+// ─── Vector Store Abstraction ────────────────────────────────────────
+const vectorStore = require("../vectorStore");
 
-const CHROMA_URL = process.env.CHROMA_URL || "http://127.0.0.1:8000";
-const CHROMA_PERSIST_DIR = process.env.CHROMA_PERSIST_DIR || "./chroma_db";
+// Custom Gemini embeddings — calls Google's API directly via https
+const https = require("https");
+class GeminiEmbeddings {
+  constructor({ apiKey, model = "gemini-embedding-2" } = {}) {
+    this.apiKey = apiKey;
+    this.model = model;
+  }
+  _request(texts) {
+    return new Promise((resolve, reject) => {
+      const data = JSON.stringify({
+        requests: texts.map(t => ({
+          model: `models/${this.model}`,
+          content: { parts: [{ text: t }] },
+        }))
+      });
+      const url = new URL(`https://generativelanguage.googleapis.com/v1beta/models/${this.model}:batchEmbedContents`);
+      url.searchParams.set("key", this.apiKey);
+      const req = https.request(url, { method: "POST", headers: { "Content-Type": "application/json" } }, res => {
+        let body = "";
+        res.on("data", c => body += c);
+        res.on("end", () => {
+          if (res.statusCode !== 200) return reject(new Error(`Gemini API ${res.statusCode}: ${body}`));
+          resolve(JSON.parse(body).embeddings.map(e => e.values));
+        });
+      });
+      req.on("error", reject);
+      req.write(data);
+      req.end();
+    });
+  }
+  async embedDocuments(texts) { return this._request(texts); }
+  async embedQuery(text) { const [vec] = await this._request([text]); return vec; }
+}
 
-// Initialize embeddings model using HuggingFace Inference API
-// Uses sentence-transformers model for high-quality semantic embeddings
-const embeddings = new HuggingFaceInferenceEmbeddings({
-  apiKey: process.env.HF_API_KEY || "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",
-  model: "sentence-transformers/all-MiniLM-L6-v2", // Fast, good quality embeddings
-});
-
-// Initialize Groq AI
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "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",
 });
+
+const embeddings = new GeminiEmbeddings({
+  apiKey: process.env.GEMINI_API_KEY,
+  model: "gemini-embedding-2",
+});
+
+// Vector search helper: embed query → search vector store → return Document-like results
+async function vectorSearch(collectionName, query, k) {
+  const queryEmbedding = await embeddings.embedQuery(query);
+  const results = await vectorStore.search({
+    embedding: queryEmbedding,
+    limit: k,
+    collectionName,
+  });
+  return results.map((r) => ({ pageContent: r.text, metadata: r.metadata }));
+}
+
+// Fallback: try Groq first, then Gemini if Groq fails (rate limit, etc.)
+async function askAI(messages, options = {}) {
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.max_tokens ?? 1000,
+    });
+    return completion.choices[0].message.content;
+  } catch (err) {
+    console.warn("Groq failed, falling back to Gemini:", err.message);
+    const lastMsg = messages[messages.length - 1]?.content || "";
+    const systemMsg = messages[0]?.role === "system" ? messages[0].content + "\n\n" : "";
+    const genRes = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + process.env.GEMINI_API_KEY,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: systemMsg + lastMsg }] }] }),
+      }
+    );
+    const genData = await genRes.json();
+    if (!genRes.ok) throw new Error(genData.error?.message || "Gemini error");
+    return genData.candidates[0].content.parts[0].text;
+  }
+}
 
 const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
 const INDEX_PATH = path.join(UPLOAD_DIR, "index.json");
@@ -82,32 +143,13 @@ const loadPdfData = async (pdfId) => {
   const fullText = pdfData.text || "";
   const chunks = chunkText(fullText, 800);
 
-  const collectionName = item.collectionName || `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-
-  let vectorStore = null;
-  if (chunks.length > 0) {
-    try {
-      vectorStore = await Promise.race([
-        Chroma.fromExistingCollection(embeddings, {
-          collectionName: collectionName,
-          persistDirectory: CHROMA_PERSIST_DIR,
-          url: CHROMA_URL,
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Chroma timed out after 5s")), 5000)
-        ),
-      ]);
-    } catch (e) {
-      console.warn("Chroma unavailable, falling back to keyword search:", e.message);
-    }
-  }
+  const collectionName = item.collectionName || `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_").replace(/^_|_$/g, "")}`;
 
   const loaded = {
     filename: item.filename || storedName,
     fullText: fullText,
     chunks: chunks,
-    vectorStore: vectorStore,
-    collectionName: collectionName,
+    collectionName,
     filePath: filePath,
     fileUrl: item.fileUrl || "",
     uploadedAt: item.uploadedAt ? new Date(item.uploadedAt) : new Date(),
@@ -222,8 +264,7 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
     const chunks = chunkText(fullText, 800);
 
     // ─── Create Vector Store with Embeddings ───────────────────────
-    // Convert text chunks to LangChain Document objects with metadata
-    const documents = chunks.map((chunk, index) => new Document({
+    const documents = chunks.map((chunk, index) => ({
       pageContent: chunk,
       metadata: {
         chunkIndex: index,
@@ -233,25 +274,29 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       }
     }));
 
-    // Try to create Chroma vector store. The HuggingFace embeddings call and
-    // Chroma server can both hang indefinitely (bad API key, server down, etc.)
-    // — race against a hard timeout so the upload always responds quickly.
-    const collectionName = `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-    let vectorStore = null;
+    // Try to create vector store. Both the embedding call and the vector DB
+    // can hang indefinitely — race against a hard timeout so the upload always
+    // responds quickly.
+    const collectionName = `pdf_${pdfId.replace(/[^a-zA-Z0-9]/g, "_").replace(/^_|_$/g, "")}`;
+    let vectorStoreAvailable = false;
     if (chunks.length > 0) {
       try {
-        vectorStore = await Promise.race([
-          Chroma.fromDocuments(documents, embeddings, {
-            collectionName: collectionName,
-            persistDirectory: CHROMA_PERSIST_DIR,
-            url: CHROMA_URL,
+        const chunkEmbeddings = await embeddings.embedDocuments(chunks);
+        await vectorStore.createCollection(collectionName);
+        await Promise.race([
+          vectorStore.addDocuments({
+            collectionName,
+            ids: chunks.map((_, i) => `${pdfId}_${i}`),
+            embeddings: chunkEmbeddings,
+            documents,
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Chroma/embeddings timed out after 8s")), 8000)
+            setTimeout(() => reject(new Error("Vector store timed out after 30s")), 30000)
           ),
         ]);
-      } catch (chromaErr) {
-        console.warn("Chroma/embeddings unavailable, vector search disabled for this PDF:", chromaErr.message);
+        vectorStoreAvailable = true;
+      } catch (err) {
+        console.warn("Vector store unavailable, vector search disabled for this PDF:", err.message);
       }
     }
 
@@ -261,8 +306,8 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       fullText: fullText,
       chunks: chunks,
       totalPages: pdfData.numpages || 0,
-      vectorStore: vectorStore,
-      collectionName: collectionName,
+      vectorStoreAvailable,
+      collectionName: vectorStoreAvailable ? collectionName : null,
       filePath: filePath,
       fileUrl: fileUrl,
       uploadedAt: new Date(),
@@ -356,10 +401,21 @@ router.post("/chat", async (req, res) => {
 
     // Use vector store when available, otherwise fall back to keyword matching
     let context;
-    if (pdfData.vectorStore) {
-      const results = await pdfData.vectorStore.similaritySearch(question, 3);
-      context = results.map(r => r.pageContent).join("\n\n");
-    } else {
+    let sourcesCount = 0;
+    if (pdfData.collectionName) {
+      try {
+        console.log("USING SEMANTIC SEARCH");
+        const results = await vectorSearch(pdfData.collectionName, question, 3);
+        if (results.length > 0) {
+          context = results.map(r => r.pageContent).join("\n\n");
+          sourcesCount = results.length;
+        }
+      } catch (e) {
+        console.warn("Vector search failed, using keyword fallback:", e.message);
+      }
+    }
+    if (!context) {
+      console.log("USING KEYWORD FALLBACK");
       const words = question.toLowerCase().split(/\s+/);
       const scored = (pdfData.chunks || []).map(chunk => ({
         chunk,
@@ -367,28 +423,22 @@ router.post("/chat", async (req, res) => {
       }));
       scored.sort((a, b) => b.score - a.score);
       context = scored.slice(0, 3).map(s => s.chunk).join("\n\n");
+      sourcesCount = scored.filter(s => s.score > 0).length;
     }
 
-    // Ask AI with context (Groq completion unchanged)
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful AI assistant. Answer questions based on the provided PDF context. If the answer is not in the context, say so politely.",
-        },
-        {
-          role: "user",
-          content: `Context from PDF:\n${context}\n\nQuestion: ${question}`,
-        },
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    });
+    // Ask AI with Groq, fallback to Gemini if rate limited
+    const answer = await askAI([
+      {
+        role: "system",
+        content: "You are a helpful AI assistant. Answer questions based on the provided PDF context. If the answer is not in the context, say so politely.",
+      },
+      {
+        role: "user",
+        content: `Context from PDF:\n${context}\n\nQuestion: ${question}`,
+      },
+    ]);
 
-    const answer = completion.choices[0].message.content;
-
-    res.json({ answer, sources: results.length });
+    res.json({ answer, sources: sourcesCount });
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: "Failed to answer question" });
@@ -658,10 +708,17 @@ router.post("/smart-search", async (req, res) => {
 
     // Use vector store when available, otherwise fall back to keyword matching
     let relevantText;
-    if (pdfData.vectorStore) {
-      const semanticResults = await pdfData.vectorStore.similaritySearch(query, 5);
-      relevantText = semanticResults.map(r => r.pageContent).join("\n\n");
-    } else {
+    if (pdfData.collectionName) {
+      try {
+        const semanticResults = await vectorSearch(pdfData.collectionName, query, 5);
+        if (semanticResults.length > 0) {
+          relevantText = semanticResults.map(r => r.pageContent).join("\n\n");
+        }
+      } catch (e) {
+        console.warn("Vector search failed, using keyword fallback:", e.message);
+      }
+    }
+    if (!relevantText) {
       const words = query.toLowerCase().split(/\s+/);
       const scored = (pdfData.chunks || []).map(chunk => ({
         chunk,
@@ -726,7 +783,7 @@ function chunkText(text, maxWords = 800) {
 }
 
 // NOTE: findRelevantChunks has been REMOVED
-// Replaced by vectorStore.similaritySearch() for semantic search
+// Replaced by vectorSearch() for semantic search
 
 
 
